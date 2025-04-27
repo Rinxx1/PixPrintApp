@@ -8,7 +8,7 @@ import {
   Linking,
   ScrollView,
 } from 'react-native';
-import HeaderBar from '../components/HeaderBar';
+import HeaderBar from '../../components/HeaderBar';
 
 export default function HelpSupportScreen({ navigation }) {
   const handleEmailPress = () => {
@@ -57,7 +57,7 @@ export default function HelpSupportScreen({ navigation }) {
 
           <TouchableOpacity style={styles.contactItem} onPress={handleEmailPress}>
             <Image
-              source={require('../assets/icon-email.png')}
+              source={require('../../assets/icon-email.png')}
               style={styles.icon}
             />
             <Text style={styles.label}>Email Support</Text>
@@ -65,7 +65,7 @@ export default function HelpSupportScreen({ navigation }) {
 
           <TouchableOpacity style={styles.contactItem} onPress={handleCallPress}>
             <Image
-              source={require('../assets/icon-phone.png')}
+              source={require('../../assets/icon-phone.png')}
               style={styles.icon}
             />
             <Text style={styles.label}>Call Support</Text>

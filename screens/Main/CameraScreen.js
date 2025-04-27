@@ -93,7 +93,7 @@ export default function CameraScreen({ navigation }) {
         <TouchableOpacity  onPress={() => navigation.navigate('Gallery')}>
         <View style={styles.thumbnailWrapper}>
           <Image
-            source={require('../assets/avatar.png')}
+            source={require('../../assets/avatar.png')}
             style={styles.thumbnail}
           />
         </View>

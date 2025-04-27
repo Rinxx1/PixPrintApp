@@ -6,7 +6,7 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
-import HeaderBar from '../components/HeaderBar';
+import HeaderBar from '../../components/HeaderBar';
 
 export default function PrivacyPolicyScreen({ navigation }) {
   return (
@@ -18,7 +18,7 @@ export default function PrivacyPolicyScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <Image source={require('../assets/icon-shield.png')} style={styles.icon} />
+            <Image source={require('../../assets/icon-shield.png')} style={styles.icon} />
             <Text style={styles.sectionTitle}>Information Collection</Text>
           </View>
           <Text style={styles.text}>
@@ -28,7 +28,7 @@ export default function PrivacyPolicyScreen({ navigation }) {
 
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <Image source={require('../assets/icon-settings.png')} style={styles.icon} />
+            <Image source={require('../../assets/icon-settings.png')} style={styles.icon} />
             <Text style={styles.sectionTitle}>Use of Data</Text>
           </View>
           <Text style={styles.text}>
@@ -38,7 +38,7 @@ export default function PrivacyPolicyScreen({ navigation }) {
 
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <Image source={require('../assets/icon-alert.png')} style={styles.icon} />
+            <Image source={require('../../assets/icon-alert.png')} style={styles.icon} />
             <Text style={styles.sectionTitle}>Security</Text>
           </View>
           <Text style={styles.text}>
@@ -48,7 +48,7 @@ export default function PrivacyPolicyScreen({ navigation }) {
 
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <Image source={require('../assets/icon-check.png')} style={styles.icon} />
+            <Image source={require('../../assets/icon-check.png')} style={styles.icon} />
             <Text style={styles.sectionTitle}>Your Consent</Text>
           </View>
           <Text style={styles.text}>
@@ -58,7 +58,7 @@ export default function PrivacyPolicyScreen({ navigation }) {
 
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <Image source={require('../assets/icon-camera.png')} style={styles.icon} />
+            <Image source={require('../../assets/icon-camera.png')} style={styles.icon} />
             <Text style={styles.sectionTitle}>Photos and Media</Text>
           </View>
           <Text style={styles.text}>

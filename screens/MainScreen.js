@@ -1,7 +1,21 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { auth } from '../firebase'; // Import Firebase auth
 
 export default function MainScreen({ navigation }) {
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      if (user) {
+        // If the user is logged in, navigate directly to the "Tabs" screen
+        navigation.replace('Tabs');
+      }
+    });
+
+    // Clean up the listener when the component unmounts
+    return () => unsubscribe();
+  }, [navigation]);
+
   return (
     <View style={styles.container}>
       <Image source={require('../assets/icon-pix-print.png')} style={styles.logo} />
@@ -10,27 +24,32 @@ export default function MainScreen({ navigation }) {
 
       <View style={styles.spacer} />
 
+      {/* Sign In Button */}
       <TouchableOpacity
-  style={styles.button}
-  onPress={() => navigation.navigate('SignIn')}
->
-  <Text style={styles.buttonText}>Sign In</Text>
-</TouchableOpacity>
+        style={styles.button}
+        onPress={() => navigation.navigate('SignIn')}
+      >
+        <Text style={styles.buttonText}>Sign In</Text>
+      </TouchableOpacity>
 
-
-      <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={() => navigation.navigate('ContinueAsGuest')}>
+      {/* Continue as Guest Button */}
+      <TouchableOpacity
+        style={[styles.button, styles.secondaryButton]}
+        onPress={() => navigation.navigate('ContinueAsGuest')}
+      >
         <Text style={styles.buttonText}>Continue as guest</Text>
       </TouchableOpacity>
 
-          <Text style={styles.footerText}>
-      You don’t have an account?{' '}
-      <Text
-        style={styles.linkText}
-        onPress={() => navigation.navigate('SignUp')}
-      >
-        Sign up
+      {/* Sign Up Link */}
+      <Text style={styles.footerText}>
+        You don’t have an account?{' '}
+        <Text
+          style={styles.linkText}
+          onPress={() => navigation.navigate('SignUp')}
+        >
+          Sign up
+        </Text>
       </Text>
-    </Text>
     </View>
   );
 }

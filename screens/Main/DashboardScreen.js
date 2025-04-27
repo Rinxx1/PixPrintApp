@@ -1,73 +1,51 @@
-import React, { useState } from 'react';
-import HeaderBar from '../components/HeaderBar';
-
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Image,
-  ScrollView,
-} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import HeaderBar from '../../components/HeaderBar';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ScrollView } from 'react-native';
+import { auth, db } from '../../firebase';  // Importing Firebase services
+import { doc, getDoc } from 'firebase/firestore';  // Add this to fetch user data from Firestore
 
 export default function DashboardScreen({ navigation }) {
   const [eventCode, setEventCode] = useState('');
-  const username = 'Isay';
-
+  const [username, setUsername] = useState('');
   const joinedEvents = [
-    {
-      id: 1,
-      name: "Alice & Bob’s Wedding",
-      date: "July 21, 2024",
-      image: require('../assets/event-wedding.png'),
-    },
-    {
-      id: 2,
-      name: "Rose & John Wedding",
-      date: "June 11, 2024",
-      image: require('../assets/event-wedding.png'),
-    },
-    {
-      id: 3,
-      name: "Rose & John Wedding",
-      date: "June 11, 2024",
-      image: require('../assets/event-wedding.png'),
-    },
-    {
-      id: 4,
-      name: "Rose & John Wedding",
-      date: "June 11, 2024",
-      image: require('../assets/event-wedding.png'),
-    },
-    {
-      id: 5,
-      name: "Rose & John Wedding",
-      date: "June 11, 2024",
-      image: require('../assets/event-wedding.png'),
-    },
-    {
-      id: 6,
-      name: "Rose & John Wedding",
-      date: "June 11, 2024",
-      image: require('../assets/event-wedding.png'),
-    },
+    { id: 1, name: "Alice & Bob’s Wedding", date: "July 21, 2024", image: require('../../assets/event-wedding.png') },
+    { id: 2, name: "Rose & John Wedding", date: "June 11, 2024", image: require('../../assets/event-wedding.png') },
   ];
+
+  // Fetch user data from Firestore after the component mounts
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        const userRef = doc(db, 'user_tbl', user.uid);
+        const docSnap = await getDoc(userRef);
+        if (docSnap.exists()) {
+          setUsername(docSnap.data().user_firstname);  // Set username as the first name from Firestore
+        } else {
+          console.log('No such document!');
+        }
+      }
+    };
+
+    fetchUserData();
+  }, []);
 
   return (
     <View style={styles.container}>
       <HeaderBar navigation={navigation} showBack={false} />
-
+      
       <View style={styles.content}>
         {/* Greeting */}
         <View style={styles.profileRow}>
           <Image
-            source={require('../assets/avatar.png')}
+            source={require('../../assets/avatar.png')}
             style={styles.avatar}
           />
           <View>
             <Text style={styles.greeting}>Welcome back,</Text>
-            <Text style={styles.username}>{username}</Text>
+            {/* Ensure username is rendered inside Text */}
+            <Text style={styles.username}>{username ? username.toString() : 'User'}</Text>
+  {/* Default to 'User' if no name */}
           </View>
         </View>
 

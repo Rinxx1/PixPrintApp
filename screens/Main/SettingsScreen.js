@@ -1,16 +1,24 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Switch,
-  Image,
-  ScrollView,
-} from 'react-native';
-import HeaderBar from '../components/HeaderBar';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, Image, ScrollView, Alert } from 'react-native';
+import { auth } from '../../firebase'; // Import Firebase auth
+import HeaderBar from '../../components/HeaderBar';
+import { signOut } from 'firebase/auth'; // Import the signOut method from Firebase
 
 export default function SettingsScreen({ navigation }) {
+  
+  const handleLogout = async () => {
+    try {
+      // Sign out the user from Firebase
+      await signOut(auth);
+      // Show a success message and navigate to SignIn screen
+      Alert.alert('Logged Out', 'You have been logged out successfully.');
+      navigation.navigate('SignIn');
+    } catch (error) {
+      // Show error if sign out fails
+      Alert.alert('Error', 'There was an issue logging out. Please try again.');
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* Fixed Header */}
@@ -27,7 +35,7 @@ export default function SettingsScreen({ navigation }) {
         {/* 🌟 Pix Credits Card */}
         <View style={styles.cardHighlight}>
           <View style={styles.creditsHeader}>
-            <Image source={require('../assets/icon-pix-print.png')} style={styles.creditsIcon} />
+            <Image source={require('../../assets/icon-pix-print.png')} style={styles.creditsIcon} />
             <Text style={styles.creditsText}>
               Pix Credits: <Text style={styles.creditsAmount}>120</Text>
             </Text>
@@ -41,11 +49,11 @@ export default function SettingsScreen({ navigation }) {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Account</Text>
           <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('PersonalInfo')}>
-          <Text style={styles.label}>Profile Information</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('ChangePassword')}>
-          <Text style={styles.label}>Change Password</Text>
-        </TouchableOpacity>
+            <Text style={styles.label}>Profile Information</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('ChangePassword')}>
+            <Text style={styles.label}>Change Password</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ⚙️ Preferences */}
@@ -65,17 +73,18 @@ export default function SettingsScreen({ navigation }) {
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>About</Text>
           <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('Terms&Condition')}>
-          <Text style={styles.label}>Terms & Conditions</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('PrivacyPolicy')}>
-          <Text style={styles.label}>Privacy Policy</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('HelpSupport')}>
-          <Text style={styles.label}>Help & Support</Text>
-        </TouchableOpacity>
+            <Text style={styles.label}>Terms & Conditions</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('PrivacyPolicy')}>
+            <Text style={styles.label}>Privacy Policy</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('HelpSupport')}>
+            <Text style={styles.label}>Help & Support</Text>
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton}>
+        {/* Logout Button */}
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
       </ScrollView>

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
 import { Calendar } from 'react-native-calendars';
-import HeaderBar from '../components/HeaderBar';
-import BottomNavBar from '../components/BottomNavbar';
+import HeaderBar from '../../components/HeaderBar';
+import BottomNavBar from '../../components/BottomNavbar';
 
 export default function CalendarScreen({ navigation }) {
   const [selectedDate, setSelectedDate] = useState('');

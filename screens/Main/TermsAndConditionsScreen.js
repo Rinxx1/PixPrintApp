@@ -6,7 +6,7 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
-import HeaderBar from '../components/HeaderBar';
+import HeaderBar from '../../components/HeaderBar';
 
 export default function TermsAndConditionsScreen({ navigation }) {
   return (
@@ -18,7 +18,7 @@ export default function TermsAndConditionsScreen({ navigation }) {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <Image source={require('../assets/icon-check.png')} style={styles.icon} />
+            <Image source={require('../../assets/icon-check.png')} style={styles.icon} />
             <Text style={styles.sectionTitle}>Acceptance of Terms</Text>
           </View>
           <Text style={styles.text}>
@@ -28,7 +28,7 @@ export default function TermsAndConditionsScreen({ navigation }) {
 
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <Image source={require('../assets/icon-camera.png')} style={styles.icon} />
+            <Image source={require('../../assets/icon-camera.png')} style={styles.icon} />
             <Text style={styles.sectionTitle}>Use of Service</Text>
           </View>
           <Text style={styles.text}>
@@ -38,7 +38,7 @@ export default function TermsAndConditionsScreen({ navigation }) {
 
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <Image source={require('../assets/icon-shield.png')} style={styles.icon} />
+            <Image source={require('../../assets/icon-shield.png')} style={styles.icon} />
             <Text style={styles.sectionTitle}>Intellectual Property</Text>
           </View>
           <Text style={styles.text}>
@@ -48,7 +48,7 @@ export default function TermsAndConditionsScreen({ navigation }) {
 
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <Image source={require('../assets/icon-alert.png')} style={styles.icon} />
+            <Image source={require('../../assets/icon-alert.png')} style={styles.icon} />
             <Text style={styles.sectionTitle}>Limitation of Liability</Text>
           </View>
           <Text style={styles.text}>
@@ -58,7 +58,7 @@ export default function TermsAndConditionsScreen({ navigation }) {
 
         <View style={styles.card}>
           <View style={styles.sectionHeader}>
-            <Image source={require('../assets/icon-settings.png')} style={styles.icon} />
+            <Image source={require('../../assets/icon-settings.png')} style={styles.icon} />
             <Text style={styles.sectionTitle}>Modifications</Text>
           </View>
           <Text style={styles.text}>

@@ -8,9 +8,9 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
-import HeaderBar from '../components/HeaderBar';
+import HeaderBar from '../../components/HeaderBar';
 
-const images = new Array(9).fill(require('../assets/avatar.png'));
+const images = new Array(9).fill(require('../../assets/avatar.png'));
 const screenWidth = Dimensions.get('window').width;
 const imageSize = (screenWidth - 94) / 3;
 

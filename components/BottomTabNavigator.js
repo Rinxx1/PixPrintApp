@@ -4,10 +4,10 @@ import { createStackNavigator, TransitionPresets } from '@react-navigation/stack
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
-import DashboardScreen from '../screens/DashboardScreen';
-import CalendarScreen from '../screens/CalendarScreen';
-import GalleryScreen from '../screens/GalleryScreen';
-import SettingsScreen from '../screens/SettingsScreen';
+import DashboardScreen from '../screens/Main/DashboardScreen';
+import CalendarScreen from '../screens/Main/CalendarScreen';
+import GalleryScreen from '../screens/Main/GalleryScreen';
+import SettingsScreen from '../screens/Main/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();

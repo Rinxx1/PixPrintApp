@@ -1,10 +1,45 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Logo from '../assets/icon-pix-print.png';
+import { auth } from '../firebase'; // Import Firebase auth
+import { signInWithEmailAndPassword } from 'firebase/auth'; // Firebase authentication method
+import { useNavigation } from '@react-navigation/native'; // For navigation
 
 export default function SignInScreen({ navigation }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [secureText, setSecureText] = useState(true);
+  
+  const nav = useNavigation(); // To navigate to tabs after successful login
+
+  // Check if the user is already logged in when the screen loads
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      if (user) {
+        // If the user is logged in, navigate to the Tabs screen
+        nav.navigate('Tabs');
+      }
+    });
+    
+    // Clean up the subscription when the component is unmounted
+    return unsubscribe;
+  }, [nav]);
+
+  // Handle sign-in logic
+  const handleSignIn = async () => {
+    if (email && password) {
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        Alert.alert('Success', 'You have successfully logged in!');
+        nav.navigate('Tabs'); // Navigate to the main app screen
+      } catch (error) {
+        Alert.alert('Sign In Error', 'Invalid email or password. Please try again.');
+      }
+    } else {
+      Alert.alert('Input Error', 'Please enter both email and password.');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -12,7 +47,14 @@ export default function SignInScreen({ navigation }) {
       <Text style={styles.title}>PixPrint</Text>
       <Text style={styles.subtitle}>Capture. Print. Celebrate</Text>
 
-      <TextInput placeholder="Email" style={styles.input} />
+      {/* Email input */}
+      <TextInput
+        placeholder="Email"
+        style={styles.input}
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
+      />
 
       {/* Password with eye toggle */}
       <View style={styles.inputWrapper}>
@@ -20,6 +62,8 @@ export default function SignInScreen({ navigation }) {
           placeholder="Password"
           secureTextEntry={secureText}
           style={styles.inputInner}
+          value={password}
+          onChangeText={setPassword}
         />
         <TouchableOpacity onPress={() => setSecureText(!secureText)}>
           <Ionicons
@@ -30,13 +74,20 @@ export default function SignInScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('Tabs')}>
+      {/* Sign In Button */}
+      <TouchableOpacity style={styles.button} onPress={handleSignIn}>
         <Text style={styles.buttonText}>Sign In</Text>
       </TouchableOpacity>
 
-      <Text style={styles.footerText} onPress={() => navigation.navigate('SignUp')}>
+      {/* Footer */}
+      <Text style={styles.footerText}>
         Don’t have an account?{' '}
-        <Text style={styles.linkText}>Sign up</Text>
+        <Text
+          style={styles.linkText}
+          onPress={() => navigation.navigate('SignUp')}
+        >
+          Sign up
+        </Text>
       </Text>
     </View>
   );
