@@ -5,26 +5,28 @@ import HeaderBar from '../../components/HeaderBar';
 import { signOut } from 'firebase/auth'; // Import the signOut method from Firebase
 
 export default function SettingsScreen({ navigation }) {
-  
   const handleLogout = async () => {
     try {
-      // Sign out the user from Firebase
+
       await signOut(auth);
-      // Show a success message and navigate to SignIn screen
+
       Alert.alert('Logged Out', 'You have been logged out successfully.');
-      navigation.navigate('SignIn');
+      
+
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'SignIn' }], 
+      });
     } catch (error) {
-      // Show error if sign out fails
+
       Alert.alert('Error', 'There was an issue logging out. Please try again.');
     }
   };
 
   return (
     <View style={styles.container}>
-      {/* Fixed Header */}
-      <HeaderBar navigation={navigation} showBack={false} />
 
-      {/* Scrollable Content */}
+      <HeaderBar navigation={navigation} showBack={false} />
       <ScrollView
         style={styles.scrollContainer}
         contentContainerStyle={{ paddingBottom: 140, paddingTop: 100 }}
@@ -32,7 +34,7 @@ export default function SettingsScreen({ navigation }) {
       >
         <Text style={styles.title}>Settings</Text>
 
-        {/* 🌟 Pix Credits Card */}
+ 
         <View style={styles.cardHighlight}>
           <View style={styles.creditsHeader}>
             <Image source={require('../../assets/icon-pix-print.png')} style={styles.creditsIcon} />
@@ -45,7 +47,6 @@ export default function SettingsScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* 👤 Account Settings */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Account</Text>
           <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('PersonalInfo')}>
@@ -56,7 +57,6 @@ export default function SettingsScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* ⚙️ Preferences */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Preferences</Text>
           <View style={styles.itemRow}>
@@ -69,7 +69,6 @@ export default function SettingsScreen({ navigation }) {
           </View>
         </View>
 
-        {/* 📃 Other */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>About</Text>
           <TouchableOpacity style={styles.item} onPress={() => navigation.navigate('Terms&Condition')}>
@@ -83,7 +82,6 @@ export default function SettingsScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>

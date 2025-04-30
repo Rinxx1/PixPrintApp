@@ -1,20 +1,27 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { auth } from '../firebase'; // Import Firebase auth
 
 export default function MainScreen({ navigation }) {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(user => {
       if (user) {
         // If the user is logged in, navigate directly to the "Tabs" screen
-        navigation.replace('Tabs');
+        setIsLoggedIn(true);
+        navigation.replace('Tabs');  // Automatically go to Tabs if logged in
+      } else {
+        // If no user is logged in, stay on the MainScreen
+        setIsLoggedIn(false);
       }
     });
 
     // Clean up the listener when the component unmounts
     return () => unsubscribe();
   }, [navigation]);
+
+  if (isLoggedIn) return null; // Avoid showing MainScreen while redirecting
 
   return (
     <View style={styles.container}>

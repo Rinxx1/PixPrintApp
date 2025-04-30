@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Logo from '../assets/icon-pix-print.png';
 import { auth } from '../firebase'; // Import Firebase auth
@@ -10,8 +10,24 @@ export default function SignInScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [secureText, setSecureText] = useState(true);
-  
+  const [isLoading, setIsLoading] = useState(true); // To handle loading state
+
   const nav = useNavigation(); // To navigate to tabs after successful login
+
+  const rotateAnim = useState(new Animated.Value(0))[0];
+
+  // Start the animation when the loading state is true
+  useEffect(() => {
+    if (isLoading) {
+      Animated.loop(
+        Animated.timing(rotateAnim, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        })
+      ).start();
+    }
+  }, [isLoading]);
 
   // Check if the user is already logged in when the screen loads
   useEffect(() => {
@@ -19,10 +35,13 @@ export default function SignInScreen({ navigation }) {
       if (user) {
         // If the user is logged in, navigate to the Tabs screen
         nav.navigate('Tabs');
+      } else {
+        // If no user is logged in, stay on the SignIn screen
+        setIsLoading(false); // Set loading to false once auth state is checked
       }
     });
-    
-    // Clean up the subscription when the component is unmounted
+
+    // Clean up the subscription when the component unmounts
     return unsubscribe;
   }, [nav]);
 
@@ -30,16 +49,42 @@ export default function SignInScreen({ navigation }) {
   const handleSignIn = async () => {
     if (email && password) {
       try {
+        setIsLoading(true); // Show loading while signing in
         await signInWithEmailAndPassword(auth, email, password);
         Alert.alert('Success', 'You have successfully logged in!');
         nav.navigate('Tabs'); // Navigate to the main app screen
       } catch (error) {
+        setIsLoading(false); // Hide loading on error
         Alert.alert('Sign In Error', 'Invalid email or password. Please try again.');
       }
     } else {
       Alert.alert('Input Error', 'Please enter both email and password.');
     }
   };
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Animated.Image
+          source={Logo}
+          style={[
+            styles.loadingIcon,
+            {
+              transform: [
+                {
+                  rotate: rotateAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0deg', '360deg'], // Rotate from 0 to 360 degrees
+                  }),
+                },
+              ],
+            },
+          ]}
+        />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -161,6 +206,24 @@ const styles = StyleSheet.create({
     color: '#807E84',
   },
   linkText: {
+    color: '#FF6F61',
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FAF8F5',
+  },
+  loadingIcon: {
+    width: 80,
+    height: 80,
+    resizeMode: 'contain',
+    marginBottom: 20,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
     color: '#FF6F61',
     fontWeight: '500',
   },
