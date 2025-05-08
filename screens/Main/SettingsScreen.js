@@ -7,7 +7,7 @@ import { signOut } from 'firebase/auth'; // Import the signOut method from Fireb
 export default function SettingsScreen({ navigation }) {
   const handleLogout = async () => {
     try {
-
+ 
       await signOut(auth);
 
       Alert.alert('Logged Out', 'You have been logged out successfully.');
@@ -42,7 +42,8 @@ export default function SettingsScreen({ navigation }) {
               Pix Credits: <Text style={styles.creditsAmount}>120</Text>
             </Text>
           </View>
-          <TouchableOpacity style={styles.addCreditsBtn}>
+      
+          <TouchableOpacity style={styles.addCreditsBtn} onPress={() => navigation.navigate('AddMoreCredits')}>
             <Text style={styles.addCreditsText}>Add More Credits</Text>
           </TouchableOpacity>
         </View>
