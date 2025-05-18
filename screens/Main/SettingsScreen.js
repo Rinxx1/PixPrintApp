@@ -1,31 +1,57 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch, Image, ScrollView, Alert } from 'react-native';
-import { auth } from '../../firebase'; // Import Firebase auth
+import { auth, db } from '../../firebase'; // Import Firebase auth and Firestore
 import HeaderBar from '../../components/HeaderBar';
 import { signOut } from 'firebase/auth'; // Import the signOut method from Firebase
+import { collection, query, where, getDocs, onSnapshot, doc } from 'firebase/firestore'; // Firestore methods for querying data
 
 export default function SettingsScreen({ navigation }) {
+  const [credits, setCredits] = useState(0); // To store the user's credits
+  let unsubscribe; // Declare the unsubscribe variable
+
+  useEffect(() => {
+    // Firestore real-time listener to fetch user's credits based on their user_id
+    const fetchCredits = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        const creditsRef = collection(db, 'credits_tbl');
+        const q = query(creditsRef, where('user_id', '==', user.uid));
+
+        unsubscribe = onSnapshot(q, (querySnapshot) => {
+          let totalCredits = 0;
+          querySnapshot.forEach(doc => {
+            totalCredits += doc.data().credits; // Summing up the credits for the user
+          });
+          setCredits(totalCredits); // Update the credits state
+        });
+      }
+    };
+
+    fetchCredits(); // Start the listener
+
+    // Clean up the listener when the component unmounts
+    return () => {
+      if (unsubscribe) {
+        unsubscribe(); // Unsubscribe from the Firestore listener
+      }
+    };
+  }, []); // Run only once when the component mounts
+
   const handleLogout = async () => {
     try {
- 
       await signOut(auth);
-
       Alert.alert('Logged Out', 'You have been logged out successfully.');
-      
-
       navigation.reset({
         index: 0,
-        routes: [{ name: 'SignIn' }], 
+        routes: [{ name: 'SignIn' }],
       });
     } catch (error) {
-
       Alert.alert('Error', 'There was an issue logging out. Please try again.');
     }
   };
 
   return (
     <View style={styles.container}>
-
       <HeaderBar navigation={navigation} showBack={false} />
       <ScrollView
         style={styles.scrollContainer}
@@ -34,15 +60,15 @@ export default function SettingsScreen({ navigation }) {
       >
         <Text style={styles.title}>Settings</Text>
 
- 
+        {/* Display user's credits */}
         <View style={styles.cardHighlight}>
           <View style={styles.creditsHeader}>
             <Image source={require('../../assets/icon-pix-print.png')} style={styles.creditsIcon} />
             <Text style={styles.creditsText}>
-              Pix Credits: <Text style={styles.creditsAmount}>120</Text>
+              Pix Credits: <Text style={styles.creditsAmount}>{credits}</Text>
             </Text>
           </View>
-      
+
           <TouchableOpacity style={styles.addCreditsBtn} onPress={() => navigation.navigate('AddMoreCredits')}>
             <Text style={styles.addCreditsText}>Add More Credits</Text>
           </TouchableOpacity>

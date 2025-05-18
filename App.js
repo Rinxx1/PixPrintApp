@@ -22,6 +22,7 @@ import TermsAndConditionsScreen from './screens/Main/TermsAndConditionsScreen';
 import PrivacyPolicyScreen from './screens/Main/PrivacyPolicyScreen';
 import HelpSupportScreen from './screens/Main/HelpSupportScreen';
 import AddMoreCreditsScreen from './screens/Main/AddMoreCreditsScreen';
+import JoinEventScreenTwo from './screens/Main/JoinEventScreenTwo';
 
 const Stack = createNativeStackNavigator();
 
@@ -65,6 +66,7 @@ export default function App() {
           <Stack.Screen name='PrivacyPolicy' component={PrivacyPolicyScreen} />
           <Stack.Screen name='HelpSupport' component={HelpSupportScreen} />
           <Stack.Screen name='AddMoreCredits' component={AddMoreCreditsScreen} />
+          <Stack.Screen name='JoinEventTwo' component={JoinEventScreenTwo} />
         </Stack.Navigator>
       </AuthProvider>
     </NavigationContainer>
