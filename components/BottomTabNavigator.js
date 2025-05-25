@@ -22,7 +22,7 @@ function TabNavigator() {
           position: 'absolute',
           backgroundColor: '#fff',
           elevation: 8,
-          height: Platform.OS === 'ios' ? 70 : 60,
+          height: Platform.OS === 'ios' ? 70 : 66,
           borderRadius: 40,
           marginHorizontal: 28,
           marginBottom: 18,
@@ -36,7 +36,7 @@ function TabNavigator() {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
           if (route.name === 'Dashboard') iconName = 'home';
-          if (route.name === 'Calendar') iconName = 'calendar';
+          // if (route.name === 'Calendar') iconName = 'calendar';
           if (route.name === 'Gallery') iconName = 'images';
           if (route.name === 'Settings') iconName = 'settings';
 
@@ -51,7 +51,7 @@ function TabNavigator() {
       })}
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Calendar" component={CalendarScreen} />
+      {/* <Tab.Screen name="Calendar" component={CalendarScreen} /> */}
       <Tab.Screen name="Gallery" component={GalleryScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
