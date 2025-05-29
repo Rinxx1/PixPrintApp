@@ -63,6 +63,7 @@ export default function DashboardScreen({ navigation }) {
       }
     };
 
+    // Updated fetchCreatedEvents function
     const fetchCreatedEvents = async () => {
       try {
         const user = auth.currentUser;
@@ -74,21 +75,57 @@ export default function DashboardScreen({ navigation }) {
           const events = [];
           querySnapshot.forEach(doc => {
             const data = doc.data();
-            let formattedDate = data.event_date;
             
-            if (data.event_date && typeof data.event_date.toDate === 'function') {
-              const dateObj = data.event_date.toDate();
-              formattedDate = dateObj.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
+            // Format start date
+            let formattedStartDate = 'No date specified';
+            let startDateObj = null;
+            
+            if (data.event_start_date && typeof data.event_start_date.toDate === 'function') {
+              startDateObj = data.event_start_date.toDate();
+              formattedStartDate = startDateObj.toLocaleDateString('en-US', {
+                month: 'short',
                 day: 'numeric',
               });
+            }
+            
+            // Format end date
+            let formattedEndDate = '';
+            let dateRangeText = '';
+            
+            if (data.event_end_date && typeof data.event_end_date.toDate === 'function') {
+              const endDateObj = data.event_end_date.toDate();
+              
+              formattedEndDate = endDateObj.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+              });
+              
+              // Get year from start date
+              const eventYear = startDateObj ? startDateObj.getFullYear() : new Date().getFullYear();
+              
+              // Create a formatted date range
+              if (formattedStartDate === formattedEndDate) {
+                // Single day event
+                dateRangeText = `${formattedStartDate}, ${eventYear}`;
+              } else {
+                // Multi-day event
+                dateRangeText = `${formattedStartDate} - ${formattedEndDate}, ${eventYear}`;
+              }
+            } else {
+              // Only start date available
+              if (startDateObj) {
+                dateRangeText = `${formattedStartDate}, ${startDateObj.getFullYear()}`;
+              } else {
+                dateRangeText = formattedStartDate;
+              }
             }
             
             events.push({
               id: doc.id,
               name: data.event_name,
-              date: formattedDate,
+              startDate: formattedStartDate,
+              endDate: formattedEndDate,
+              dateRange: dateRangeText,
               code: data.event_code,
               description: data.event_description || 'No description available',
               image: require('../../assets/event-wedding.png'),
@@ -102,6 +139,7 @@ export default function DashboardScreen({ navigation }) {
       }
     };
 
+    // Updated fetchJoinedEvents function
     const fetchJoinedEvents = async () => {
       try {
         const user = auth.currentUser;
@@ -120,21 +158,57 @@ export default function DashboardScreen({ navigation }) {
               .then(eventDoc => {
                 if (eventDoc.exists()) {
                   const eventData = eventDoc.data();
-                  let formattedDate = eventData.event_date;
                   
-                  if (eventData.event_date && typeof eventData.event_date.toDate === 'function') {
-                    const dateObj = eventData.event_date.toDate();
-                    formattedDate = dateObj.toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
+                  // Format start date
+                  let formattedStartDate = 'No date specified';
+                  let startDateObj = null;
+                  
+                  if (eventData.event_start_date && typeof eventData.event_start_date.toDate === 'function') {
+                    startDateObj = eventData.event_start_date.toDate();
+                    formattedStartDate = startDateObj.toLocaleDateString('en-US', {
+                      month: 'short',
                       day: 'numeric',
                     });
+                  }
+                  
+                  // Format end date
+                  let formattedEndDate = '';
+                  let dateRangeText = '';
+                  
+                  if (eventData.event_end_date && typeof eventData.event_end_date.toDate === 'function') {
+                    const endDateObj = eventData.event_end_date.toDate();
+                    
+                    formattedEndDate = endDateObj.toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    });
+                    
+                    // Get year from start date
+                    const eventYear = startDateObj ? startDateObj.getFullYear() : new Date().getFullYear();
+                    
+                    // Create a formatted date range
+                    if (formattedStartDate === formattedEndDate) {
+                      // Single day event
+                      dateRangeText = `${formattedStartDate}, ${eventYear}`;
+                    } else {
+                      // Multi-day event
+                      dateRangeText = `${formattedStartDate} - ${formattedEndDate}, ${eventYear}`;
+                    }
+                  } else {
+                    // Only start date available
+                    if (startDateObj) {
+                      dateRangeText = `${formattedStartDate}, ${startDateObj.getFullYear()}`;
+                    } else {
+                      dateRangeText = formattedStartDate;
+                    }
                   }
                   
                   return {
                     id: eventDoc.id,
                     name: eventData.event_name,
-                    date: formattedDate,
+                    startDate: formattedStartDate,
+                    endDate: formattedEndDate,
+                    dateRange: dateRangeText,
                     code: eventData.event_code,
                     description: eventData.event_description || 'No description available',
                     image: require('../../assets/event-wedding.png'),
@@ -494,10 +568,11 @@ export default function DashboardScreen({ navigation }) {
                     {event.description}
                   </Text>
                   
+                  {/* Update this section in the event card */}
                   <View style={styles.eventDetailsRow}>
                     <View style={styles.eventDetail}>
                       <Ionicons name="calendar-outline" size={14} color="#FF6F61" />
-                      <Text style={styles.eventDetailText}>{event.date}</Text>
+                      <Text style={styles.eventDetailText}>{event.dateRange}</Text>
                     </View>
                     
                     <View style={styles.eventDetail}>
@@ -927,6 +1002,40 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 18,
+    color: '#FF6F61',
+    fontWeight: '500',
+  },
+  // Add these styles to the StyleSheet
+  eventDateDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 20,
+  },
+  calendarIcon: {
+    marginRight: 6,
+    color: '#FF6F61',
+  },
+  dateContainer: {
+    flexDirection: 'column',
+  },
+  dateText: {
+    fontSize: 13,
+    color: '#666',
+  },
+  dateSubtext: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 2,
+  },
+  durationBadge: {
+    backgroundColor: 'rgba(255, 111, 97, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginTop: 2,
+  },
+  durationText: {
+    fontSize: 10,
     color: '#FF6F61',
     fontWeight: '500',
   },

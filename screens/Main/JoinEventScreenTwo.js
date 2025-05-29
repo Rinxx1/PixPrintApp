@@ -21,6 +21,9 @@ import { doc, getDoc } from 'firebase/firestore';
 const { width, height } = Dimensions.get('window');
 
 export default function JoinEventScreenTwo({ route, navigation }) {
+  // Extract eventId from route params
+  const { eventId } = route.params || {};
+  
   // State variables
   const [eventName, setEventName] = useState(''); 
   const [eventDate, setEventDate] = useState('');
@@ -31,6 +34,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const [selectedCategory, setSelectedCategory] = useState('person');
   const [activeTab, setActiveTab] = useState('gallery');
   const [eventCode, setEventCode] = useState('');
+  const [eventTime, setEventTime] = useState('All Day');
   
   // Animation values
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -39,6 +43,127 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     outputRange: [1, 0.6],
     extrapolate: 'clamp'
   });
+  
+  // IMPORTANT: Move fetchEventData inside the component
+  // Update the fetchEventData function to handle date range
+  const fetchEventData = async () => {
+    try {
+      if (!eventId) {
+        console.error("No event ID provided");
+        setLoading(false);
+        return;
+      }
+
+      const eventRef = doc(db, 'event_tbl', eventId);
+      const eventDoc = await getDoc(eventRef);
+      
+      if (eventDoc.exists()) {
+        const eventData = eventDoc.data();
+        
+        setEventName(eventData.event_name || 'Unnamed Event');
+        setEventCode(eventData.event_code || '');
+        
+        // Handle event_start_date and event_end_date
+        let formattedDateRange = 'No date specified';
+        
+        // Format start date if available
+        if (eventData.event_start_date && typeof eventData.event_start_date.toDate === 'function') {
+          const startDateObj = eventData.event_start_date.toDate();
+          let startDate = startDateObj.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          });
+          
+          // If there's an end date and it's different from start date
+          if (eventData.event_end_date && typeof eventData.event_end_date.toDate === 'function') {
+            const endDateObj = eventData.event_end_date.toDate();
+            
+            // Check if dates are on the same day
+            if (startDateObj.toDateString() !== endDateObj.toDateString()) {
+              // Different days - show full range
+              const endDate = endDateObj.toLocaleDateString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+              });
+              formattedDateRange = `${startDate} - ${endDate}`;
+            } else {
+              // Same day - just show one date
+              formattedDateRange = startDate;
+            }
+          } else {
+            // Only start date available
+            formattedDateRange = startDate;
+          }
+        } 
+        // Handle legacy format for backwards compatibility
+        else if (eventData.event_date && typeof eventData.event_date.toDate === 'function') {
+          const dateObj = eventData.event_date.toDate();
+          formattedDateRange = dateObj.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          });
+        }
+        
+        setEventDate(formattedDateRange);
+        setEventDescription(eventData.event_description || 'No description available');
+
+        // Extract time information for display in the stats section
+        let timeDisplay = "All Day";
+
+        if (eventData.event_start_date && typeof eventData.event_start_date.toDate === 'function') {
+          const startTimeObj = eventData.event_start_date.toDate();
+          let startTime = startTimeObj.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+          
+          // If there's an end date and time
+          if (eventData.event_end_date && typeof eventData.event_end_date.toDate === 'function') {
+            const endTimeObj = eventData.event_end_date.toDate();
+            let endTime = endTimeObj.toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true
+            });
+            
+            timeDisplay = `${startTime} - ${endTime}`;
+          } else {
+            timeDisplay = startTime;
+          }
+
+          setEventTime(timeDisplay);
+        } else {
+          setEventTime("All Day");
+        }
+      } else {
+        console.log('No such event document!');
+        setEventName('Event Not Found');
+        setEventDate('');
+        setEventDescription('The requested event could not be found.');
+      }
+    } catch (error) {
+      console.error("Error fetching event details:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Add console log to debug
+  useEffect(() => {
+    console.log('JoinEventScreenTwo received eventId:', eventId);
+    
+    // Check if eventId is available from route params
+    if (!eventId) {
+      console.error('No event ID provided');
+      setLoading(false);
+    } else {
+      fetchEventData();
+    }
+  }, [eventId]);
   
   // Image grids for different categories
   const personImages = [
@@ -81,56 +206,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     setSelectedCategory(category);
   };
 
-  // Fetch event details from Firestore
-  useEffect(() => {
-    const fetchEventDetails = async () => {
-      try {
-        const { eventId } = route.params;
-        
-        if (!eventId) {
-          console.error("No event ID provided");
-          setLoading(false);
-          return;
-        }
-
-        const eventRef = doc(db, 'event_tbl', eventId);
-        const eventDoc = await getDoc(eventRef);
-        
-        if (eventDoc.exists()) {
-          const eventData = eventDoc.data();
-          
-          setEventName(eventData.event_name || 'Unnamed Event');
-          setEventCode(eventData.event_code || ''); // Added this line to get the event code
-          
-          if (eventData.event_date && typeof eventData.event_date.toDate === 'function') {
-            const dateObj = eventData.event_date.toDate();
-            const formattedDate = dateObj.toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            });
-            setEventDate(formattedDate);
-          } else {
-            setEventDate(eventData.event_date || 'No date specified');
-          }
-          
-          setEventDescription(eventData.event_description || 'No description available');
-        } else {
-          console.log('No such event document!');
-          setEventName('Event Not Found');
-          setEventDate('');
-          setEventDescription('The requested event could not be found.');
-        }
-      } catch (error) {
-        console.error("Error fetching event details:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchEventDetails();
-  }, [route.params]);
-
   // Determine which set of images to display based on selected category
   let images = [];
   let galleryTitle = '';
@@ -158,14 +233,23 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     setSelectedImage(null);
   };
 
-  // Update tab selection
+  // Make sure JoinEventScreenTwo is passing the eventId to JoinEventSettings
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     
+    if (!eventId) {
+      console.warn('No eventId available for navigation');
+      // Maybe show alert to user
+      return;
+    }
+    
+    //console.log(`Navigating to ${tab} with eventId:`, eventId);
+    
     if (tab === 'camera') {
-      navigation.navigate('Camera');
-    } else if (tab === 'list') {
-      // Handle list view or navigation
+      navigation.navigate('Camera', { eventId });
+    } else if (tab === 'settings') {
+      // Make sure to pass the eventId here
+      navigation.navigate('JoinEventSettings', { eventId });
     }
   };
 
@@ -180,7 +264,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      <HeaderBar navigation={navigation} showBack={false} />
+      <HeaderBar navigation={navigation} showBack={true} />
 
       <Animated.ScrollView 
         contentContainerStyle={styles.scrollContent}
@@ -224,9 +308,19 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             </TouchableOpacity>
           </View>
 
+          {/* Date Row - Updated for date range */}
           <View style={styles.dateRow}>
-            <Ionicons name="calendar-outline" size={16} color="#FF6F61" />
-            <Text style={styles.date}>{eventDate}</Text>
+            <View style={styles.dateIconContainer}>
+              <Ionicons name="calendar-outline" size={16} color="#FF6F61" />
+            </View>
+            <View style={styles.dateTextContainer}>
+              <Text style={styles.date}>{eventDate}</Text>
+              {eventDate && eventDate.includes(' - ') && (
+                <View style={styles.multiDayBadge}>
+                  <Text style={styles.multiDayText}>Multi-day Event</Text>
+                </View>
+              )}
+            </View>
           </View>
 
           <View style={styles.separator} />
@@ -243,10 +337,11 @@ export default function JoinEventScreenTwo({ route, navigation }) {
               <Ionicons name="people-outline" size={18} color="#FF6F61" />
               <Text style={styles.statValue}>254 Going</Text>
             </View>
+            {/* Only show time if it's available */}
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Ionicons name="time-outline" size={18} color="#FF6F61" />
-              <Text style={styles.statValue}>7PM - 11PM</Text>
+              <Text style={styles.statValue}>{eventTime}</Text>
             </View>
           </View>
         </View>
@@ -592,10 +687,28 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 16,
   },
+  dateIconContainer: {
+    marginRight: 6,
+  },
+  dateTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   date: {
     fontSize: 14,
     color: '#666',
-    marginLeft: 6,
+  },
+  multiDayBadge: {
+    backgroundColor: '#FF6F61',
+    borderRadius: 12,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    marginLeft: 8,
+  },
+  multiDayText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   separator: {
     height: 1,

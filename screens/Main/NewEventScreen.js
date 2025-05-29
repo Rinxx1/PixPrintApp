@@ -9,7 +9,9 @@ import {
   Alert,
   ScrollView,
   Animated,
-  Dimensions
+  Dimensions,
+  ActivityIndicator,
+  Platform 
 } from 'react-native';
 import HeaderBar from '../../components/HeaderBar';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,14 +24,16 @@ const { width } = Dimensions.get('window');
 
 export default function NewEventScreen({ navigation }) {
   const [eventName, setEventName] = useState('');
-  const [eventDate, setEventDate] = useState(null);
+  const [eventStartDate, setEventStartDate] = useState(null);
+  const [eventEndDate, setEventEndDate] = useState(null);
   const [eventDescription, setEventDescription] = useState('');
   const [accessCode, setAccessCode] = useState('');
-  const [secureText, setSecureText] = useState(true);
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+  const [datePickerMode, setDatePickerMode] = useState('start'); // 'start' or 'end'
   const [userCredits, setUserCredits] = useState(0);
   const [eventPrice, setEventPrice] = useState(50);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
 
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -52,7 +56,12 @@ export default function NewEventScreen({ navigation }) {
 
     // Fetch user credits
     fetchUserCredits();
-  }, []);
+    
+    // Generate code on first load only
+    if (!accessCode) {
+      generateUniqueAccessCode();
+    }
+  }, []); // Empty dependency array
 
   const fetchUserCredits = async () => {
     const user = auth.currentUser;
@@ -70,12 +79,67 @@ export default function NewEventScreen({ navigation }) {
     }
   };
 
-  const showDatePicker = () => setDatePickerVisibility(true);
+  const showDatePicker = (mode) => {
+    setDatePickerMode(mode);
+    setDatePickerVisibility(true);
+  };
+  
   const hideDatePicker = () => setDatePickerVisibility(false);
 
   const handleConfirm = (date) => {
-    setEventDate(date);
+    if (datePickerMode === 'start') {
+      setEventStartDate(date);
+      // If end date is before start date or not set, update it
+      if (!eventEndDate || eventEndDate < date) {
+        // Set end date to same day initially
+        const endOfDay = new Date(date);
+        endOfDay.setHours(23, 59, 59, 999);
+        setEventEndDate(endOfDay);
+      }
+    } else {
+      // Ensure end date is not before start date
+      if (eventStartDate && date < eventStartDate) {
+        Alert.alert('Error', 'End date cannot be before start date');
+        return;
+      }
+      setEventEndDate(date);
+    }
     hideDatePicker();
+  };
+
+  // Check if an access code already exists in Firestore
+  const isCodeUnique = async (code) => {
+    const eventRef = collection(db, 'event_tbl');
+    const q = query(eventRef, where('event_code', '==', code));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.empty;
+  };
+
+  // Generate a unique access code
+  const generateUniqueAccessCode = async () => {
+    try {
+      setIsGeneratingCode(true);
+      let isUnique = false;
+      let newCode = '';
+      
+      // Try up to 10 times to generate a unique code
+      for (let i = 0; i < 10; i++) {
+        newCode = generateEventCode();
+        isUnique = await isCodeUnique(newCode);
+        if (isUnique) break;
+      }
+      
+      if (isUnique) {
+        setAccessCode(newCode);
+      } else {
+        console.error('Could not generate a unique code after multiple attempts');
+        setAccessCode('');
+      }
+    } catch (error) {
+      console.error('Error generating unique code:', error);
+    } finally {
+      setIsGeneratingCode(false);
+    }
   };
 
   const handleCreateEvent = async () => {
@@ -84,32 +148,50 @@ export default function NewEventScreen({ navigation }) {
       return;
     }
     
-    if (!eventDate) {
-      Alert.alert('Error', 'Please select an event date');
+    if (!eventStartDate) {
+      Alert.alert('Error', 'Please select a start date');
       return;
     }
     
-    if (!accessCode.trim()) {
-      Alert.alert('Error', 'Please enter an access code');
+    if (!eventEndDate) {
+      Alert.alert('Error', 'Please select an end date');
+      return;
+    }
+    
+    if (!accessCode) {
+      Alert.alert('Error', 'Please wait while the access code is being generated');
       return;
     }
 
+    // ⭐ IMPORTANT: Capture the current access code to ensure it doesn't change
+    const finalAccessCode = accessCode;
+    
     if (userCredits >= eventPrice) {
       setIsLoading(true);
       
       try {
         const user = auth.currentUser;
         if (user) {
-          await createEventInFirestore(eventName, eventDate, eventDescription, accessCode, user.uid);
+          console.log("About to create event with code:", finalAccessCode);
+          
+          await createEventInFirestore(
+            eventName, 
+            eventStartDate, 
+            eventEndDate, 
+            eventDescription, 
+            finalAccessCode, // Use the captured code
+            user.uid
+          );
           await updateCredits(user.uid, userCredits - eventPrice);
           
           Alert.alert(
             'Event Created Successfully!', 
-            `"${eventName}" has been created and is ready for guests.`,
+            `"${eventName}" has been created and is ready for guests.\n\nEvent Code: ${finalAccessCode}`, // Use the captured code
             [{ text: 'OK', onPress: () => navigation.navigate('Tabs') }]
           );
         }
       } catch (error) {
+        console.error("Error during event creation:", error);
         Alert.alert('Error', 'Failed to create event. Please try again.');
       } finally {
         setIsLoading(false);
@@ -126,15 +208,26 @@ export default function NewEventScreen({ navigation }) {
     }
   };
 
-  const createEventInFirestore = async (eventName, eventDate, eventDescription, accessCode, userId) => {
+  const createEventInFirestore = async (
+    eventName, 
+    eventStartDate, 
+    eventEndDate, 
+    eventDescription, 
+    accessCode, 
+    userId
+  ) => {
     try {
+      console.log("Creating event with access code:", accessCode);
       const eventRef = collection(db, 'event_tbl');
       await addDoc(eventRef, {
         event_name: eventName,
-        event_date: eventDate,
+        event_start_date: eventStartDate,
+        event_end_date: eventEndDate,
         event_description: eventDescription,
         user_id: userId,
-        event_code: generateEventCode(),
+        event_code: accessCode,
+        created_at: new Date(),
+        status: 'active'
       });
     } catch (e) {
       console.error('Error creating event: ', e);
@@ -143,7 +236,13 @@ export default function NewEventScreen({ navigation }) {
   };
 
   const generateEventCode = () => {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
+    // Generate a code with letters and numbers (more visually distinct than base36)
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed similar looking chars like I, 1, O, 0
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
   };
 
   const updateCredits = async (userId, newCredits) => {
@@ -163,6 +262,26 @@ export default function NewEventScreen({ navigation }) {
       console.error('Error updating credits: ', e);
       throw e;
     }
+  };
+
+  // Format date for display
+  const formatDate = (date) => {
+    if (!date) return '';
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  // Format time for display  
+  const formatTime = (date) => {
+    if (!date) return '';
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit', 
+      minute: '2-digit'
+    });
   };
 
   const hasEnoughCredits = userCredits >= eventPrice;
@@ -266,16 +385,60 @@ export default function NewEventScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Event Date */}
+          {/* Event Start Date */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Event Date</Text>
-            <TouchableOpacity onPress={showDatePicker} style={styles.inputContainer}>
-              <Ionicons name="time-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
+            <Text style={styles.label}>Event Start</Text>
+            <TouchableOpacity onPress={() => showDatePicker('start')} style={styles.inputContainer}>
+              <Ionicons name="calendar-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
               <Text style={[styles.input, styles.dateText]}>
-                {eventDate ? eventDate.toLocaleDateString() : 'Select date'}
+                {eventStartDate ? formatDate(eventStartDate) : 'Select start date'}
               </Text>
               <Ionicons name="chevron-down" size={20} color="#AAAAAA" />
             </TouchableOpacity>
+          </View>
+
+          {/* Event End Date */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Event End</Text>
+            <TouchableOpacity 
+              onPress={() => showDatePicker('end')} 
+              style={[
+                styles.inputContainer,
+                !eventStartDate && styles.disabledInput
+              ]}
+              disabled={!eventStartDate}
+            >
+              <Ionicons 
+                name="calendar-outline" 
+                size={20} 
+                color={!eventStartDate ? "#CCCCCC" : "#AAAAAA"} 
+                style={styles.inputIcon} 
+              />
+              <Text 
+                style={[
+                  styles.input, 
+                  styles.dateText,
+                  !eventStartDate && styles.disabledText
+                ]}
+              >
+                {eventEndDate 
+                  ? formatDate(eventEndDate) 
+                  : !eventStartDate 
+                    ? 'Select start date first' 
+                    : 'Select end date'
+                }
+              </Text>
+              <Ionicons 
+                name="chevron-down" 
+                size={20} 
+                color={!eventStartDate ? "#CCCCCC" : "#AAAAAA"} 
+              />
+            </TouchableOpacity>
+            {eventStartDate && eventEndDate && (
+              <Text style={styles.dateRangeText}>
+                Duration: {calculateDurationText(eventStartDate, eventEndDate)}
+              </Text>
+            )}
           </View>
 
           {/* Event Description */}
@@ -299,23 +462,25 @@ export default function NewEventScreen({ navigation }) {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Access Code</Text>
             <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
-              <TextInput
-                placeholder="Create access code"
-                placeholderTextColor="#AAAAAA"
-                style={styles.input}
-                value={accessCode}
-                onChangeText={setAccessCode}
-                secureTextEntry={secureText}
-              />
-              <TouchableOpacity onPress={() => setSecureText(!secureText)}>
-                <Ionicons
-                  name={secureText ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color="#AAAAAA"
-                />
+              <Ionicons name="key-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
+              <Text style={[styles.input, styles.codeText]}>
+                {isGeneratingCode ? 'Generating code...' : accessCode}
+              </Text>
+              <TouchableOpacity 
+                onPress={generateUniqueAccessCode} 
+                disabled={isGeneratingCode}
+                style={isGeneratingCode ? styles.disabledButton : styles.refreshButton}
+              >
+                {isGeneratingCode ? (
+                  <ActivityIndicator size="small" color="#AAAAAA" />
+                ) : (
+                  <Ionicons name="refresh" size={20} color="#FF6F61" />
+                )}
               </TouchableOpacity>
             </View>
+            <Text style={styles.codeHelpText}>
+              Unique access code for your guests to join the event
+            </Text>
           </View>
         </Animated.View>
 
@@ -360,12 +525,15 @@ export default function NewEventScreen({ navigation }) {
           ]}
         >
           <TouchableOpacity 
-            style={[styles.createButton, (!hasEnoughCredits || isLoading) && styles.createButtonDisabled]} 
+            style={[
+              styles.createButton, 
+              (!hasEnoughCredits || isLoading || isGeneratingCode) && styles.createButtonDisabled
+            ]} 
             onPress={handleCreateEvent}
-            disabled={!hasEnoughCredits || isLoading}
+            disabled={!hasEnoughCredits || isLoading || isGeneratingCode}
           >
             <LinearGradient
-              colors={(!hasEnoughCredits || isLoading) ? ['#CCCCCC', '#AAAAAA'] : ['#FF8D76', '#FF6F61']}
+              colors={(!hasEnoughCredits || isLoading || isGeneratingCode) ? ['#CCCCCC', '#AAAAAA'] : ['#FF8D76', '#FF6F61']}
               style={styles.createButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -386,13 +554,29 @@ export default function NewEventScreen({ navigation }) {
       {/* Date Picker Modal */}
       <DateTimePickerModal
         isVisible={isDatePickerVisible}
-        mode="date"
+        mode="datetime"
         onConfirm={handleConfirm}
         onCancel={hideDatePicker}
-        minimumDate={new Date()}
+        minimumDate={datePickerMode === 'start' ? new Date() : eventStartDate || new Date()}
+        date={datePickerMode === 'start' ? (eventStartDate || new Date()) : (eventEndDate || eventStartDate || new Date())}
       />
     </View>
   );
+}
+
+// Helper function to calculate duration between two dates
+function calculateDurationText(startDate, endDate) {
+  const diffTime = Math.abs(endDate - startDate);
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const diffHours = Math.floor((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  
+  if (diffDays === 0) {
+    return `${diffHours} hour${diffHours !== 1 ? 's' : ''}`;
+  } else if (diffHours === 0) {
+    return `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
+  } else {
+    return `${diffDays} day${diffDays !== 1 ? 's' : ''} ${diffHours} hour${diffHours !== 1 ? 's' : ''}`;
+  }
 }
 
 const styles = StyleSheet.create({
@@ -547,6 +731,10 @@ const styles = StyleSheet.create({
     borderColor: '#EEEEEE',
     minHeight: 50,
   },
+  disabledInput: {
+    backgroundColor: '#F9F9F9',
+    borderColor: '#EEEEEE',
+  },
   inputIcon: {
     marginRight: 12,
   },
@@ -556,12 +744,41 @@ const styles = StyleSheet.create({
     color: '#333333',
     paddingVertical: 0,
   },
+  disabledText: {
+    color: '#AAAAAA',
+  },
   dateText: {
     paddingVertical: 14,
+  },
+  dateRangeText: {
+    fontSize: 12,
+    color: '#666666',
+    marginTop: 6,
+    marginLeft: 4,
   },
   textArea: {
     paddingVertical: 12,
     textAlignVertical: 'top',
+  },
+  codeText: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 18,
+    letterSpacing: 1,
+    color: '#FF6F61',
+    fontWeight: '700',
+  },
+  codeHelpText: {
+    fontSize: 12,
+    color: '#666666',
+    marginTop: 6,
+    marginLeft: 4,
+  },
+  refreshButton: {
+    padding: 8,
+  },
+  disabledButton: {
+    padding: 8,
+    opacity: 0.5,
   },
   featuresCard: {
     backgroundColor: '#FFFFFF',
