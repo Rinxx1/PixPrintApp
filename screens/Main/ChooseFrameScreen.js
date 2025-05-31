@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Image, StyleSheet } from 'react-native';
-import HeaderBar from '../components/HeaderBar';
+import HeaderBar from '../../components/HeaderBar';
 
 const mockFrames = [
-  require('../assets/frame1.png'),
-  require('../assets/frame1.png'),
-  require('../assets/frame1.png'),
-  require('../assets/frame1.png'),
+  require('../../assets/frame1.png'),
+  require('../../assets/frame1.png'),
+  require('../../assets/frame1.png'),
+  require('../../assets/frame1.png'),
 ];
 
 export default function ChooseFrameScreen({ navigation }) {

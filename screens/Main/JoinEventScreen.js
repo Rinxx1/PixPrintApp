@@ -6,7 +6,7 @@ import {
   StyleSheet,
   Image,
 } from 'react-native';
-import HeaderBar from '../components/HeaderBar';
+import HeaderBar from '../../components/HeaderBar';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function JoinEventScreen({ navigation }) {
@@ -18,7 +18,7 @@ export default function JoinEventScreen({ navigation }) {
       {/* Content */}
       <View style={styles.content}>
         <Image
-          source={require('../assets/event-wedding.png')}
+          source={require('../../assets/event-wedding.png')}
           style={styles.image}
         />
 
