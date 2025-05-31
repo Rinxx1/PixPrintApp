@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "315145642881",
+    "project_id": "pixprintapp",
+    "storage_bucket": "pixprintapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:315145642881:android:ad319802eeea13c24c7e80",
+        "android_client_info": {
+          "package_name": "pix.print.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBC0Ld15pfJ457vfC24tKld__TAFUKjP2U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

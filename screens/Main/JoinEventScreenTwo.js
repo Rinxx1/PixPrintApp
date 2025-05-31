@@ -1,0 +1,1351 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  Image, 
+  ScrollView, 
+  TouchableOpacity, 
+  ActivityIndicator, 
+  Modal,
+  Animated,
+  Dimensions,
+  ImageBackground
+} from 'react-native';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import HeaderBar from '../../components/HeaderBar';
+import { db, auth } from '../../firebase'; // Make sure to import auth
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+
+const { width, height } = Dimensions.get('window');
+
+export default function JoinEventScreenTwo({ route, navigation }) {
+  // Extract eventId from route params
+  const { eventId } = route.params || {};
+  
+  // State variables
+  const [eventName, setEventName] = useState(''); 
+  const [eventDate, setEventDate] = useState('');
+  const [eventDescription, setEventDescription] = useState('');
+  const [eventLocation, setEventLocation] = useState(''); // Add event location state
+  const [eventStartDate, setEventStartDate] = useState(null); // Add start date state
+  const [eventEndDate, setEventEndDate] = useState(null); // Add end date state
+  const [loading, setLoading] = useState(true);
+  const [selectedImage, setSelectedImage] = useState(null); 
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('person');
+  const [activeTab, setActiveTab] = useState('gallery');
+  const [eventCode, setEventCode] = useState('');
+  const [eventTime, setEventTime] = useState('All Day');
+  const [attendeeCount, setAttendeeCount] = useState(0); // Add attendee count state
+  
+  // Updated state for different photo categories
+  const [eventPhotos, setEventPhotos] = useState([]); // All photos
+  const [myPhotos, setMyPhotos] = useState([]); // Current user's photos
+  const [photosLoading, setPhotosLoading] = useState(false);
+  
+  // Animation values
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const imageOpacity = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [1, 0.6],
+    extrapolate: 'clamp'
+  });
+
+  // Function to count attendees for this specific event
+  const getEventAttendeeCount = async (eventId) => {
+    try {
+      const joinedRef = collection(db, 'joined_tbl');
+      const q = query(joinedRef, where('event_id', '==', eventId));
+      const querySnapshot = await getDocs(q);
+      const count = querySnapshot.size;
+      return count;
+    } catch (error) {
+      return 0;
+    }
+  };
+
+  // Function to check if event is finished or ongoing
+  const getEventStatus = () => {
+    const now = new Date();
+    
+    // If we have end date, use it for comparison
+    if (eventEndDate) {
+      return now > eventEndDate ? 'finished' : 'active';
+    }
+    
+    // If we only have start date, consider event finished after 24 hours
+    if (eventStartDate) {
+      const eventEnd = new Date(eventStartDate);
+      eventEnd.setHours(eventEnd.getHours() + 24);
+      return now > eventEnd ? 'finished' : 'active';
+    }
+    
+    // Default to active if no dates available
+    return 'active';
+  };
+
+  // Function to determine if event is in the future, present, or past
+  const getEventTimeStatus = () => {
+    const now = new Date();
+    
+    // If we have start date
+    if (eventStartDate) {
+      const startDate = new Date(eventStartDate);
+      startDate.setHours(0, 0, 0, 0); // Set to beginning of day for comparison
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Set to beginning of today
+      
+      if (startDate > today) {
+        return 'future'; // Event is in the future
+      } else if (eventEndDate) {
+        const endDate = new Date(eventEndDate);
+        endDate.setHours(23, 59, 59, 999); // Set to end of end date
+        
+        if (now >= startDate && now <= endDate) {
+          return 'present'; // Event is currently happening
+        } else if (now > endDate) {
+          return 'past'; // Event has finished
+        }
+      } else {
+        // Single day event or no end date
+        if (startDate.getTime() === today.getTime()) {
+          return 'present'; // Event is today
+        } else if (startDate < today) {
+          return 'past'; // Event was in the past
+        }
+      }
+    }
+    
+    // Default to present if no dates available
+    return 'present';
+  };
+
+  // Function to get the appropriate attendee text
+  const getAttendeeText = () => {
+    const timeStatus = getEventTimeStatus();
+    
+    if (timeStatus === 'future') {
+      return attendeeCount === 1 ? 'Going' : 'Going';
+    } else {
+      // For present or past events
+      return attendeeCount === 1 ? 'Attendee' : 'Attendees';
+    }
+  };
+
+  // Function to fetch all event photos from Firebase
+  const fetchEventPhotos = async () => {
+    if (!eventId) return;
+    
+    try {
+      setPhotosLoading(true);
+      
+      // Query all photos for this specific event
+      const photosRef = collection(db, 'photos_tbl');
+      const q = query(
+        photosRef,
+        where('event_id', '==', eventId)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const photos = [];
+      
+      querySnapshot.forEach((doc) => {
+        const photoData = doc.data();
+        photos.push({
+          id: doc.id,
+          imageUrl: photoData.photo_url,
+          username: photoData.username || 'Unknown User',
+          uploadedAt: photoData.uploaded_at,
+          filter: photoData.filter,
+          filterName: photoData.filter_name,
+          likes: photoData.likes || 0,
+          comments: photoData.comments || 0,
+          userId: photoData.user_id
+        });
+      });
+      
+      // Sort photos by upload date (newest first)
+      const sortedPhotos = photos.sort((a, b) => {
+        if (!a.uploadedAt && !b.uploadedAt) return 0;
+        if (!a.uploadedAt) return 1;
+        if (!b.uploadedAt) return -1;
+        
+        const dateA = a.uploadedAt.toDate ? a.uploadedAt.toDate() : new Date(a.uploadedAt);
+        const dateB = b.uploadedAt.toDate ? b.uploadedAt.toDate() : new Date(b.uploadedAt);
+        
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      setEventPhotos(sortedPhotos);
+      
+    } catch (error) {
+      setEventPhotos([]);
+    } finally {
+      setPhotosLoading(false);
+    }
+  };
+
+  // Function to fetch current user's photos from this event
+  const fetchMyPhotos = async () => {
+    if (!eventId) return;
+    
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setMyPhotos([]);
+      return;
+    }
+    
+    try {
+      setPhotosLoading(true);
+      
+      // Query photos for this specific event and current user
+      const photosRef = collection(db, 'photos_tbl');
+      const q = query(
+        photosRef,
+        where('event_id', '==', eventId),
+        where('user_id', '==', currentUser.uid)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const photos = [];
+      
+      querySnapshot.forEach((doc) => {
+        const photoData = doc.data();
+        photos.push({
+          id: doc.id,
+          imageUrl: photoData.photo_url,
+          username: photoData.username || 'Unknown User',
+          uploadedAt: photoData.uploaded_at,
+          filter: photoData.filter,
+          filterName: photoData.filter_name,
+          likes: photoData.likes || 0,
+          comments: photoData.comments || 0,
+          userId: photoData.user_id
+        });
+      });
+      
+      // Sort photos by upload date (newest first)
+      const sortedPhotos = photos.sort((a, b) => {
+        if (!a.uploadedAt && !b.uploadedAt) return 0;
+        if (!a.uploadedAt) return 1;
+        if (!b.uploadedAt) return -1;
+        
+        const dateA = a.uploadedAt.toDate ? a.uploadedAt.toDate() : new Date(a.uploadedAt);
+        const dateB = b.uploadedAt.toDate ? b.uploadedAt.toDate() : new Date(b.uploadedAt);
+        
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      setMyPhotos(sortedPhotos);
+      
+    } catch (error) {
+      setMyPhotos([]);
+    } finally {
+      setPhotosLoading(false);
+    }
+  };
+
+  // Update the fetchEventData function to also fetch attendee count
+  const fetchEventData = async () => {
+    try {
+      if (!eventId) {
+        setLoading(false);
+        return;
+      }
+
+      const eventRef = doc(db, 'event_tbl', eventId);
+      const eventDoc = await getDoc(eventRef);
+      
+      if (eventDoc.exists()) {
+        const eventData = eventDoc.data();
+        
+        setEventName(eventData.event_name || 'Unnamed Event');
+        setEventCode(eventData.event_code || '');
+        setEventLocation(eventData.event_location || 'Location not specified');
+        
+        // Store the actual date objects for status checking
+        let startDateObj = null;
+        let endDateObj = null;
+        
+        // Handle event_start_date and event_end_date
+        let formattedDateRange = 'No date specified';
+        
+        // Format start date if available
+        if (eventData.event_start_date && typeof eventData.event_start_date.toDate === 'function') {
+          startDateObj = eventData.event_start_date.toDate();
+          setEventStartDate(startDateObj); // Store for status checking
+          
+          let startDate = startDateObj.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          });
+          
+          // If there's an end date and it's different from start date
+          if (eventData.event_end_date && typeof eventData.event_end_date.toDate === 'function') {
+            endDateObj = eventData.event_end_date.toDate();
+            setEventEndDate(endDateObj); // Store for status checking
+            
+            // Check if dates are on the same day
+            if (startDateObj.toDateString() !== endDateObj.toDateString()) {
+              // Different days - show full range
+              const endDate = endDateObj.toLocaleDateString('en-US', {
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric',
+              });
+              formattedDateRange = `${startDate} - ${endDate}`;
+            } else {
+              // Same day - just show one date
+              formattedDateRange = startDate;
+            }
+          } else {
+            // Only start date available
+            formattedDateRange = startDate;
+          }
+        } 
+        // Handle legacy format for backwards compatibility
+        else if (eventData.event_date && typeof eventData.event_date.toDate === 'function') {
+          const dateObj = eventData.event_date.toDate();
+          setEventStartDate(dateObj); // Store for status checking
+          formattedDateRange = dateObj.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          });
+        }
+        
+        setEventDate(formattedDateRange);
+        setEventDescription(eventData.event_description || 'No description available');
+
+        // Extract time information for display in the stats section
+        let timeDisplay = "All Day";
+
+        if (eventData.event_start_date && typeof eventData.event_start_date.toDate === 'function') {
+          const startTimeObj = eventData.event_start_date.toDate();
+          let startTime = startTimeObj.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+          
+          // If there's an end date and time
+          if (eventData.event_end_date && typeof eventData.event_end_date.toDate === 'function') {
+            const endTimeObj = eventData.event_end_date.toDate();
+            let endTime = endTimeObj.toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true
+            });
+            
+            timeDisplay = `${startTime} - ${endTime}`;
+          } else {
+            timeDisplay = startTime;
+          }
+
+          setEventTime(timeDisplay);
+        } else {
+          setEventTime("All Day");
+        }
+
+        // Fetch attendee count for this event
+        const count = await getEventAttendeeCount(eventId);
+        setAttendeeCount(count);
+        
+      } else {
+        setEventName('Event Not Found');
+        setEventDate('');
+        setEventLocation('');
+        setEventDescription('The requested event could not be found.');
+        setAttendeeCount(0);
+      }
+    } catch (error) {
+      setAttendeeCount(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Add console log to debug
+  useEffect(() => {
+    // Check if eventId is available from route params
+    if (!eventId) {
+      setLoading(false);
+    } else {
+      fetchEventData();
+      fetchEventPhotos(); // Fetch all photos when component mounts
+    }
+  }, [eventId]);
+
+  // Update photos when category changes
+  useEffect(() => {
+    if (eventId) {
+      if (selectedCategory === 'person') {
+        fetchEventPhotos(); // Fetch all photos
+      } else if (selectedCategory === 'group') {
+        fetchMyPhotos(); // Fetch user's photos
+      }
+    }
+  }, [selectedCategory]);
+  
+  // Image grids for photographer category - keep static data
+  const cameraImages = [
+    { id: 1, imageUrl: require('../../assets/avatar.png') },
+    { id: 2, imageUrl: require('../../assets/avatar.png') },
+    { id: 3, imageUrl: require('../../assets/avatar.png') },
+    { id: 4, imageUrl: require('../../assets/avatar.png') },
+    { id: 5, imageUrl: require('../../assets/avatar.png') },
+    { id: 6, imageUrl: require('../../assets/avatar.png') },
+    { id: 7, imageUrl: require('../../assets/avatar.png') },
+    { id: 8, imageUrl: require('../../assets/avatar.png') },
+    { id: 9, imageUrl: require('../../assets/avatar.png') },
+  ];
+
+  const handleCategoryChange = (category) => {
+    setSelectedCategory(category);
+  };
+
+  // Determine which set of images to display based on selected category
+  let images = [];
+  let galleryTitle = '';
+
+  if (selectedCategory === 'person') {
+    images = eventPhotos; // All photos from the event
+    galleryTitle = 'All Photos';
+  } else if (selectedCategory === 'camera') {
+    images = cameraImages; // Static photographer photos
+    galleryTitle = 'Photographer';
+  } else if (selectedCategory === 'group') {
+    images = myPhotos; // Current user's photos only
+    galleryTitle = 'My Photos';
+  }
+
+  // Handle the image click
+  const handleImageClick = (imageUrl) => {
+    setSelectedImage(imageUrl);
+    setIsModalVisible(true);
+  };
+
+  // Close the modal
+  const closeModal = () => {
+    setIsModalVisible(false);
+    setSelectedImage(null);
+  };
+
+  // Make sure JoinEventScreenTwo is passing the eventId to JoinEventSettings
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    
+    if (!eventId) {
+      return;
+    }
+    
+    if (tab === 'camera') {
+      navigation.navigate('Camera', { eventId });
+    } else if (tab === 'settings') {
+      navigation.navigate('JoinEventSettings', { eventId });
+    }
+  };
+
+  // Get current event status
+  const eventStatus = getEventStatus();
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FF6F61" />
+        <Text style={styles.loadingText}>Loading event details...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <HeaderBar navigation={navigation} showBack={true} />
+
+      <Animated.ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
+      >
+        {/* Event Cover with Animated Parallax Effect */}
+        <Animated.View style={[styles.coverContainer, { opacity: imageOpacity }]}>
+          <ImageBackground
+            source={require('../../assets/avatar.png')}
+            style={styles.coverImage}
+            resizeMode="cover"
+          >
+            <View style={styles.coverOverlay}>
+              <View style={styles.eventStatus}>
+                <View style={[
+                  styles.statusDot, 
+                  { backgroundColor: eventStatus === 'active' ? '#4CD964' : '#FF6B6B' }
+                ]} />
+                <Text style={styles.statusText}>
+                  {eventStatus === 'active' ? 'Active Event' : 'Event Finished'}
+                </Text>
+              </View>
+            </View>
+          </ImageBackground>
+        </Animated.View>
+
+        {/* Event Info Card */}
+        <View style={styles.eventCard}>
+          <View style={styles.eventHeader}>
+            <View style={styles.titleContainer}>
+              <Text style={styles.title}>{eventName}</Text>
+              {eventCode && (
+                <View style={styles.eventCodeBadge}>
+                  <Ionicons name="key-outline" size={14} color="#FF6F61" />
+                  <Text style={styles.eventCodeText}>{eventCode}</Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity style={styles.shareButton}>
+              <Ionicons name="share-social" size={20} color="#FF6F61" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Date Row - Updated for date range */}
+          <View style={styles.dateRow}>
+            <View style={styles.dateIconContainer}>
+              <Ionicons name="calendar-outline" size={16} color="#FF6F61" />
+            </View>
+            <View style={styles.dateTextContainer}>
+              <Text style={styles.date}>{eventDate}</Text>
+              {eventDate && eventDate.includes(' - ') && (
+                <View style={styles.multiDayBadge}>
+                  <Text style={styles.multiDayText}>Multi-day Event</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.separator} />
+          
+          <Text style={styles.description}>{eventDescription}</Text>
+
+          <View style={styles.eventStats}>
+            <View style={styles.statItem}>
+              <Ionicons name="location-outline" size={18} color="#FF6F61" />
+              <Text style={styles.statValue} numberOfLines={1} ellipsizeMode="tail">
+                {eventLocation}
+              </Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Ionicons name="people-outline" size={18} color="#FF6F61" />
+              <Text style={styles.statValue}>
+                {attendeeCount} {getAttendeeText()}
+              </Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <Ionicons name="time-outline" size={18} color="#FF6F61" />
+              <Text style={styles.statValue}>{eventTime}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Gallery Section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Event Gallery</Text>
+          <Text style={styles.photosCount}>
+            {selectedCategory === 'person' ? eventPhotos.length : 
+             selectedCategory === 'group' ? myPhotos.length : 
+             images.length} Photos
+          </Text>
+        </View>
+
+        {/* Category Selector */}
+        <View style={styles.categoryContainer}>
+          <TouchableOpacity 
+            style={[styles.categoryTab, selectedCategory === 'person' && styles.selectedCategoryTab]}
+            onPress={() => handleCategoryChange('person')}
+          >
+            <Ionicons 
+              name="grid-outline" 
+              size={20} 
+              color={selectedCategory === 'person' ? '#FFFFFF' : '#666666'} 
+            />
+            <Text 
+              style={[
+                styles.categoryText, 
+                selectedCategory === 'person' && styles.selectedCategoryText
+              ]}
+            >
+              All
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.categoryTab, selectedCategory === 'camera' && styles.selectedCategoryTab]}
+            onPress={() => handleCategoryChange('camera')}
+          >
+            <Ionicons 
+              name="camera" 
+              size={20} 
+              color={selectedCategory === 'camera' ? '#FFFFFF' : '#666666'} 
+            />
+            <Text 
+              style={[
+                styles.categoryText, 
+                selectedCategory === 'camera' && styles.selectedCategoryText
+              ]}
+            >
+              Photographer
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.categoryTab, selectedCategory === 'group' && styles.selectedCategoryTab]}
+            onPress={() => handleCategoryChange('group')}
+          >
+            <Ionicons 
+              name="person" 
+              size={20} 
+              color={selectedCategory === 'group' ? '#FFFFFF' : '#666666'} 
+            />
+            <Text 
+              style={[
+                styles.categoryText, 
+                selectedCategory === 'group' && styles.selectedCategoryText
+              ]}
+            >
+              Me
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Gallery Title */}
+        <View style={styles.galleryHeader}>
+          <Text style={styles.galleryTitle}>{galleryTitle}</Text>
+          <TouchableOpacity style={styles.viewAllButton}>
+            <Text style={styles.viewAllText}>View All</Text>
+            <Ionicons name="chevron-forward" size={16} color="#FF6F61" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Loading indicator for photos */}
+        {photosLoading && (selectedCategory === 'person' || selectedCategory === 'group') && (
+          <View style={styles.photosLoadingContainer}>
+            <ActivityIndicator size="small" color="#FF6F61" />
+            <Text style={styles.photosLoadingText}>Loading photos...</Text>
+          </View>
+        )}
+
+        {/* No photos message for All category */}
+        {!photosLoading && selectedCategory === 'person' && eventPhotos.length === 0 && (
+          <View style={styles.noPhotosContainer}>
+            <Ionicons name="images-outline" size={48} color="#CCC" />
+            <Text style={styles.noPhotosText}>No photos uploaded yet</Text>
+            <Text style={styles.noPhotosSubtext}>Be the first to capture memories!</Text>
+          </View>
+        )}
+
+        {/* No photos message for My Photos category */}
+        {!photosLoading && selectedCategory === 'group' && myPhotos.length === 0 && (
+          <View style={styles.noPhotosContainer}>
+            <Ionicons name="camera-outline" size={48} color="#CCC" />
+            <Text style={styles.noPhotosText}>You haven't captured any photos yet</Text>
+            <Text style={styles.noPhotosSubtext}>Start taking photos to see them here!</Text>
+          </View>
+        )}
+
+        {/* Image Gallery Grid - Instagram Style */}
+        {images.length > 0 && (
+          <View style={styles.instaGrid}>
+            {(selectedCategory === 'person' || selectedCategory === 'group') ? (
+              // For dynamic photo arrays (All Photos and My Photos)
+              images.map((photo, index) => {
+                // Create a simpler grid layout for dynamic content
+                const isFirstInRow = index % 3 === 0;
+                
+                if (isFirstInRow) {
+                  return (
+                    <View key={`row-${index}`} style={styles.instaGridRow}>
+                      {[0, 1, 2].map((colIndex) => {
+                        const photoIndex = index + colIndex;
+                        const currentPhoto = images[photoIndex];
+                        if (!currentPhoto) return null;
+                        
+                        return (
+                          <TouchableOpacity
+                            key={`image-${currentPhoto.id}`}
+                            style={styles.instaEqualImage}
+                            onPress={() => handleImageClick(currentPhoto.imageUrl)}
+                          >
+                            <Image 
+                              source={{ uri: currentPhoto.imageUrl }} 
+                              style={styles.eventImage} 
+                              resizeMode="cover"
+                            />
+                            {currentPhoto.filterName && currentPhoto.filterName !== 'None' && (
+                              <View style={styles.filterBadge}>
+                                <Text style={styles.filterBadgeText}>{currentPhoto.filterName}</Text>
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  );
+                }
+                return null;
+              })
+            ) : (
+              // Original static grid for photographer category
+              [0, 3, 6].map((rowStart, rowIndex) => (
+                <View key={`row-${rowIndex}`} style={styles.instaGridRow}>
+                  {rowStart === 0 ? (
+                    <>
+                      <TouchableOpacity
+                        style={styles.instaMainImage}
+                        onPress={() => images[0]?.imageUrl && handleImageClick(images[0].imageUrl)}
+                      >
+                        <Image 
+                          source={images[0]?.imageUrl} 
+                          style={styles.eventImage}
+                          resizeMode="cover" 
+                        />
+                      </TouchableOpacity>
+                      <View style={styles.instaSecondaryColumn}>
+                        <TouchableOpacity
+                          style={styles.instaSecondaryImage}
+                          onPress={() => images[1]?.imageUrl && handleImageClick(images[1].imageUrl)}
+                        >
+                          <Image 
+                            source={images[1]?.imageUrl} 
+                            style={styles.eventImage} 
+                            resizeMode="cover"
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.instaSecondaryImage}
+                          onPress={() => images[2]?.imageUrl && handleImageClick(images[2].imageUrl)}
+                        >
+                          <Image 
+                            source={images[2]?.imageUrl} 
+                            style={styles.eventImage} 
+                            resizeMode="cover"
+                          />
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      {[0, 1, 2].map((colIndex) => {
+                        const imageIndex = rowStart + colIndex;
+                        return (
+                          <TouchableOpacity
+                            key={`image-${imageIndex}`}
+                            style={styles.instaEqualImage}
+                            onPress={() => 
+                              images[imageIndex]?.imageUrl && 
+                              handleImageClick(images[imageIndex].imageUrl)
+                            }
+                          >
+                            <Image 
+                              source={images[imageIndex]?.imageUrl} 
+                              style={styles.eventImage} 
+                              resizeMode="cover"
+                            />
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </>
+                  )}
+                </View>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* Bottom Space for Navigator */}
+        <View style={{ height: 100 }} />
+      </Animated.ScrollView>
+
+      {/* Image Preview Modal */}
+      <Modal
+        visible={isModalVisible}
+        transparent={true}
+        onRequestClose={closeModal}
+        animationType="fade"
+      >
+        <View style={styles.modalContainer}>
+          <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
+            <Ionicons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Image source={{ uri: selectedImage }} style={styles.modalImage} />
+          
+          <View style={styles.modalControls}>
+            <TouchableOpacity style={styles.modalControlButton}>
+              <Ionicons name="heart-outline" size={24} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.modalControlButton, styles.modalControlButton]}>
+              <Ionicons name="print-outline" size={24} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalControlButton}>
+              <Ionicons name="share-social-outline" size={24} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalControlButton}>
+              <Ionicons name="download-outline" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Enhanced Floating Bottom Navigator - Icon Only */}
+      <View style={styles.bottomNavContainer}>
+        <View style={styles.bottomNav}>
+          {/* Gallery Tab */}
+          <TouchableOpacity 
+            style={styles.navTab} 
+            onPress={() => handleTabChange('gallery')}
+          >
+            <View style={[styles.navIcon, activeTab === 'gallery' && styles.activeNavIcon]}>
+              <Ionicons 
+                name="images" 
+                size={24} 
+                color={activeTab === 'gallery' ? '#FF6F61' : '#8E8E93'} 
+              />
+            </View>
+            {activeTab === 'gallery' && <View style={styles.activeIndicator} />}
+          </TouchableOpacity>
+
+          {/* Camera Tab - Special Highlighted Design */}
+          <TouchableOpacity 
+            style={styles.cameraTab} 
+            onPress={() => handleTabChange('camera')}
+          >
+            <LinearGradient
+              colors={['#FF8D76', '#FF6F61']}
+              style={styles.cameraButton}
+            >
+              <Ionicons 
+                name="camera" 
+                size={26} 
+                color="#FFFFFF" 
+              />
+            </LinearGradient>
+            {activeTab === 'camera' && <View style={styles.cameraIndicator} />}
+          </TouchableOpacity>
+
+          {/* Settings Tab */}
+          <TouchableOpacity 
+            style={styles.navTab} 
+            onPress={() => handleTabChange('settings')}
+          >
+            <View style={[styles.navIcon, activeTab === 'settings' && styles.activeNavIcon]}>
+              <Ionicons 
+                name="settings" 
+                size={24} 
+                color={activeTab === 'settings' ? '#FF6F61' : '#8E8E93'} 
+              />
+            </View>
+            {activeTab === 'settings' && <View style={styles.activeIndicator} />}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// Add these new styles to your existing StyleSheet
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+    paddingTop: 104,
+  },
+  scrollContent: {
+    paddingTop: 10,
+  },
+  // Cover Image Styles
+  coverContainer: {
+    height: 220,
+    marginBottom: 10,
+    marginHorizontal: 20,
+  },
+  coverImage: {
+    height: '100%',
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  coverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 16,
+    justifyContent: 'flex-end',
+    padding: 15,
+  },
+  eventStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+    // backgroundColor will be set dynamically based on event status
+  },
+  statusText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // Event Card Styles
+  eventCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+  },
+  eventHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  titleContainer: {
+    flex: 1,
+    marginRight: 10,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#222',
+  },
+  eventCodeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0EF',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  eventCodeText: {
+    fontSize: 14,
+    color: '#FF6F61',
+    fontWeight: '600',
+    marginLeft: 5,
+  },
+  shareButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFF0EF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  dateIconContainer: {
+    marginRight: 6,
+  },
+  dateTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  date: {
+    fontSize: 14,
+    color: '#666',
+  },
+  multiDayBadge: {
+    backgroundColor: '#FF6F61',
+    borderRadius: 12,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    marginLeft: 8,
+  },
+  multiDayText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#F0F0F0',
+    marginVertical: 16,
+  },
+  description: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#444',
+    marginBottom: 16,
+  },
+  eventStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9F9F9',
+    borderRadius: 12,
+    padding: 15,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  statValue: {
+    marginLeft: 6,
+    fontSize: 13,
+    color: '#444',
+    fontWeight: '500',
+  },
+  statDivider: {
+    width: 1,
+    height: '80%',
+    backgroundColor: '#E5E5E5',
+  },
+  // Section Header Styles
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#222',
+  },
+  photosCount: {
+    fontSize: 14,
+    color: '#888',
+  },
+  // Category Selector Styles
+  categoryContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    backgroundColor: '#F0F2F5',
+    borderRadius: 30,
+    padding: 4,
+  },
+  categoryTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 30,
+    flex: 1,
+  },
+  selectedCategoryTab: {
+    backgroundColor: '#FF6F61',
+  },
+  categoryText: {
+    marginLeft: 6,
+    fontSize: 12,
+    color: '#666666',
+    fontWeight: '500',
+  },
+  selectedCategoryText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  // Gallery Header Styles
+  galleryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  galleryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222',
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: '#FF6F61',
+    fontWeight: '500',
+  },
+  // Image Grid Styles
+  imageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  imageContainer: {
+    width: (width - 48) / 3,
+    aspectRatio: 1,
+    marginRight: 4,
+    marginBottom: 4,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  largeImageContainer: {
+    width: (width - 44) / 2,
+  },
+  eventImage: {
+    width: '100%',
+    height: '100%',
+  },
+  largeEventImage: {
+    height: '100%',
+  },
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalImage: {
+    width: width * 0.9,
+    height: width * 0.9,
+    borderRadius: 12,
+    resizeMode: 'contain',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  modalControls: {
+    flexDirection: 'row',
+    position: 'absolute',
+    bottom: 30,
+    justifyContent: 'center',
+  },
+  modalControlButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  // Loading
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#888',
+  },
+  
+  // Keeping the original bottom navigator styles
+  bottomNavContainer: {
+    position: 'absolute',
+    bottom: 24,
+    left: 24,
+    right: 24,
+    alignItems: 'center',
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 28,
+    paddingVertical: 8,
+    paddingHorizontal: 13,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+    width: '100%',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    height: 66,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  navTab: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    position: 'relative',
+  },
+  navIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  activeNavIcon: {
+    backgroundColor: 'rgba(255, 111, 97, 0.12)',
+    transform: [{ scale: 1.1 }],
+  },
+  cameraTab: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    position: 'relative',
+  },
+  cameraButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FF6F61',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: -8,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FF6F61',
+  },
+  cameraIndicator: {
+    position: 'absolute',
+    bottom: -10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF6F61',
+    shadowColor: '#FF6F61',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  // Instagram-style grid
+  instaGrid: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  instaGridRow: {
+    flexDirection: 'row',
+    height: width * 0.3,
+    marginBottom: 4,
+  },
+  instaMainImage: {
+    width: '66%',
+    height: '100%',
+    borderRadius: 12,
+    marginRight: 4,
+    overflow: 'hidden',
+  },
+  instaSecondaryColumn: {
+    width: '33%',
+    height: '100%',
+    justifyContent: 'space-between',
+  },
+  instaSecondaryImage: {
+    width: '100%',
+    height: '49%',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  instaEqualImage: {
+    flex: 1,
+    marginHorizontal: 2,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  eventImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#f0f0f0', // Placeholder color
+  },
+  printButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  printText: {
+    color: '#fff',
+    marginLeft: 5,
+  },
+  // New styles for photo loading and empty states
+  photosLoadingContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  photosLoadingText: {
+    marginLeft: 10,
+    fontSize: 14,
+    color: '#888',
+  },
+  noPhotosContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  noPhotosText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#888',
+    marginTop: 10,
+  },
+  noPhotosSubtext: {
+    fontSize: 14,
+    color: '#AAA',
+    marginTop: 5,
+    textAlign: 'center',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 12,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  filterBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+});

@@ -1,0 +1,420 @@
+import React, { useEffect, useState } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, StatusBar } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import NetInfo from '@react-native-async-storage/async-storage';
+import * as SplashScreen from 'expo-splash-screen';
+import { AuthProvider } from './context/authContext';
+import MainNavigator from './navigation/MainNavigator';
+
+import SplashAnimation from './screens/SplashAnimation';
+import MainScreen from './screens/MainScreen';
+import SignInScreen from './screens/SignInScreen';
+import SignUpScreen from './screens/SignUpScreen';
+import ContinueAsGuestScreen from './screens/ContinueAsGuestScreen';
+import NewEventScreen from './screens/Main/NewEventScreen';
+import JoinEventScreen from './screens/Main/JoinEventScreen';
+import CameraScreen from './screens/Main/CameraScreen';
+import ChooseFrameScreen from './screens/Main/ChooseFrameScreen';
+import BottomTabNavigatorWrapper from './components/BottomTabNavigator';
+import PersonalInfoScreen from './screens/Main/PersonalInfoScreen';
+import ChangePasswordScreen from './screens/Main/ChangePasswordScreen';
+import TermsAndConditionsScreen from './screens/Main/TermsAndConditionsScreen';
+import PrivacyPolicyScreen from './screens/Main/PrivacyPolicyScreen';
+import HelpSupportScreen from './screens/Main/HelpSupportScreen';
+import AddMoreCreditsScreen from './screens/Main/AddMoreCreditsScreen';
+import JoinEventScreenTwo from './screens/Main/JoinEventScreenTwo';
+import JoinEventSettings from './screens/Main/JoinEventSettings';
+
+const Stack = createNativeStackNavigator();
+
+// Network Error Component
+const NetworkErrorScreen = ({ onRetry, isConnected, connectionType }) => (
+  <View style={networkStyles.container}>
+    <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    
+    <View style={networkStyles.content}>
+      <View style={networkStyles.iconContainer}>
+        <Ionicons 
+          name={isConnected ? "wifi-outline" : "cloud-offline-outline"} 
+          size={80} 
+          color="#FF6F61" 
+        />
+      </View>
+      
+      <Text style={networkStyles.title}>
+        {isConnected ? 'Slow Connection' : 'No Internet Connection'}
+      </Text>
+      
+      <Text style={networkStyles.subtitle}>
+        {isConnected 
+          ? `Your ${connectionType} connection is slow. Some features may not work properly.`
+          : 'Please check your internet connection and try again.'
+        }
+      </Text>
+      
+      <View style={networkStyles.tipsContainer}>
+        <Text style={networkStyles.tipsTitle}>Tips to improve your connection:</Text>
+        <Text style={networkStyles.tipItem}>• Move closer to your WiFi router</Text>
+        <Text style={networkStyles.tipItem}>• Switch between WiFi and mobile data</Text>
+        <Text style={networkStyles.tipItem}>• Close other apps using internet</Text>
+        {!isConnected && <Text style={networkStyles.tipItem}>• Check if airplane mode is off</Text>}
+      </View>
+      
+      <TouchableOpacity 
+        style={networkStyles.retryButton} 
+        onPress={onRetry}
+      >
+        <Ionicons name="refresh" size={20} color="#FFFFFF" style={networkStyles.retryIcon} />
+        <Text style={networkStyles.retryText}>Try Again</Text>
+      </TouchableOpacity>
+      
+      {isConnected && (
+        <TouchableOpacity 
+          style={networkStyles.continueButton} 
+          onPress={() => onRetry(true)}
+        >
+          <Text style={networkStyles.continueText}>Continue Anyway</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  </View>
+);
+
+export default function App() {
+  const [appReady, setAppReady] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
+  const [networkState, setNetworkState] = useState({
+    isConnected: true,
+    isInternetReachable: true,
+    type: 'unknown',
+    isSlowConnection: false,
+  });
+  const [showNetworkError, setShowNetworkError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+
+  // Network monitoring and quality detection
+  useEffect(() => {
+    let unsubscribe;
+    let connectionTestTimeout;
+
+    const setupNetworkListener = async () => {
+      try {
+        // Get initial state
+        const initialState = await NetInfo.fetch();
+        handleNetworkStateChange(initialState);
+
+        // Subscribe to network state changes
+        unsubscribe = NetInfo.addEventListener(handleNetworkStateChange);
+      } catch (error) {
+        console.error('Error setting up network listener:', error);
+        // Fallback to assume connected if NetInfo fails
+        setNetworkState(prev => ({
+          ...prev,
+          isConnected: true,
+          isInternetReachable: true
+        }));
+      }
+    };
+
+    const handleNetworkStateChange = (state) => {
+      console.log('Network state changed:', state);
+      
+      const newNetworkState = {
+        isConnected: state.isConnected ?? true,
+        isInternetReachable: state.isInternetReachable ?? true,
+        type: state.type || 'unknown',
+        isSlowConnection: false,
+      };
+
+      // Test connection speed for mobile connections
+      if (state.isConnected && state.type === 'cellular') {
+        testConnectionSpeed().then(isSlowConnection => {
+          setNetworkState({
+            ...newNetworkState,
+            isSlowConnection,
+          });
+          
+          // Show error screen if no connection or very slow connection
+          if (!state.isConnected || !state.isInternetReachable || isSlowConnection) {
+            setShowNetworkError(true);
+          } else {
+            setShowNetworkError(false);
+            setRetryCount(0);
+          }
+        });
+      } else {
+        setNetworkState(newNetworkState);
+        
+        // Show error screen if no connection
+        if (!state.isConnected || !state.isInternetReachable) {
+          setShowNetworkError(true);
+        } else {
+          setShowNetworkError(false);
+          setRetryCount(0);
+        }
+      }
+    };
+
+    const testConnectionSpeed = () => {
+      return new Promise((resolve) => {
+        const startTime = Date.now();
+        const timeout = 10000; // 10 seconds timeout
+        
+        // Test with a small image request to Google
+        const testUrl = 'https://www.google.com/favicon.ico?' + Math.random();
+        
+        connectionTestTimeout = setTimeout(() => {
+          resolve(true); // Consider it slow if takes more than 10 seconds
+        }, timeout);
+
+        fetch(testUrl, {
+          method: 'HEAD',
+          cache: 'no-cache',
+        })
+        .then(() => {
+          clearTimeout(connectionTestTimeout);
+          const duration = Date.now() - startTime;
+          const isSlowConnection = duration > 5000; // Consider slow if takes more than 5 seconds
+          resolve(isSlowConnection);
+        })
+        .catch(() => {
+          clearTimeout(connectionTestTimeout);
+          resolve(true); // Consider it slow/problematic if fetch fails
+        });
+      });
+    };
+
+    setupNetworkListener();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+      if (connectionTestTimeout) {
+        clearTimeout(connectionTestTimeout);
+      }
+    };
+  }, []);
+
+  // App initialization
+  useEffect(() => {
+    async function prepare() {
+      try {
+        await SplashScreen.preventAutoHideAsync();
+        
+        // Add a small delay to ensure network state is determined
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        await SplashScreen.hideAsync();
+        setAppReady(true);
+      } catch (error) {
+        console.error('Error during app preparation:', error);
+        setAppReady(true); // Continue anyway
+      }
+    }
+    prepare();
+  }, []);
+
+  // Handle retry attempts
+  const handleRetry = async (forceContinue = false) => {
+    if (forceContinue) {
+      setShowNetworkError(false);
+      setRetryCount(0);
+      return;
+    }
+
+    setRetryCount(prev => prev + 1);
+    
+    try {
+      // Test network again
+      const state = await NetInfo.fetch();
+      
+      if (state.isConnected && state.isInternetReachable) {
+        // Test connection speed again
+        const isSlowConnection = await testConnectionSpeed();
+        
+        if (!isSlowConnection || retryCount >= 3) {
+          setShowNetworkError(false);
+          setRetryCount(0);
+        } else {
+          // Show option to continue anyway after 3 retries
+          if (retryCount >= 2) {
+            Alert.alert(
+              'Connection Issues',
+              'Your connection is still slow. Would you like to continue anyway?',
+              [
+                { text: 'Keep Trying', style: 'cancel' },
+                { text: 'Continue Anyway', onPress: () => handleRetry(true) }
+              ]
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error during retry:', error);
+      if (retryCount >= 3) {
+        // Allow continuing after multiple failed retries
+        Alert.alert(
+          'Connection Error',
+          'Unable to verify connection. Continue in offline mode?',
+          [
+            { text: 'Keep Trying', style: 'cancel' },
+            { text: 'Continue Offline', onPress: () => handleRetry(true) }
+          ]
+        );
+      }
+    }
+  };
+
+  const testConnectionSpeed = () => {
+    return new Promise((resolve) => {
+      const startTime = Date.now();
+      const timeout = 8000; // 8 seconds timeout for retry
+      
+      const timeoutId = setTimeout(() => {
+        resolve(true); // Consider it slow
+      }, timeout);
+
+      fetch('https://www.google.com/favicon.ico?' + Math.random(), {
+        method: 'HEAD',
+        cache: 'no-cache',
+      })
+      .then(() => {
+        clearTimeout(timeoutId);
+        const duration = Date.now() - startTime;
+        resolve(duration > 4000); // Consider slow if > 4 seconds
+      })
+      .catch(() => {
+        clearTimeout(timeoutId);
+        resolve(true);
+      });
+    });
+  };
+
+  if (!appReady) return null;
+
+  if (showSplash) {
+    return <SplashAnimation onDone={() => setShowSplash(false)} />;
+  }
+
+  // Show network error screen if there are connection issues
+  if (showNetworkError) {
+    return (
+      <NetworkErrorScreen 
+        onRetry={handleRetry}
+        isConnected={networkState.isConnected}
+        connectionType={networkState.type}
+      />
+    );
+  }
+
+  return (
+    <NavigationContainer>
+      <AuthProvider>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Main" component={MainScreen} />
+          <Stack.Screen name="SignIn" component={SignInScreen} />
+          <Stack.Screen name="SignUp" component={SignUpScreen} />
+          <Stack.Screen name="ContinueAsGuest" component={ContinueAsGuestScreen} />
+          <Stack.Screen name="Tabs" component={BottomTabNavigatorWrapper} />
+          <Stack.Screen name="NewEvent" component={NewEventScreen} />
+          <Stack.Screen name="JoinEvent" component={JoinEventScreen} />
+          <Stack.Screen name="Camera" component={CameraScreen} />
+          <Stack.Screen name="ChooseFrame" component={ChooseFrameScreen} />
+          <Stack.Screen name="PersonalInfo" component={PersonalInfoScreen} />
+          <Stack.Screen name='ChangePassword' component={ChangePasswordScreen} />
+          <Stack.Screen name='Terms&Condition' component={TermsAndConditionsScreen} />
+          <Stack.Screen name='PrivacyPolicy' component={PrivacyPolicyScreen} />
+          <Stack.Screen name='HelpSupport' component={HelpSupportScreen} />
+          <Stack.Screen name='AddMoreCredits' component={AddMoreCreditsScreen} />
+          <Stack.Screen name='JoinEventTwo' component={JoinEventScreenTwo} />
+          <Stack.Screen name='JoinEventSettings' component={JoinEventSettings} />
+        </Stack.Navigator>
+      </AuthProvider>
+    </NavigationContainer>
+  );
+}
+
+const networkStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  content: {
+    alignItems: 'center',
+    maxWidth: 400,
+  },
+  iconContainer: {
+    marginBottom: 24,
+    opacity: 0.8,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333333',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666666',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  tipsContainer: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 32,
+    width: '100%',
+  },
+  tipsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333333',
+    marginBottom: 12,
+  },
+  tipItem: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 6,
+    lineHeight: 20,
+  },
+  retryButton: {
+    backgroundColor: '#FF6F61',
+    borderRadius: 25,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#FF6F61',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  retryIcon: {
+    marginRight: 8,
+  },
+  retryText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  continueButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  continueText: {
+    color: '#FF6F61',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+});

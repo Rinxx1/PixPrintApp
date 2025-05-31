@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "PixPrintApp",
+    "slug": "PixPrintApp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/icon-pix-print.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAF8F5"
+    },
+    "plugins": [
+      "expo-camera"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.anonymous.PixPrintApp"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
