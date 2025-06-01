@@ -336,7 +336,7 @@ const applyFilterToImage = async (imageUri, filterColor) => {
       [{ resize: { width: 1080 } }],
       { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
     );
-    return fallbackResult;
+    return fallbackResult; 
   }
 };
 
