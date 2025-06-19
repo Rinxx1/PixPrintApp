@@ -15,8 +15,9 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import HeaderBar from '../../components/HeaderBar';
-import { db, auth } from '../../firebase'; // Make sure to import auth
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { db, auth } from '../../firebase';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, onSnapshot, addDoc } from 'firebase/firestore';
+import { useAlert } from '../../context/AlertContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,9 +29,9 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const [eventName, setEventName] = useState(''); 
   const [eventDate, setEventDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
-  const [eventLocation, setEventLocation] = useState(''); // Add event location state
-  const [eventStartDate, setEventStartDate] = useState(null); // Add start date state
-  const [eventEndDate, setEventEndDate] = useState(null); // Add end date state
+  const [eventLocation, setEventLocation] = useState('');
+  const [eventStartDate, setEventStartDate] = useState(null);
+  const [eventEndDate, setEventEndDate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null); 
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -38,12 +39,21 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const [activeTab, setActiveTab] = useState('gallery');
   const [eventCode, setEventCode] = useState('');
   const [eventTime, setEventTime] = useState('All Day');
-  const [attendeeCount, setAttendeeCount] = useState(0); // Add attendee count state
+  const [eventCreatorId, setEventCreatorId] = useState(null);
+  const [userCredits, setUserCredits] = useState(0); // This will now be updated in real-time
+  const [isEventCreator, setIsEventCreator] = useState(false);
+  const [extensionAlertShown, setExtensionAlertShown] = useState(false);
   
   // Updated state for different photo categories
-  const [eventPhotos, setEventPhotos] = useState([]); // All photos
-  const [myPhotos, setMyPhotos] = useState([]); // Current user's photos
+  const [eventPhotos, setEventPhotos] = useState([]);
+  const [myPhotos, setMyPhotos] = useState([]);
   const [photosLoading, setPhotosLoading] = useState(false);
+  
+  // Add alert hook
+  const { showAlert, showError, showSuccess, showConfirm } = useAlert();
+  
+  // Add ref for unsubscribe function
+  const unsubscribeCredits = useRef(null);
   
   // Animation values
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -53,16 +63,227 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     extrapolate: 'clamp'
   });
 
-  // Function to count attendees for this specific event
-  const getEventAttendeeCount = async (eventId) => {
+  // Extension pricing configuration
+  const extensionOptions = [
+    { hours: 2, credits: 10, label: '2 Hours' },
+    { hours: 4, credits: 15, label: '4 Hours' },
+    { hours: 6, credits: 25, label: '6 Hours' }
+  ];
+
+  // Updated function to fetch user credits with real-time listener
+  const fetchUserCredits = async () => {
     try {
-      const joinedRef = collection(db, 'joined_tbl');
-      const q = query(joinedRef, where('event_id', '==', eventId));
-      const querySnapshot = await getDocs(q);
-      const count = querySnapshot.size;
-      return count;
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      // Set up Firestore real-time listener to fetch user's credits
+      const creditsRef = collection(db, 'credits_tbl');
+      const q = query(creditsRef, where('user_id', '==', currentUser.uid));
+
+      unsubscribeCredits.current = onSnapshot(q, (querySnapshot) => {
+        let totalCredits = 0;
+        querySnapshot.forEach(doc => {
+          totalCredits += doc.data().credits;
+        });
+        setUserCredits(totalCredits);
+      }, (error) => {
+        console.error('Error fetching user credits:', error);
+        setUserCredits(0); // Set to 0 on error
+      });
+
     } catch (error) {
-      return 0;
+      console.error('Error setting up credits listener:', error);
+      setUserCredits(0);
+    }
+  };
+
+  // Updated function to update user credits - now adds to credits_tbl
+  const updateUserCredits = async (creditsToDeduct) => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return false;
+
+      // Add a negative credit entry to deduct credits
+      const creditsRef = collection(db, 'credits_tbl');
+      await addDoc(creditsRef, {
+        user_id: currentUser.uid,
+        credits: -creditsToDeduct, // Negative value to deduct
+        transaction_type: 'event_extension',
+        event_id: eventId,
+        description: `Event extension for ${eventName}`,
+        created_at: new Date(),
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating user credits:', error);
+      return false;
+    }
+  };
+
+  // Function to extend event duration
+  const extendEvent = async (additionalHours) => {
+    try {
+      if (!eventEndDate) return false;
+
+      const newEndDate = new Date(eventEndDate);
+      newEndDate.setHours(newEndDate.getHours() + additionalHours);
+
+      const eventRef = doc(db, 'event_tbl', eventId);
+      await updateDoc(eventRef, {
+        event_end_date: newEndDate,
+        last_extended_at: new Date(),
+        total_extensions: (await getDoc(eventRef)).data()?.total_extensions + 1 || 1
+      });
+
+      setEventEndDate(newEndDate);
+      return true;
+    } catch (error) {
+      console.error('Error extending event:', error);
+      return false;
+    }
+  };
+
+  // Function to show extension alert
+  const showExtensionAlert = () => {
+    if (extensionAlertShown) return;
+    
+    setExtensionAlertShown(true);
+
+    showConfirm(
+      '⏰ Event Ending Soon!',
+      `Your event "${eventName}" will end in approximately 2 minutes.\n\n💳 Your Credits: ${userCredits}\n\nWould you like to extend the event duration?`,
+      () => {
+        showExtensionOptions();
+      },
+      () => {
+        showAlert({
+          title: 'Event Will End Soon',
+          message: `Your event "${eventName}" will automatically end as scheduled. Thank you for using PixPrint!`,
+          type: 'info',
+          buttons: [
+            { text: 'OK', style: 'primary' }
+          ]
+        });
+      }
+    );
+  };
+
+  // Function to show extension options
+  const showExtensionOptions = () => {
+    const optionButtons = extensionOptions.map(option => ({
+      text: `${option.label} (${option.credits} credits)`,
+      style: userCredits >= option.credits ? 'primary' : 'disabled',
+      disabled: userCredits < option.credits,
+      onPress: () => {
+        if (userCredits >= option.credits) {
+          handleExtensionPurchase(option);
+        } else {
+          showInsufficientCreditsAlert(option.credits);
+        }
+      }
+    }));
+
+    optionButtons.push({
+      text: 'Cancel',
+      style: 'cancel'
+    });
+
+    showAlert({
+      title: '🕐 Extend Event Duration',
+      message: `Choose how long you want to extend your event:\n\n💳 Available Credits: ${userCredits}\n\n⏰ Current End Time: ${eventEndDate?.toLocaleString()}\n\nExtension Pricing:`,
+      type: 'info',
+      buttons: optionButtons
+    });
+  };
+
+  // Function to handle extension purchase
+  const handleExtensionPurchase = (option) => {
+    const newEndTime = new Date(eventEndDate);
+    newEndTime.setHours(newEndTime.getHours() + option.hours);
+
+    showConfirm(
+      '✅ Confirm Extension',
+      `Extend "${eventName}" by ${option.label}?\n\n💰 Cost: ${option.credits} credits\n💳 Remaining Credits: ${userCredits - option.credits}\n\n⏰ New End Time: ${newEndTime.toLocaleString()}\n\nThis action cannot be undone.`,
+      async () => {
+        setLoading(true);
+        
+        try {
+          // Deduct credits first (this will be reflected in real-time via the listener)
+          const creditsUpdated = await updateUserCredits(option.credits);
+          
+          if (!creditsUpdated) {
+            throw new Error('Failed to update credits');
+          }
+
+          // Extend the event
+          const eventExtended = await extendEvent(option.hours);
+          
+          if (!eventExtended) {
+            throw new Error('Failed to extend event');
+          }
+
+          showSuccess(
+            '🎉 Event Extended Successfully!',
+            `Your event has been extended by ${option.label}!\n\n⏰ New End Time: ${newEndTime.toLocaleString()}\n💳 Credits will be updated shortly\n\nEnjoy your extended event time!`,
+            () => {
+              // Refresh event data
+              fetchEventData();
+            }
+          );
+
+        } catch (error) {
+          console.error('Extension error:', error);
+          showError(
+            'Extension Failed',
+            'Unable to extend your event at this time. Please check your connection and try again. Your credits have not been charged.',
+            () => showExtensionOptions(),
+            () => {}
+          );
+        } finally {
+          setLoading(false);
+        }
+      },
+      () => {
+        showExtensionOptions();
+      }
+    );
+  };
+
+  // Function to show insufficient credits alert
+  const showInsufficientCreditsAlert = (requiredCredits) => {
+    showAlert({
+      title: '💳 Insufficient Credits',
+      message: `You need ${requiredCredits} credits for this extension.\n\n💳 Your Credits: ${userCredits}\n💰 Credits Needed: ${requiredCredits - userCredits} more\n\nPurchase more credits to extend your event duration.`,
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Buy Credits', 
+          style: 'primary',
+          onPress: () => {
+            showAlert({
+              title: 'Credits Store',
+              message: 'Credits purchase feature coming soon! Contact support for credit top-ups.',
+              type: 'info',
+              buttons: [{ text: 'OK', style: 'primary' }]
+            });
+          }
+        }
+      ]
+    });
+  };
+
+  // Function to check if event is about to end and show alert
+  const checkEventEndingStatus = () => {
+    if (!eventEndDate || !isEventCreator || extensionAlertShown) return;
+
+    const now = new Date();
+    const timeDiff = eventEndDate.getTime() - now.getTime();
+    const minutesUntilEnd = Math.floor(timeDiff / (1000 * 60));
+
+    if (minutesUntilEnd <= 2 && minutesUntilEnd > 0) {
+      showExtensionAlert();
     }
   };
 
@@ -70,19 +291,16 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const getEventStatus = () => {
     const now = new Date();
     
-    // If we have end date, use it for comparison
     if (eventEndDate) {
       return now > eventEndDate ? 'finished' : 'active';
     }
     
-    // If we only have start date, consider event finished after 24 hours
     if (eventStartDate) {
       const eventEnd = new Date(eventStartDate);
       eventEnd.setHours(eventEnd.getHours() + 24);
       return now > eventEnd ? 'finished' : 'active';
     }
     
-    // Default to active if no dates available
     return 'active';
   };
 
@@ -90,49 +308,34 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const getEventTimeStatus = () => {
     const now = new Date();
     
-    // If we have start date
     if (eventStartDate) {
       const startDate = new Date(eventStartDate);
-      startDate.setHours(0, 0, 0, 0); // Set to beginning of day for comparison
+      startDate.setHours(0, 0, 0, 0);
       
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // Set to beginning of today
+      today.setHours(0, 0, 0, 0);
       
       if (startDate > today) {
-        return 'future'; // Event is in the future
+        return 'future';
       } else if (eventEndDate) {
         const endDate = new Date(eventEndDate);
-        endDate.setHours(23, 59, 59, 999); // Set to end of end date
+        endDate.setHours(23, 59, 59, 999);
         
         if (now >= startDate && now <= endDate) {
-          return 'present'; // Event is currently happening
+          return 'present';
         } else if (now > endDate) {
-          return 'past'; // Event has finished
+          return 'past';
         }
       } else {
-        // Single day event or no end date
         if (startDate.getTime() === today.getTime()) {
-          return 'present'; // Event is today
+          return 'present';
         } else if (startDate < today) {
-          return 'past'; // Event was in the past
+          return 'past';
         }
       }
     }
     
-    // Default to present if no dates available
     return 'present';
-  };
-
-  // Function to get the appropriate attendee text
-  const getAttendeeText = () => {
-    const timeStatus = getEventTimeStatus();
-    
-    if (timeStatus === 'future') {
-      return attendeeCount === 1 ? 'Going' : 'Going';
-    } else {
-      // For present or past events
-      return attendeeCount === 1 ? 'Attendee' : 'Attendees';
-    }
   };
 
   // Function to fetch all event photos from Firebase
@@ -142,7 +345,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     try {
       setPhotosLoading(true);
       
-      // Query all photos for this specific event
       const photosRef = collection(db, 'photos_tbl');
       const q = query(
         photosRef,
@@ -167,7 +369,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         });
       });
       
-      // Sort photos by upload date (newest first)
       const sortedPhotos = photos.sort((a, b) => {
         if (!a.uploadedAt && !b.uploadedAt) return 0;
         if (!a.uploadedAt) return 1;
@@ -201,7 +402,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     try {
       setPhotosLoading(true);
       
-      // Query photos for this specific event and current user
       const photosRef = collection(db, 'photos_tbl');
       const q = query(
         photosRef,
@@ -227,7 +427,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         });
       });
       
-      // Sort photos by upload date (newest first)
       const sortedPhotos = photos.sort((a, b) => {
         if (!a.uploadedAt && !b.uploadedAt) return 0;
         if (!a.uploadedAt) return 1;
@@ -248,7 +447,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     }
   };
 
-  // Update the fetchEventData function to also fetch attendee count
+  // Updated fetchEventData function with creator check
   const fetchEventData = async () => {
     try {
       if (!eventId) {
@@ -265,18 +464,24 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         setEventName(eventData.event_name || 'Unnamed Event');
         setEventCode(eventData.event_code || '');
         setEventLocation(eventData.event_location || 'Location not specified');
+        setEventCreatorId(eventData.user_id);
+        
+        // Check if current user is the event creator
+        const currentUser = auth.currentUser;
+        if (currentUser && eventData.user_id === currentUser.uid) {
+          setIsEventCreator(true);
+          await fetchUserCredits(); // Set up real-time credits listener for creator
+        }
         
         // Store the actual date objects for status checking
         let startDateObj = null;
         let endDateObj = null;
         
-        // Handle event_start_date and event_end_date
         let formattedDateRange = 'No date specified';
         
-        // Format start date if available
         if (eventData.event_start_date && typeof eventData.event_start_date.toDate === 'function') {
           startDateObj = eventData.event_start_date.toDate();
-          setEventStartDate(startDateObj); // Store for status checking
+          setEventStartDate(startDateObj);
           
           let startDate = startDateObj.toLocaleDateString('en-US', {
             month: 'long',
@@ -284,14 +489,11 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             year: 'numeric',
           });
           
-          // If there's an end date and it's different from start date
           if (eventData.event_end_date && typeof eventData.event_end_date.toDate === 'function') {
             endDateObj = eventData.event_end_date.toDate();
-            setEventEndDate(endDateObj); // Store for status checking
+            setEventEndDate(endDateObj);
             
-            // Check if dates are on the same day
             if (startDateObj.toDateString() !== endDateObj.toDateString()) {
-              // Different days - show full range
               const endDate = endDateObj.toLocaleDateString('en-US', {
                 month: 'long',
                 day: 'numeric',
@@ -299,18 +501,15 @@ export default function JoinEventScreenTwo({ route, navigation }) {
               });
               formattedDateRange = `${startDate} - ${endDate}`;
             } else {
-              // Same day - just show one date
               formattedDateRange = startDate;
             }
           } else {
-            // Only start date available
             formattedDateRange = startDate;
           }
         } 
-        // Handle legacy format for backwards compatibility
         else if (eventData.event_date && typeof eventData.event_date.toDate === 'function') {
           const dateObj = eventData.event_date.toDate();
-          setEventStartDate(dateObj); // Store for status checking
+          setEventStartDate(dateObj);
           formattedDateRange = dateObj.toLocaleDateString('en-US', {
             month: 'long',
             day: 'numeric',
@@ -321,7 +520,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         setEventDate(formattedDateRange);
         setEventDescription(eventData.event_description || 'No description available');
 
-        // Extract time information for display in the stats section
+        // Extract time information
         let timeDisplay = "All Day";
 
         if (eventData.event_start_date && typeof eventData.event_start_date.toDate === 'function') {
@@ -332,7 +531,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             hour12: true
           });
           
-          // If there's an end date and time
           if (eventData.event_end_date && typeof eventData.event_end_date.toDate === 'function') {
             const endTimeObj = eventData.event_end_date.toDate();
             let endTime = endTimeObj.toLocaleTimeString('en-US', {
@@ -350,33 +548,27 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         } else {
           setEventTime("All Day");
         }
-
-        // Fetch attendee count for this event
-        const count = await getEventAttendeeCount(eventId);
-        setAttendeeCount(count);
         
       } else {
         setEventName('Event Not Found');
         setEventDate('');
         setEventLocation('');
         setEventDescription('The requested event could not be found.');
-        setAttendeeCount(0);
       }
     } catch (error) {
-      setAttendeeCount(0);
+      console.error('Error fetching event data:', error);
     } finally {
       setLoading(false);
     }
   };
   
-  // Add console log to debug
+  // Initial data fetch
   useEffect(() => {
-    // Check if eventId is available from route params
     if (!eventId) {
       setLoading(false);
     } else {
       fetchEventData();
-      fetchEventPhotos(); // Fetch all photos when component mounts
+      fetchEventPhotos();
     }
   }, [eventId]);
 
@@ -384,12 +576,40 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   useEffect(() => {
     if (eventId) {
       if (selectedCategory === 'person') {
-        fetchEventPhotos(); // Fetch all photos
+        fetchEventPhotos();
       } else if (selectedCategory === 'group') {
-        fetchMyPhotos(); // Fetch user's photos
+        fetchMyPhotos();
       }
     }
   }, [selectedCategory]);
+
+  // Set up interval to check event ending status (only for event creators)
+  useEffect(() => {
+    let interval;
+    
+    if (isEventCreator && eventEndDate) {
+      interval = setInterval(() => {
+        checkEventEndingStatus();
+      }, 30000);
+      
+      checkEventEndingStatus();
+    }
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isEventCreator, eventEndDate, extensionAlertShown]);
+
+  // Cleanup credits listener on unmount
+  useEffect(() => {
+    return () => {
+      if (unsubscribeCredits.current) {
+        unsubscribeCredits.current();
+      }
+    };
+  }, []);
   
   // Image grids for photographer category - keep static data
   const cameraImages = [
@@ -413,13 +633,13 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   let galleryTitle = '';
 
   if (selectedCategory === 'person') {
-    images = eventPhotos; // All photos from the event
+    images = eventPhotos;
     galleryTitle = 'All Photos';
   } else if (selectedCategory === 'camera') {
-    images = cameraImages; // Static photographer photos
+    images = cameraImages;
     galleryTitle = 'Photographer';
   } else if (selectedCategory === 'group') {
-    images = myPhotos; // Current user's photos only
+    images = myPhotos;
     galleryTitle = 'My Photos';
   }
 
@@ -435,7 +655,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     setSelectedImage(null);
   };
 
-  // Make sure JoinEventScreenTwo is passing the eventId to JoinEventSettings
+  // Handle tab changes
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     
@@ -492,6 +712,15 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                   {eventStatus === 'active' ? 'Active Event' : 'Event Finished'}
                 </Text>
               </View>
+              
+              {/* Creator Badge - Show only to event creator */}
+              {isEventCreator && (
+                <View style={styles.creatorBadge}>
+                  <Ionicons name="star" size={12} color="#FFD700" />
+                  <Text style={styles.creatorText}>Event Creator</Text>
+                  <Text style={styles.creditsText}>{userCredits} Credits</Text>
+                </View>
+              )}
             </View>
           </ImageBackground>
         </Animated.View>
@@ -513,7 +742,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Date Row - Updated for date range */}
+          {/* Date Row */}
           <View style={styles.dateRow}>
             <View style={styles.dateIconContainer}>
               <Ionicons name="calendar-outline" size={16} color="#FF6F61" />
@@ -532,18 +761,12 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           
           <Text style={styles.description}>{eventDescription}</Text>
 
+          {/* Event stats without attendees */}
           <View style={styles.eventStats}>
             <View style={styles.statItem}>
               <Ionicons name="location-outline" size={18} color="#FF6F61" />
               <Text style={styles.statValue} numberOfLines={1} ellipsizeMode="tail">
                 {eventLocation}
-              </Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Ionicons name="people-outline" size={18} color="#FF6F61" />
-              <Text style={styles.statValue}>
-                {attendeeCount} {getAttendeeText()}
               </Text>
             </View>
             <View style={styles.statDivider} />
@@ -665,7 +888,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             {(selectedCategory === 'person' || selectedCategory === 'group') ? (
               // For dynamic photo arrays (All Photos and My Photos)
               images.map((photo, index) => {
-                // Create a simpler grid layout for dynamic content
                 const isFirstInRow = index % 3 === 0;
                 
                 if (isFirstInRow) {
@@ -803,7 +1025,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         </View>
       </Modal>
 
-      {/* Enhanced Floating Bottom Navigator - Icon Only */}
+      {/* Enhanced Floating Bottom Navigator */}
       <View style={styles.bottomNavContainer}>
         <View style={styles.bottomNav}>
           {/* Gallery Tab */}
@@ -821,7 +1043,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             {activeTab === 'gallery' && <View style={styles.activeIndicator} />}
           </TouchableOpacity>
 
-          {/* Camera Tab - Special Highlighted Design */}
+          {/* Camera Tab */}
           <TouchableOpacity 
             style={styles.cameraTab} 
             onPress={() => handleTabChange('camera')}
@@ -859,7 +1081,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   );
 }
 
-// Add these new styles to your existing StyleSheet
+// Updated styles with new creator badge styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -885,7 +1107,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.2)',
     borderRadius: 16,
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     padding: 15,
   },
   eventStatus: {
@@ -902,12 +1124,39 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     marginRight: 6,
-    // backgroundColor will be set dynamically based on event status
   },
   statusText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
+  },
+  // New Creator Badge Styles
+  creatorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 215, 0, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.5)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    alignSelf: 'flex-end',
+  },
+  creatorText: {
+    color: '#FFD700',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 4,
+    marginRight: 8,
+  },
+  creditsText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    backgroundColor: 'rgba(255, 215, 0, 0.3)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
   },
   // Event Card Styles
   eventCard: {
@@ -1000,6 +1249,7 @@ const styles = StyleSheet.create({
     color: '#444',
     marginBottom: 16,
   },
+  // Event stats without attendees
   eventStats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1172,8 +1422,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#888',
   },
-  
-  // Keeping the original bottom navigator styles
+  // Bottom navigator styles
   bottomNavContainer: {
     position: 'absolute',
     bottom: 24,
@@ -1295,7 +1544,7 @@ const styles = StyleSheet.create({
   eventImage: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#f0f0f0', // Placeholder color
+    backgroundColor: '#f0f0f0',
   },
   printButton: {
     flexDirection: 'row',
@@ -1305,7 +1554,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginLeft: 5,
   },
-  // New styles for photo loading and empty states
+  // Photo loading and empty states
   photosLoadingContainer: {
     flexDirection: 'row',
     justifyContent: 'center',

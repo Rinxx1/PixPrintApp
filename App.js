@@ -24,7 +24,7 @@ import HelpSupportScreen from './screens/Main/HelpSupportScreen';
 import AddMoreCreditsScreen from './screens/Main/AddMoreCreditsScreen';
 import JoinEventScreenTwo from './screens/Main/JoinEventScreenTwo';
 import JoinEventSettings from './screens/Main/JoinEventSettings'; // Import JoinEventSettings if needed
-
+import { AlertProvider } from './context/AlertContext';
 const Stack = createNativeStackNavigator();
 
 export default function App() {
@@ -50,8 +50,8 @@ export default function App() {
     // Wrap the NavigationContainer and AuthProvider correctly
     <NavigationContainer>
       <AuthProvider>
+        <AlertProvider>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {/* Screens */}
           <Stack.Screen name="Main" component={MainScreen} />
           <Stack.Screen name="SignIn" component={SignInScreen} />
           <Stack.Screen name="SignUp" component={SignUpScreen} />
@@ -70,6 +70,7 @@ export default function App() {
           <Stack.Screen name='JoinEventTwo' component={JoinEventScreenTwo} />
           <Stack.Screen name='JoinEventSettings' component={JoinEventSettings} />
         </Stack.Navigator>
+        </AlertProvider>
       </AuthProvider>
     </NavigationContainer>
   );

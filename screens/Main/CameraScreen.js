@@ -9,8 +9,8 @@ import {
   Animated,
   Dimensions,
   ActivityIndicator,
-  Alert,
   Modal,
+  Linking,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,8 +20,11 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { db, auth } from '../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
+import { useAlert } from '../../context/AlertContext'; // Add this import
 
 const { width, height } = Dimensions.get('window');
+const CARD_WIDTH = width * 0.85;
 
 export default function CameraScreen({ route, navigation }) {
   // Get eventId from route params
@@ -36,10 +39,16 @@ export default function CameraScreen({ route, navigation }) {
   const [lastCapturedImage, setLastCapturedImage] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   
+  // Add the missing state for gallery functionality
+  const [isUploadingFromGallery, setIsUploadingFromGallery] = useState(false);
+  
   // New states for photo preview modal
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewImageUri, setPreviewImageUri] = useState(null);
   const [previewFilterName, setPreviewFilterName] = useState('None');
+  
+  // Add alert hook
+  const { showAlert, showError, showSuccess, showConfirm } = useAlert();
   
   // Ref for camera
   const cameraRef = useRef(null);
@@ -167,7 +176,19 @@ export default function CameraScreen({ route, navigation }) {
     // Check if user is logged in first
     const user = auth.currentUser;
     if (!eventId && !user) {
-      Alert.alert('Error', 'Please log in to take photos');
+      showAlert({
+        title: 'Authentication Required',
+        message: 'Please log in to take and save photos. You need an account to access camera features.',
+        type: 'warning',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Sign In', 
+            style: 'primary', 
+            onPress: () => navigation.navigate('SignIn') 
+          }
+        ]
+      });
       return;
     }
     
@@ -219,7 +240,12 @@ export default function CameraScreen({ route, navigation }) {
       
     } catch (error) {
       console.error("Error taking picture:", error);
-      Alert.alert('Error', 'Failed to take picture. Please try again.');
+      showError(
+        'Camera Error',
+        'Failed to capture photo. This could be due to camera permissions or hardware issues. Please try again.',
+        () => takePicture(), // Retry function
+        () => {} // Cancel function
+      );
     } finally {
       setIsTakingPicture(false);
     }
@@ -238,31 +264,42 @@ export default function CameraScreen({ route, navigation }) {
       // Upload the photo to Firebase Storage
       await uploadPhotoToStorage(previewImageUri);
       
-      // Close modal after successful save
-      handleClosePreview();
+      // Show success message
+      showSuccess(
+        'Photo Saved! 📸',
+        `Your ${previewFilterName !== 'None' ? `${previewFilterName} filtered ` : ''}photo has been successfully saved to ${eventId ? 'the event gallery' : 'your personal collection'}.`,
+        () => {
+          // Close modal after success
+          handleClosePreview();
+        }
+      );
       
     } catch (error) {
       console.error("Error saving photo:", error);
-      Alert.alert('Error', 'Failed to save photo. Please try again.');
-      setIsUploading(false);
+      showError(
+        'Save Failed',
+        'Unable to save your photo. This could be due to network issues or storage problems. Please try again.',
+        () => handleSavePhoto(), // Retry function
+        () => setIsUploading(false) // Cancel function
+      );
     }
   };
 
-  // Handle print photo (placeholder function)
+  // Handle print photo with enhanced dialog
   const handlePrintPhoto = () => {
-    Alert.alert(
-      'Print Feature',
-      'Print functionality will be available soon! Your photo has been saved to the gallery.',
-      [
-        {
-          text: 'OK',
-          onPress: () => {
-            // For now, just save the photo
-            handleSavePhoto();
-          }
+    showAlert({
+      title: '🖨️ Print Coming Soon!',
+      message: `Print functionality is currently in development and will be available in the next update!\n\nFor now, your ${previewFilterName !== 'None' ? `${previewFilterName} filtered ` : ''}photo will be saved to the gallery where you can access it anytime.`,
+      type: 'info',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Save Photo Instead', 
+          style: 'primary', 
+          onPress: () => handleSavePhoto()
         }
       ]
-    );
+    });
   };
 
   // Handle closing preview modal
@@ -285,70 +322,75 @@ export default function CameraScreen({ route, navigation }) {
   };
 
   // Simplified applyFilterToImage function - just resize and compress
-const applyFilterToImage = async (imageUri, filterColor) => {
-  try {
-    console.log('Applying filter:', filterColor);
-    
-    let manipulations = [{ resize: { width: 1080 } }];
-    
-    if (filterColor) {
-      // Try to apply tint based on filter color
-      let tintColor;
-      switch (filterColor) {
-        case 'red':
-          tintColor = '#FF4444';
-          break;
-        case 'skyblue':
-          tintColor = '#87CEEB';
-          break;
-        case 'gold':
-          tintColor = '#FFD700';
-          break;
-        case 'white':
-          tintColor = '#FFFFFF';
-          break;
-        default:
-          tintColor = null;
-      }
+  const applyFilterToImage = async (imageUri, filterColor) => {
+    try {
+      console.log('Applying filter:', filterColor);
       
-      if (tintColor) {
-        manipulations.push({ tint: tintColor });
+      let manipulations = [{ resize: { width: 1080 } }];
+      
+      if (filterColor) {
+        // Try to apply tint based on filter color
+        let tintColor;
+        switch (filterColor) {
+          case 'red':
+            tintColor = '#FF4444';
+            break;
+          case 'skyblue':
+            tintColor = '#87CEEB';
+            break;
+          case 'gold':
+            tintColor = '#FFD700';
+            break;
+          case 'white':
+            tintColor = '#FFFFFF';
+            break;
+          default:
+            tintColor = null;
+        }
+        
+        if (tintColor) {
+          manipulations.push({ tint: tintColor });
+        }
       }
+
+      const result = await ImageManipulator.manipulateAsync(
+        imageUri,
+        manipulations,
+        { 
+          compress: 0.8, 
+          format: ImageManipulator.SaveFormat.JPEG 
+        }
+      );
+
+      console.log('Filter applied successfully');
+      return result;
+
+    } catch (error) {
+      console.error('Error applying filter:', error);
+      // If filter application fails, fall back to just resizing
+      const fallbackResult = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [{ resize: { width: 1080 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      return fallbackResult; 
     }
+  };
 
-    const result = await ImageManipulator.manipulateAsync(
-      imageUri,
-      manipulations,
-      { 
-        compress: 0.8, 
-        format: ImageManipulator.SaveFormat.JPEG 
-      }
-    );
-
-    console.log('Filter applied successfully');
-    return result;
-
-  } catch (error) {
-    console.error('Error applying filter:', error);
-    // If filter application fails, fall back to just resizing
-    const fallbackResult = await ImageManipulator.manipulateAsync(
-      imageUri,
-      [{ resize: { width: 1080 } }],
-      { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
-    );
-    return fallbackResult; 
-  }
-};
-
-// Upload photo to Firebase Storage
-  const uploadPhotoToStorage = async (imageUri) => {
+  // Upload photo to Firebase Storage
+  const uploadPhotoToStorage = async (imageUri, updateThumbnail = true) => {
     try {
       // Get the current user
       const user = auth.currentUser;
       
       // Check if user is logged in
       if (!user) {
-        Alert.alert('Error', 'You must be logged in to save photos.');
+        showError(
+          'Authentication Required',
+          'You must be logged in to save photos. Please sign in to continue.',
+          () => navigation.navigate('SignIn'), // Navigate to sign in
+          () => {} // Cancel function
+        );
         return;
       }
       
@@ -356,10 +398,9 @@ const applyFilterToImage = async (imageUri, filterColor) => {
       let firestoreData;
       const timestamp = new Date().getTime();
       
-      // Get the actual filter color and name
-      const currentFilter = filterOptions[filterIndex];
-      const filterColor = currentFilter.color;
-      const filterName = currentFilter.name;
+      // For gallery uploads, we don't have a filter applied
+      const filterColor = filterIndex > 0 ? filterOptions[filterIndex].color : null;
+      const filterName = filterIndex > 0 ? filterOptions[filterIndex].name : 'None';
       
       // Determine the storage path based on whether we have an event ID
       if (eventId) {
@@ -376,7 +417,8 @@ const applyFilterToImage = async (imageUri, filterColor) => {
           filter: filterColor,
           filter_name: filterName,
           likes: 0,
-          comments: 0
+          comments: 0,
+          source: 'camera' // Mark as camera photo
         };
       } else {
         // User's personal photo
@@ -392,7 +434,8 @@ const applyFilterToImage = async (imageUri, filterColor) => {
           filter_name: filterName,
           is_personal: true,
           likes: 0,
-          comments: 0
+          comments: 0,
+          source: 'camera' // Mark as camera photo
         };
       }
       
@@ -415,16 +458,8 @@ const applyFilterToImage = async (imageUri, filterColor) => {
       
       console.log("Photo uploaded successfully:", downloadURL);
       
-      // Show success message with different wording based on photo type
-      const successMessage = eventId 
-        ? 'Photo uploaded to event successfully!'
-        : 'Photo saved to your personal collection!';
-      
-      Alert.alert('Success', successMessage);
-      
     } catch (error) {
       console.error("Error uploading photo:", error);
-      Alert.alert('Upload Error', 'Failed to upload photo. Please try again.');
       throw error; // Re-throw to handle in calling function
     }
   };
@@ -439,14 +474,195 @@ const applyFilterToImage = async (imageUri, filterColor) => {
     setFilterIndex(0);
   };
 
+  // Enhanced gallery access function with better error handling
+  const handleGalleryAccess = async () => {
+    try {
+      // Request permission to access media library
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        showAlert({
+          title: 'Permission Required',
+          message: 'PixPrint needs access to your photo library to upload images. Please grant permission in your device settings to continue.',
+          type: 'warning',
+          buttons: [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Open Settings', 
+              style: 'primary', 
+              onPress: () => Linking.openSettings() 
+            }
+          ]
+        });
+        return;
+      }
+
+      // Launch image picker with multiple selection
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaType: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+        aspect: [1, 1],
+        allowsEditing: false,
+      });
+
+      if (!result.canceled && result.assets) {
+        const selectedImages = result.assets;
+        
+        if (selectedImages.length > 0) {
+          // Enhanced confirmation dialog with more details
+          showConfirm(
+            `Upload ${selectedImages.length} Photo${selectedImages.length > 1 ? 's' : ''}?`,
+            `You selected ${selectedImages.length} photo${selectedImages.length > 1 ? 's' : ''} from your gallery.\n\n📸 Destination: ${eventId ? 'Event Gallery' : 'Personal Collection'}\n📱 Source: Gallery Upload\n🔄 Processing: Photos will be optimized for sharing\n\nProceed with upload?`,
+            () => handleMultipleImageUpload(selectedImages), // Confirm function
+            () => console.log('Gallery upload cancelled') // Cancel function
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error accessing gallery:', error);
+      showError(
+        'Gallery Access Failed',
+        'Unable to access your photo gallery. This could be due to permission issues or device restrictions. Please try again.',
+        () => handleGalleryAccess(), // Retry function
+        () => {} // Cancel function
+      );
+    }
+  };
+
+  // Enhanced multiple image upload function
+  const handleMultipleImageUpload = async (images) => {
+    if (!images || images.length === 0) return;
+
+    const user = auth.currentUser;
+    if (!user && !eventId) {
+      showAlert({
+        title: 'Authentication Required',
+        message: 'Please log in to upload photos from your gallery.',
+        type: 'warning',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Sign In', 
+            style: 'primary', 
+            onPress: () => navigation.navigate('SignIn') 
+          }
+        ]
+      });
+      return;
+    }
+
+    setIsUploadingFromGallery(true);
+    
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const totalImages = images.length;
+      
+      // Show initial upload progress
+      showAlert({
+        title: 'Uploading Photos 📤',
+        message: `Starting upload of ${totalImages} photo${totalImages > 1 ? 's' : ''}...\n\nPlease keep the app open while photos are being processed and uploaded.`,
+        type: 'info',
+        buttons: [
+          { text: 'Continue in Background', style: 'primary' }
+        ]
+      });
+
+      // Process each image
+      for (let i = 0; i < images.length; i++) {
+        try {
+          const image = images[i];
+          
+          // Apply basic processing (resize for consistency)
+          const processedImage = await applyFilterToImage(image.uri, null);
+          
+          // Upload to Firebase
+          await uploadPhotoToStorage(processedImage.uri, i === 0);
+          
+          successCount++;
+          
+          // Update the thumbnail with the first successfully uploaded image
+          if (i === 0) {
+            setLastCapturedImage(processedImage.uri);
+          }
+          
+        } catch (error) {
+          console.error(`Error uploading image ${i + 1}:`, error);
+          failCount++;
+        }
+      }
+
+      // Show detailed final result
+      if (successCount > 0 && failCount === 0) {
+        showSuccess(
+          'Upload Complete! 🎉',
+          `Successfully uploaded all ${successCount} photo${successCount > 1 ? 's' : ''} to ${eventId ? 'the event gallery' : 'your personal collection'}!\n\n📸 All photos are now available for viewing and sharing.`,
+          () => {
+            // Optional: Navigate to gallery to view uploaded photos
+            if (eventId) {
+              navigation.navigate('Gallery', { eventId });
+            }
+          }
+        );
+      } else if (successCount > 0 && failCount > 0) {
+        showAlert({
+          title: 'Partial Upload Complete',
+          message: `✅ Successfully uploaded: ${successCount} photo${successCount > 1 ? 's' : ''}\n❌ Failed to upload: ${failCount} photo${failCount > 1 ? 's' : ''}\n\nThe failed uploads might be due to network issues or file format problems. You can try uploading the failed photos again.`,
+          type: 'warning',
+          buttons: [
+            { text: 'OK', style: 'primary' }
+          ]
+        });
+      } else {
+        showError(
+          'Upload Failed',
+          'None of the selected photos could be uploaded. This could be due to:\n\n• Network connection issues\n• File format not supported\n• Storage quota exceeded\n• Authentication problems\n\nPlease check your connection and try again.',
+          () => handleGalleryAccess(), // Retry with new selection
+          () => {} // Cancel function
+        );
+      }
+
+    } catch (error) {
+      console.error('Error in multiple upload:', error);
+      showError(
+        'Upload Process Failed',
+        'There was an unexpected error during the upload process. Please check your internet connection and try again.',
+        () => handleMultipleImageUpload(images), // Retry with same images
+        () => {} // Cancel function
+      );
+    } finally {
+      setIsUploadingFromGallery(false);
+    }
+  };
+
   if (!permission) return <Text>Requesting camera permission...</Text>;
 
   if (!permission.granted) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.permissionText}>We need your permission to access the camera</Text>
-        <TouchableOpacity style={styles.button} onPress={requestPermission}>
-          <Text style={styles.buttonText}>Grant Permission</Text>
+        <Ionicons name="camera-outline" size={64} color="#FF6F61" style={{ marginBottom: 20 }} />
+        <Text style={styles.permissionTitle}>Camera Access Required</Text>
+        <Text style={styles.permissionText}>
+          PixPrint needs camera access to take photos for your events and personal collection.
+        </Text>
+        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+          <LinearGradient
+            colors={['#FF8D76', '#FF6F61']}
+            style={styles.permissionButtonGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          >
+            <Ionicons name="camera" size={20} color="#fff" />
+            <Text style={styles.permissionButtonText}>Grant Camera Access</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.settingsButton}
+          onPress={() => Linking.openSettings()}
+        >
+          <Text style={styles.settingsButtonText}>Open Settings</Text>
         </TouchableOpacity>
       </View>
     );
@@ -539,19 +755,40 @@ const applyFilterToImage = async (imageUri, filterColor) => {
         {/* Thumbnail */}
         <TouchableOpacity 
           style={styles.thumbnailWrapper}
-          onPress={() => navigation.navigate('Gallery', { eventId })}
-          disabled={isTakingPicture || isUploading}
+          onPress={handleGalleryAccess}
+          disabled={isTakingPicture || isUploading || isUploadingFromGallery}
         >
-          {lastCapturedImage ? (
-            <Image
-              source={{ uri: lastCapturedImage }}
-              style={styles.thumbnail}
-            />
+          {isUploadingFromGallery ? (
+            <View style={styles.uploadingThumbnail}>
+              <ActivityIndicator size="small" color="#FF6F61" />
+            </View>
+          ) : lastCapturedImage ? (
+            <View style={styles.thumbnailContainer}>
+              <Image
+                source={{ uri: lastCapturedImage }}
+                style={styles.thumbnail}
+              />
+              <View style={styles.galleryIcon}>
+                <Ionicons name="images" size={16} color="#fff" />
+              </View>
+            </View>
           ) : (
             <View style={styles.emptyThumbnail}>
               <Ionicons name="images-outline" size={24} color="#fff" />
+              <Text style={styles.galleryText}>Gallery</Text>
             </View>
           )}
+        </TouchableOpacity>
+
+        {/* Add a separate button to navigate to the app's gallery if needed */}
+        <TouchableOpacity 
+          style={styles.viewGalleryButton}
+          onPress={() => navigation.navigate('Gallery', { eventId })}
+          disabled={isTakingPicture || isUploading || isUploadingFromGallery}
+        >
+          <View style={styles.viewGalleryContent}>
+            <Ionicons name="albums-outline" size={16} color="#fff" />
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -752,22 +989,48 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#000',
+    paddingHorizontal: 30,
+  },
+  permissionTitle: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 12,
   },
   permissionText: {
-    color: '#fff',
+    color: '#ccc',
     fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 30,
+  },
+  permissionButton: {
+    borderRadius: 25,
+    overflow: 'hidden',
     marginBottom: 16,
   },
-  button: {
-    backgroundColor: '#FF6F61',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+  permissionButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 30,
   },
-  buttonText: {
+  permissionButtonText: {
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+    marginLeft: 8,
+  },
+  settingsButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  settingsButtonText: {
+    color: '#FF6F61',
+    fontSize: 14,
+    fontWeight: '500',
   },
   controls: {
     ...StyleSheet.absoluteFillObject,
@@ -929,229 +1192,6 @@ const styles = StyleSheet.create({
   // Preview Modal Styles
   previewModalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  previewModalContent: {
-    width: '100%',
-    maxWidth: 400,
-    alignItems: 'center',
-  },
-  previewImageContainer: {
-    position: 'relative',
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: 20,
-  },
-  previewImage: {
-    width: width * 0.85,
-    height: width * 0.85,
-    borderRadius: 20,
-    resizeMode: 'cover',
-  },
-  previewFilterOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 20,
-  },
-  filterInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginBottom: 30,
-  },
-  filterInfoText: {
-    color: '#fff',
-    fontSize: 14,
-    marginLeft: 6,
-    fontWeight: '500',
-  },
-  previewActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    paddingHorizontal: 10,
-  },
-  retakeButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 25,
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    minWidth: 80,
-  },
-  retakeButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    marginTop: 4,
-    fontWeight: '600',
-  },
-  saveButton: {
-    borderRadius: 25,
-    overflow: 'hidden',
-    marginHorizontal: 10,
-  },
-  saveButtonGradient: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    flexDirection: 'row',
-    minWidth: 100,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  printButton: {
-    borderRadius: 25,
-    overflow: 'hidden',
-  },
-  printButtonGradient: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    flexDirection: 'row',
-    minWidth: 100,
-  },
-  printButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
-  previewHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    padding: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  closePreviewButton: {
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 20,
-    padding: 8,
-  },
-  previewFilterInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  filterIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  filterColorDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 6,
-  },
-  previewFilterText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  previewImageSection: {
-    marginTop: 80,
-    marginBottom: 20,
-  },
-  previewImageBorder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  previewBottomActions: {
-    width: '100%',
-    paddingHorizontal: 20,
-  },
-  secondaryActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  secondaryActionButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 25,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    minWidth: 80,
-  },
-  secondaryActionIcon: {
-    marginBottom: 4,
-  },
-  secondaryActionText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  primaryActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  retakeButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  printButtonPrimary: {
-    borderRadius: 25,
-    overflow: 'hidden',
-  },
-  printButtonGradient: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    flexDirection: 'row',
-    minWidth: 100,
-  },
-  printButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  saveButtonSecondary: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 25,
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    minWidth: 80,
-  },
-  saveButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  // Professional Preview Modal Styles
-  previewModalContainer: {
-    flex: 1,
     backgroundColor: '#000000',
     justifyContent: 'space-between',
   },
@@ -1232,7 +1272,7 @@ const styles = StyleSheet.create({
   
   previewImage: {
     width: width * 0.85,
-    height: height * 0.52, // Adjusted height for better proportions
+    height: height * 0.52,
     borderRadius: 20,
     resizeMode: 'cover',
   },
@@ -1260,7 +1300,7 @@ const styles = StyleSheet.create({
   previewBottomActions: {
     paddingHorizontal: 25,
     paddingBottom: 25,
-    gap: 10, // Reduced gap between buttons
+    gap: 10,
   },
   
   // Primary Print Button
@@ -1341,5 +1381,56 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 8,
     letterSpacing: 0.3,
+  },
+  
+  thumbnailContainer: {
+    position: 'relative',
+  },
+  
+  galleryIcon: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#FF6F61',
+    borderRadius: 8,
+    width: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#fff',
+  },
+  
+  uploadingThumbnail: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: '#FF6F61',
+    backgroundColor: 'rgba(255, 111, 97, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  galleryText: {
+    color: '#fff',
+    fontSize: 10,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  
+  viewGalleryButton: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    zIndex: 10,
+  },
+  
+  viewGalleryContent: {
+    backgroundColor: '#00000077',
+    borderRadius: 20,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
 });

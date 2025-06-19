@@ -33,7 +33,7 @@ export default function useCustomAlert() {
       title,
       message,
       type: 'success',
-      buttons: onOk ? [{ text: 'Great!', style: 'default', onPress: onOk }] : [{ text: 'OK', style: 'default' }],
+      buttons: onOk ? [{ text: 'Great!', style: 'default', onPress: onOk }] : [],
     });
   };
 

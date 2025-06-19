@@ -7,7 +7,6 @@ import {
   Switch, 
   Image, 
   ScrollView, 
-  Alert,
   Animated,
   Dimensions
 } from 'react-native';
@@ -17,6 +16,7 @@ import { signOut } from 'firebase/auth';
 import { collection, query, where, getDocs, onSnapshot, doc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAlert } from '../../context/AlertContext'; // Add this import
 
 const { width } = Dimensions.get('window');
 
@@ -26,6 +26,9 @@ export default function SettingsScreen({ navigation }) {
   const [notifications, setNotifications] = useState(true);
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(30))[0];
+  
+  // Add alert hook
+  const { showConfirm, showError, showSuccess } = useAlert();
   
   let unsubscribe;
 
@@ -71,31 +74,63 @@ export default function SettingsScreen({ navigation }) {
   }, []);
 
   const handleLogout = async () => {
-    Alert.alert(
+    showConfirm(
       'Confirm Logout',
-      'Are you sure you want to log out?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await signOut(auth);
+      'Are you sure you want to log out of your account? You will need to sign in again to access your photos and events.',
+      async () => {
+        // User confirmed logout
+        try {
+          await signOut(auth);
+          
+          showSuccess(
+            'Logged Out Successfully',
+            'You have been safely logged out of your account.',
+            () => {
+              // Navigate to SignIn after success message
               navigation.reset({
                 index: 0,
                 routes: [{ name: 'SignIn' }],
               });
-            } catch (error) {
-              Alert.alert('Error', 'There was an issue logging out. Please try again.');
             }
-          },
-        },
-      ]
+          );
+          
+        } catch (error) {
+          console.error('Logout error:', error);
+          showError(
+            'Logout Failed',
+            'There was an issue logging out. Please check your connection and try again.',
+            () => handleLogout(), // Retry function
+            () => {} // Cancel function
+          );
+        }
+      },
+      () => {
+        // User cancelled logout - no action needed
+        console.log('Logout cancelled');
+      }
     );
+  };
+
+  const handleDarkModeToggle = () => {
+    setDarkMode(!darkMode);
+    // You can add a toast or small feedback here if needed
+    // For now, just toggle the state
+  };
+
+  const handleNotificationsToggle = async () => {
+    try {
+      setNotifications(!notifications);
+      // Here you could add logic to update notification settings in your backend
+      // or with push notification services
+    } catch (error) {
+      // Revert the change if there's an error
+      setNotifications(notifications);
+      showError(
+        'Settings Update Failed',
+        'Could not update notification preferences. Please try again.',
+        () => handleNotificationsToggle()
+      );
+    }
   };
 
   const renderSettingItem = (icon, title, subtitle, onPress, showArrow = true, customComponent = null) => (
@@ -215,11 +250,11 @@ export default function SettingsScreen({ navigation }) {
               'moon-outline',
               'Dark Mode',
               'Switch to dark theme',
-              () => setDarkMode(!darkMode),
+              handleDarkModeToggle,
               false,
               <Switch 
                 value={darkMode} 
-                onValueChange={setDarkMode}
+                onValueChange={handleDarkModeToggle}
                 trackColor={{ false: '#E5E5E5', true: '#FF6F61' }}
                 thumbColor={darkMode ? '#FFFFFF' : '#FFFFFF'}
               />
@@ -228,11 +263,11 @@ export default function SettingsScreen({ navigation }) {
               'notifications-outline',
               'Push Notifications',
               'Receive app notifications',
-              () => setNotifications(!notifications),
+              handleNotificationsToggle,
               false,
               <Switch 
                 value={notifications} 
-                onValueChange={setNotifications}
+                onValueChange={handleNotificationsToggle}
                 trackColor={{ false: '#E5E5E5', true: '#FF6F61' }}
                 thumbColor={notifications ? '#FFFFFF' : '#FFFFFF'}
               />

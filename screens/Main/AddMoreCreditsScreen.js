@@ -4,7 +4,6 @@ import {
   Text, 
   TouchableOpacity, 
   StyleSheet, 
-  Alert, 
   ScrollView, 
   Animated, 
   Dimensions 
@@ -15,6 +14,7 @@ import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAlert } from '../../context/AlertContext'; // Add this import
 
 const { width } = Dimensions.get('window');
 
@@ -22,6 +22,9 @@ export default function AddMoreCreditsScreen({ navigation }) {
   const [selectedCredits, setSelectedCredits] = useState(null);
   const [userCredits, setUserCredits] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Add alert hook
+  const { showAlert, showError, showSuccess } = useAlert();
   
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -89,17 +92,45 @@ export default function AddMoreCreditsScreen({ navigation }) {
 
   const handleBuyNow = async () => {
     if (!selectedCredits) {
-      Alert.alert('Error', 'Please select a credit package.');
+      showAlert({
+        title: 'Select a Package',
+        message: 'Please choose a credit package before proceeding with your purchase.',
+        type: 'warning',
+        buttons: [
+          { text: 'OK', style: 'primary' }
+        ]
+      });
       return;
     }
 
+    // Show purchase confirmation
+    showAlert({
+      title: 'Confirm Purchase',
+      message: `You are about to purchase ${selectedCredits.label} for ${selectedCredits.displayPrice}. This will be added to your account immediately.`,
+      type: 'confirm',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Buy Now', 
+          style: 'primary', 
+          onPress: () => processPurchase()
+        }
+      ]
+    });
+  };
+
+  const processPurchase = async () => {
     setIsLoading(true);
 
     // Get the current logged-in user
     const user = auth.currentUser;
     if (!user) {
-      Alert.alert('Error', 'You need to be logged in to purchase credits.');
-      setIsLoading(false);
+      showError(
+        'Authentication Required',
+        'You need to be logged in to purchase credits. Please sign in and try again.',
+        () => navigation.navigate('SignIn'), // Navigate to sign in
+        () => setIsLoading(false) // Cancel function
+      );
       return;
     }
 
@@ -119,8 +150,17 @@ export default function AddMoreCreditsScreen({ navigation }) {
         });
 
         setUserCredits(updatedCredits);
-        Alert.alert('Success', `You have successfully purchased ${selectedCredits.credits} credits for ${selectedCredits.displayPrice}.`);
-        navigation.goBack();
+        
+        // Show success message
+        showSuccess(
+          'Purchase Successful! 🎉',
+          `Congratulations! You have successfully purchased ${selectedCredits.credits} credits for ${selectedCredits.displayPrice}. Your new balance is ${updatedCredits} credits.`,
+          () => {
+            // Navigate back after success
+            navigation.goBack();
+          }
+        );
+        
       } else {
         // If user doesn't have any credits yet, create a new document
         await setDoc(creditsRef, {
@@ -130,32 +170,58 @@ export default function AddMoreCreditsScreen({ navigation }) {
         });
 
         setUserCredits(selectedCredits.credits);
-        Alert.alert('Success', `You have successfully purchased ${selectedCredits.credits} credits for ${selectedCredits.displayPrice}.`);
-        navigation.goBack();
+        
+        // Show success message for new user
+        showSuccess(
+          'Welcome to PixPrint! 🎉',
+          `You have successfully purchased your first ${selectedCredits.credits} credits for ${selectedCredits.displayPrice}. Start printing amazing photos now!`,
+          () => {
+            // Navigate back after success
+            navigation.goBack();
+          }
+        );
       }
     } catch (error) {
-      Alert.alert('Error', 'There was an issue processing your purchase. Please try again.');
+      console.error('Purchase error:', error);
+      
+      // Show detailed error message
+      showError(
+        'Purchase Failed',
+        'There was an issue processing your purchase. This could be due to a network connection problem or server issue. Please check your connection and try again.',
+        () => processPurchase(), // Retry function
+        () => setIsLoading(false) // Cancel function
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Enhanced showWhyCreditsInfo function with better design
+  // Enhanced showWhyCreditsInfo function with custom alerts
   const showWhyCreditsInfo = () => {
-    Alert.alert(
-      '💎 Why Credits?', 
-      '• Print high-quality photos instantly\n• Create and manage your own events\n• Access premium features and filters\n• Share unlimited photos with friends\n• Get priority customer support\n\nCredits make it easy to manage your printing budget while unlocking all PixPrint features!',
-      [
-        { text: 'Learn More', onPress: () => {
-          Alert.alert(
-            '📖 Credit Usage',
-            '• Photo Printing: 2-5 credits per photo\n• Event Creation: 10 credits per event\n• Premium Filters: 1 credit per use\n• Priority Support: Included free\n\nCredits never expire and can be shared with family!',
-            [{ text: 'Got it!', style: 'default' }]
-          );
-        }},
-        { text: 'Got it!', style: 'default' }
+    showAlert({
+      title: '💎 Why Credits?',
+      message: 'Credits make it easy to manage your printing budget while unlocking all PixPrint features!\n\n• Print high-quality photos instantly\n• Create and manage your own events\n• Access premium features and filters\n• Share unlimited photos with friends\n• Get priority customer support',
+      type: 'info',
+      buttons: [
+        { 
+          text: 'Learn More', 
+          style: 'default', 
+          onPress: () => showCreditUsageInfo()
+        },
+        { text: 'Got it!', style: 'primary' }
       ]
-    );
+    });
+  };
+
+  const showCreditUsageInfo = () => {
+    showAlert({
+      title: '📖 Credit Usage Guide',
+      message: 'Here\'s how you can use your credits:\n\n• Photo Printing: 2-5 credits per photo\n• Event Creation: 10 credits per event\n• Premium Filters: 1 credit per use\n• Priority Support: Included free\n\n💡 Tip: Credits never expire and can be shared with family members!',
+      type: 'info',
+      buttons: [
+        { text: 'Perfect!', style: 'primary' }
+      ]
+    });
   };
 
   return (
