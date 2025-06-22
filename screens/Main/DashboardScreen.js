@@ -151,14 +151,23 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  // Updated fetchJoinedEvents function without attendee count
+  // Updated fetchJoinedEvents function to include converted guest events
   const fetchJoinedEvents = async () => {
     try {
       const user = auth.currentUser;
       if (user) {
         const joinedRef = collection(db, 'joined_tbl');
-        const q = query(joinedRef, where('user_id', '==', user.uid));
+        
+        // Query for events where user_id matches current user
+        // This will include both originally joined events and converted guest events
+        const q = query(
+          joinedRef,
+          where('user_id', '==', user.uid),
+          where('joined', '==', true)
+        );
+        
         const querySnapshot = await getDocs(q);
+        console.log(`Found ${querySnapshot.size} joined events for user ${user.uid}`);
 
         const eventPromises = [];
         
@@ -166,12 +175,14 @@ export default function DashboardScreen({ navigation }) {
           const joinedData = joinedDoc.data();
           const eventId = joinedData.event_id;
           
+          console.log(`Processing joined event: ${eventId}, converted: ${joinedData.converted_from_guest}`);
+          
           const eventPromise = getDoc(doc(db, 'event_tbl', eventId))
             .then(eventDoc => {
               if (eventDoc.exists()) {
                 const eventData = eventDoc.data();
                 
-                // Format start date
+                // Format dates as before...
                 let formattedStartDate = 'No date specified';
                 let startDateObj = null;
                 
@@ -183,7 +194,6 @@ export default function DashboardScreen({ navigation }) {
                   });
                 }
                 
-                // Format end date
                 let formattedEndDate = '';
                 let dateRangeText = '';
                 
@@ -195,19 +205,14 @@ export default function DashboardScreen({ navigation }) {
                     day: 'numeric',
                   });
                   
-                  // Get year from start date
                   const eventYear = startDateObj ? startDateObj.getFullYear() : new Date().getFullYear();
                   
-                  // Create a formatted date range
                   if (formattedStartDate === formattedEndDate) {
-                    // Single day event
                     dateRangeText = `${formattedStartDate}, ${eventYear}`;
                   } else {
-                    // Multi-day event
                     dateRangeText = `${formattedStartDate} - ${formattedEndDate}, ${eventYear}`;
                   }
                 } else {
-                  // Only start date available
                   if (startDateObj) {
                     dateRangeText = `${formattedStartDate}, ${startDateObj.getFullYear()}`;
                   } else {
@@ -225,8 +230,14 @@ export default function DashboardScreen({ navigation }) {
                   description: eventData.event_description || 'No description available',
                   image: require('../../assets/event-wedding.png'),
                   joinedId: joinedDoc.id,
+                  // Mark if this was converted from guest
+                  wasGuest: joinedData.converted_from_guest || false
                 };
               }
+              return null;
+            })
+            .catch(error => {
+              console.error(`Error fetching event ${eventId}:`, error);
               return null;
             });
           
@@ -236,6 +247,7 @@ export default function DashboardScreen({ navigation }) {
         const eventResults = await Promise.all(eventPromises);
         const validEvents = eventResults.filter(event => event !== null);
         
+        console.log(`Successfully loaded ${validEvents.length} joined events`);
         setJoinedEvents(validEvents);
       }
     } catch (error) {
@@ -446,6 +458,7 @@ export default function DashboardScreen({ navigation }) {
               user_id: auth.currentUser.uid,
               username: username || 'Guest',
               joined: true,
+              isPhotographer: false,
               joined_at: new Date(),
             };
 
@@ -550,10 +563,6 @@ export default function DashboardScreen({ navigation }) {
               ]}
             />
           </View>
-
-          {/* Brand name with elegant typography */}
-          <Text style={styles.brandName}>PixPrint</Text>
-
           {/* Loading text with animated dots */}
           <View style={styles.loadingTextContainer}>
             <Text style={styles.loadingText}>Loading your events</Text>

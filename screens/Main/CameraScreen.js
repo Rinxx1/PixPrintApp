@@ -27,8 +27,8 @@ const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.85;
 
 export default function CameraScreen({ route, navigation }) {
-  // Get eventId from route params
-  const { eventId } = route.params || {};
+  // Get eventId and guest info from route params
+  const { eventId, username: guestUsername } = route.params || {};
   
   const [cameraType, setCameraType] = useState('back');
   const [permission, requestPermission] = useCameraPermissions();
@@ -167,13 +167,13 @@ export default function CameraScreen({ route, navigation }) {
     })
   ).current;
 
-  // Take photo function - updated to show preview modal
+  // Take photo function - updated to support guests
   const takePicture = async () => {
     if (isTakingPicture || !cameraRef.current) {
       return;
     }
     
-    // Check if user is logged in first
+    // Check authentication - allow guests for event photos
     const user = auth.currentUser;
     if (!eventId && !user) {
       showAlert({
@@ -186,6 +186,24 @@ export default function CameraScreen({ route, navigation }) {
             text: 'Sign In', 
             style: 'primary', 
             onPress: () => navigation.navigate('SignIn') 
+          }
+        ]
+      });
+      return;
+    }
+    
+    // For event photos, allow guests
+    if (eventId && !user && !guestUsername) {
+      showAlert({
+        title: 'Guest Access Required',
+        message: 'Please join the event as a guest or sign in to take photos.',
+        type: 'warning',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Join as Guest', 
+            style: 'primary', 
+            onPress: () => navigation.navigate('ContinueAsGuest') 
           }
         ]
       });
@@ -380,16 +398,15 @@ export default function CameraScreen({ route, navigation }) {
   // Upload photo to Firebase Storage
   const uploadPhotoToStorage = async (imageUri, updateThumbnail = true) => {
     try {
-      // Get the current user
       const user = auth.currentUser;
       
-      // Check if user is logged in
-      if (!user) {
+      // For non-event photos, require authentication
+      if (!eventId && !user) {
         showError(
           'Authentication Required',
-          'You must be logged in to save photos. Please sign in to continue.',
-          () => navigation.navigate('SignIn'), // Navigate to sign in
-          () => {} // Cancel function
+          'You must be logged in to save personal photos. Please sign in to continue.',
+          () => navigation.navigate('SignIn'),
+          () => {}
         );
         return;
       }
@@ -398,44 +415,47 @@ export default function CameraScreen({ route, navigation }) {
       let firestoreData;
       const timestamp = new Date().getTime();
       
-      // For gallery uploads, we don't have a filter applied
       const filterColor = filterIndex > 0 ? filterOptions[filterIndex].color : null;
       const filterName = filterIndex > 0 ? filterOptions[filterIndex].name : 'None';
       
-      // Determine the storage path based on whether we have an event ID
       if (eventId) {
-        // Event-specific photo
-        const filename = `event_${eventId}_${timestamp}.jpg`;
+        // Event-specific photo (supports both authenticated users and guests)
+        const filename = user ? 
+          `event_${eventId}_user_${user.uid}_${timestamp}.jpg` :
+          `event_${eventId}_guest_${guestUsername}_${timestamp}.jpg`;
+        
         storageRef = ref(storage, `event-photos/${eventId}/${filename}`);
         
         firestoreData = {
           event_id: eventId,
-          user_id: user.uid,
-          username: user.displayName || 'Unknown User',
-          photo_url: '', // Will be set after upload
+          user_id: user ? user.uid : null, // null for guests
+          username: user ? (user.displayName || 'Unknown User') : guestUsername,
+          photo_url: '',
           uploaded_at: serverTimestamp(),
           filter: filterColor,
           filter_name: filterName,
           likes: 0,
           comments: 0,
-          source: 'camera' // Mark as camera photo
+          source: 'camera',
+          is_guest: !user, // Mark as guest photo
+          guest_username: !user ? guestUsername : null
         };
       } else {
-        // User's personal photo
+        // Personal photo (requires authentication)
         const filename = `user_photo_${timestamp}.jpg`;
         storageRef = ref(storage, `user-photos/${user.uid}/${filename}`);
         
         firestoreData = {
           user_id: user.uid,
           username: user.displayName || 'Unknown User',
-          photo_url: '', // Will be set after upload
+          photo_url: '',
           uploaded_at: serverTimestamp(),
           filter: filterColor,
           filter_name: filterName,
           is_personal: true,
           likes: 0,
           comments: 0,
-          source: 'camera' // Mark as camera photo
+          source: 'camera'
         };
       }
       
@@ -460,7 +480,7 @@ export default function CameraScreen({ route, navigation }) {
       
     } catch (error) {
       console.error("Error uploading photo:", error);
-      throw error; // Re-throw to handle in calling function
+      throw error;
     }
   };
 
@@ -476,6 +496,44 @@ export default function CameraScreen({ route, navigation }) {
 
   // Enhanced gallery access function with better error handling
   const handleGalleryAccess = async () => {
+    const user = auth.currentUser;
+    
+    // For event photos, allow guests
+    if (eventId && !user && !guestUsername) {
+      showAlert({
+        title: 'Guest Access Required',
+        message: 'Please join the event as a guest to upload photos from your gallery.',
+        type: 'warning',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Join as Guest', 
+            style: 'primary', 
+            onPress: () => navigation.navigate('ContinueAsGuest') 
+          }
+        ]
+      });
+      return;
+    }
+
+    // For personal photos, require authentication
+    if (!eventId && !user) {
+      showAlert({
+        title: 'Authentication Required',
+        message: 'Please log in to upload personal photos from your gallery.',
+        type: 'warning',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Sign In', 
+            style: 'primary', 
+            onPress: () => navigation.navigate('SignIn') 
+          }
+        ]
+      });
+      return;
+    }
+
     try {
       // Request permission to access media library
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -814,6 +872,14 @@ export default function CameraScreen({ route, navigation }) {
         <View style={styles.eventBadge}>
           <Ionicons name="aperture" size={16} color="#fff" />
           <Text style={styles.eventBadgeText}>Event ID: {eventId.substring(0, 8)}...</Text>
+        </View>
+      )}
+
+      {/* Guest Badge */}
+      {eventId && guestUsername && !auth.currentUser && (
+        <View style={styles.guestBadge}>
+          <Ionicons name="person-outline" size={16} color="#fff" />
+          <Text style={styles.guestBadgeText}>Guest: {guestUsername}</Text>
         </View>
       )}
 
@@ -1432,5 +1498,23 @@ const styles = StyleSheet.create({
     padding: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  
+  guestBadge: {
+    position: 'absolute',
+    top: 110, // Below event badge
+    right: 20,
+    backgroundColor: 'rgba(76, 175, 80, 0.8)',
+    borderRadius: 20,
+    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  guestBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    marginLeft: 4,
+    fontWeight: '600',
   },
 });

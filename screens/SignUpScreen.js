@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { 
   View, 
   Text, 
@@ -17,25 +17,30 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../firebase';
-import { createUserWithEmailAndPassword, fetchSignInMethodsForEmail } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { useAlert } from '../context/AlertContext'; // Add this import
+import { createUserWithEmailAndPassword, fetchSignInMethodsForEmail, updateProfile } from 'firebase/auth';
+import { doc, setDoc, updateDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { useAlert } from '../context/AlertContext';
+import { AuthContext } from '../context/authContext'; // Add this import
 
 const { width, height } = Dimensions.get('window');
 
-export default function SignUpScreen({ navigation }) {
+export default function SignUpScreen({ route, navigation }) {
+  // Get guest info from route params
+  const { guestUsername, eventId, fromGuestSettings } = route.params || {};
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false); // Renamed this variable
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [firstName, setFirstName] = useState('');
+  const [firstName, setFirstName] = useState(guestUsername || '');
   const [lastName, setLastName] = useState('');
   const [address, setAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   // Add alert hook
   const { showAlert, showError, showSuccess, showConfirm } = useAlert();
+  const { markAccountCreated } = useContext(AuthContext); // Add this
 
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -312,24 +317,49 @@ export default function SignUpScreen({ navigation }) {
       const response = await createUserWithEmailAndPassword(auth, email, password);
       const currentUser = response.user;
 
+      // Update user profile with displayName
+      await updateProfile(currentUser, {
+        displayName: `${firstName.trim()} ${lastName.trim()}`
+      });
+
       // Add user profile to Firestore
       await setDoc(doc(db, 'user_tbl', currentUser.uid), {
         user_email: email.toLowerCase().trim(),
         user_firstname: firstName.trim(),
         user_lastname: lastName.trim(),
-        user_password: password, // Note: In production, don't store plain text passwords
+        user_password: password,
         user_address: address.trim(),
         user_id: currentUser.uid,
         created_at: new Date().toISOString(),
         profile_completed: true,
+        // Add guest conversion info if applicable
+        ...(guestUsername && {
+          converted_from_guest: true,
+          original_guest_username: guestUsername,
+          conversion_date: new Date()
+        })
       });
 
-      // Show success message with next steps
+      // If converting from guest, update their photos and event participation
+      if (guestUsername && eventId) {
+        await convertGuestToUser(currentUser.uid, guestUsername, eventId);
+      }
+
+      // Mark that account was just created (instead of signing out)
+      markAccountCreated();
+
+      // Show success message and navigate directly to Dashboard
       showSuccess(
-        'Welcome to PixPrint! 🎉',
-        `Your account has been created successfully!\n\n✅ Account: ${firstName} ${lastName}\n📧 Email: ${email}\n🔐 Your data is secure and ready\n\n🚀 Next steps:\n• Sign in with your new credentials\n• Complete your profile setup\n• Start creating photo events\n• Invite friends and family\n\nLet\'s get you signed in to start capturing memories!`,
+        guestUsername ? 'Account Converted Successfully! 🎉' : 'Welcome to PixPrint! 🎉',
+        guestUsername ? 
+          `Your guest account has been converted to a full PixPrint account!\n\n✅ Account: ${firstName} ${lastName}\n📧 Email: ${email}\n🎯 Your event participation has been preserved\n\nYou're now signed in and ready to explore your dashboard!` :
+          `Your account has been created successfully!\n\n✅ Account: ${firstName} ${lastName}\n📧 Email: ${email}\n🔐 You're now signed in and ready to start capturing memories!`,
         () => {
-          navigation.navigate('SignIn');
+          // Navigate directly to Dashboard since user is already signed in
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Tabs' }],
+          });
         }
       );
 
@@ -380,7 +410,7 @@ export default function SignUpScreen({ navigation }) {
         showAlert({
           title: 'Too Many Attempts',
           message: 'Too many failed sign-up attempts. Please wait a few minutes before trying again for security reasons.',
-          type: 'warning',
+          type: 'warning',  
           buttons: [
             { text: 'OK', style: 'primary' }
           ]
@@ -395,6 +425,71 @@ export default function SignUpScreen({ navigation }) {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Function to convert guest data to user account
+  const convertGuestToUser = async (userId, guestUsername, eventId) => {
+    try {
+      console.log(`Converting guest ${guestUsername} to user ${userId} for event ${eventId}`);
+      
+      // Update joined_tbl entry
+      const joinedRef = collection(db, 'joined_tbl');
+      const q = query(
+        joinedRef,
+        where('event_id', '==', eventId),
+        where('username', '==', guestUsername)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      console.log(`Found ${querySnapshot.size} joined entries for guest`);
+      
+      if (!querySnapshot.empty) {
+        const joinedDoc = querySnapshot.docs[0];
+        const joinedData = joinedDoc.data();
+        
+        // Only update if it's actually a guest entry (no user_id or user_id is null)
+        if (!joinedData.user_id) {
+          await updateDoc(joinedDoc.ref, {
+            user_id: userId,
+            converted_from_guest: true,
+            conversion_date: new Date()
+          });
+          console.log('Successfully updated joined_tbl entry');
+        }
+      }
+
+      // Update photos_tbl entries
+      const photosRef = collection(db, 'photos_tbl');
+      const photosQuery = query(
+        photosRef,
+        where('event_id', '==', eventId),
+        where('guest_username', '==', guestUsername),
+        where('is_guest', '==', true)
+      );
+      
+      const photosSnapshot = await getDocs(photosQuery);
+      console.log(`Found ${photosSnapshot.size} photos for guest conversion`);
+      
+      if (!photosSnapshot.empty) {
+        const batch = writeBatch(db);
+        
+        photosSnapshot.forEach((photoDoc) => {
+          batch.update(photoDoc.ref, {
+            user_id: userId,
+            is_guest: false,
+            converted_from_guest: true,
+            conversion_date: new Date()
+          });
+        });
+        
+        await batch.commit();
+        console.log('Successfully updated photos_tbl entries');
+      }
+      
+    } catch (error) {
+      console.error('Error converting guest to user:', error);
+      // Don't throw error as account creation was successful
     }
   };
 
@@ -426,22 +521,40 @@ export default function SignUpScreen({ navigation }) {
               }
             ]}
           >
-            <TouchableOpacity 
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="chevron-back" size={24} color="#333" />
-            </TouchableOpacity>
-
             <View style={styles.logoContainer}>
               <Image 
                 source={require('../assets/icon-pix-print.png')} 
                 style={styles.logo} 
               />
             </View>
-            <Text style={styles.welcomeTitle}>Create Account</Text>
-            <Text style={styles.welcomeSubtitle}>Join PixPrint and start capturing memories</Text>
+            <Text style={styles.welcomeTitle}>
+              {guestUsername ? `Welcome, ${guestUsername}!` : 'Join PixPrint!'}
+            </Text>
+            <Text style={styles.welcomeSubtitle}>
+              {guestUsername ? 
+                'Create your account to save your events and memories' :
+                'Create your account to start capturing memories'
+              }
+            </Text>
           </Animated.View>
+
+          {/* Guest conversion info banner */}
+          {guestUsername && (
+            <Animated.View 
+              style={[
+                styles.guestConversionBanner,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }]
+                }
+              ]}
+            >
+              <Ionicons name="arrow-up-circle" size={20} color="#4CAF50" />
+              <Text style={styles.guestConversionText}>
+                Converting guest account to full PixPrint account
+              </Text>
+            </Animated.View>
+          )}
 
           {/* Form Section */}
           <Animated.View 
@@ -454,38 +567,41 @@ export default function SignUpScreen({ navigation }) {
             ]}
           >
             <View style={styles.formCard}>
-              {/* Name Fields Row */}
-              <View style={styles.nameRow}>
-                <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                  <Text style={styles.inputLabel}>First Name</Text>
-                  <View style={styles.inputContainer}>
-                    <Ionicons name="person-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
-                    <TextInput
-                      placeholder="Enter first name"
-                      placeholderTextColor="#AAAAAA"
-                      value={firstName}
-                      onChangeText={setFirstName}
-                      style={styles.input}
-                      editable={!isLoading}
-                      maxLength={50}
-                    />
+              {/* First Name Input - Now standalone */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>First Name</Text>
+                <View style={styles.inputContainer}>
+                  <View style={styles.inputIcon}>
+                    <Ionicons name="person-outline" size={20} color="#AAAAAA" />
                   </View>
+                  <TextInput
+                    placeholder="Enter first name"
+                    placeholderTextColor="#AAAAAA"
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    style={styles.input}
+                    editable={!isLoading}
+                    maxLength={50}
+                  />
                 </View>
+              </View>
 
-                <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-                  <Text style={styles.inputLabel}>Last Name</Text>
-                  <View style={styles.inputContainer}>
-                    <Ionicons name="person-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
-                    <TextInput
-                      placeholder="Enter last name"
-                      placeholderTextColor="#AAAAAA"
-                      value={lastName}
-                      onChangeText={setLastName}
-                      style={styles.input}
-                      editable={!isLoading}
-                      maxLength={50}
-                    />
+              {/* Last Name Input - Now standalone */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Last Name</Text>
+                <View style={styles.inputContainer}>
+                  <View style={styles.inputIcon}>
+                    <Ionicons name="person-outline" size={20} color="#AAAAAA" />
                   </View>
+                  <TextInput
+                    placeholder="Enter last name"
+                    placeholderTextColor="#AAAAAA"
+                    value={lastName}
+                    onChangeText={setLastName}
+                    style={styles.input}
+                    editable={!isLoading}
+                    maxLength={50}
+                  />
                 </View>
               </View>
 
@@ -493,7 +609,9 @@ export default function SignUpScreen({ navigation }) {
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Email Address</Text>
                 <View style={styles.inputContainer}>
-                  <Ionicons name="mail-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
+                  <View style={styles.inputIcon}>
+                    <Ionicons name="mail-outline" size={20} color="#AAAAAA" />
+                  </View>
                   <TextInput
                     placeholder="Enter your email"
                     placeholderTextColor="#AAAAAA"
@@ -512,7 +630,9 @@ export default function SignUpScreen({ navigation }) {
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Address</Text>
                 <View style={styles.inputContainer}>
-                  <Ionicons name="location-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
+                  <View style={styles.inputIcon}>
+                    <Ionicons name="location-outline" size={20} color="#AAAAAA" />
+                  </View>
                   <TextInput
                     placeholder="Enter your address"
                     placeholderTextColor="#AAAAAA"
@@ -564,16 +684,16 @@ export default function SignUpScreen({ navigation }) {
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     style={styles.input}
-                    secureTextEntry={!showConfirmPassword} // Updated variable name
+                    secureTextEntry={!showConfirmPassword}
                     editable={!isLoading}
                     maxLength={128}
                   />
                   <TouchableOpacity 
-                    onPress={() => setShowConfirmPassword(!showConfirmPassword)} // Updated variable name
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                     style={styles.eyeIcon}
                   >
                     <Ionicons 
-                      name={showConfirmPassword ? "eye-off-outline" : "eye-outline"} // Updated variable name
+                      name={showConfirmPassword ? "eye-off-outline" : "eye-outline"} 
                       size={20} 
                       color="#AAAAAA" 
                     />
@@ -637,6 +757,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: height,
     position: 'relative',
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
   },
   backgroundElements: {
     position: 'absolute',
@@ -677,22 +798,6 @@ const styles = StyleSheet.create({
     marginBottom: 30,
     position: 'relative',
   },
-  backButton: {
-    position: 'absolute',
-    left: 24,
-    top: Platform.OS === 'ios' ? 60 : 40,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
   logoContainer: {
     width: 70,
     height: 70,
@@ -701,7 +806,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    marginTop: 20,
     shadowColor: '#FF6F61',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
@@ -740,10 +844,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 6,
   },
-  nameRow: {
-    flexDirection: 'row',
-    marginBottom: 4,
-  },
   inputGroup: {
     marginBottom: 16,
   },
@@ -762,17 +862,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderWidth: 1.5,
     borderColor: '#EEEEEE',
+    minHeight: 52,
   },
   inputIcon: {
     marginRight: 10,
+    width: 20,
+    alignItems: 'center',
   },
   input: {
     flex: 1,
     paddingVertical: 14,
     fontSize: 15,
     color: '#333333',
+    textAlignVertical: 'center',
   },
   eyeIcon: {
+    paddingVertical: 14,
     padding: 4,
   },
   signUpButton: {
@@ -786,6 +891,7 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   buttonGradient: {
     paddingVertical: 16,
@@ -818,5 +924,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#FF6F61',
     fontWeight: 'bold',
+  },
+  guestConversionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.2)',
+    borderRadius: 12,
+    padding: 12,
+    marginHorizontal: 24,
+    marginBottom: 20,
+  },
+  guestConversionText: {
+    fontSize: 14,
+    color: '#4CAF50',
+    fontWeight: '600',
+    marginLeft: 8,
+    flex: 1,
   },
 });

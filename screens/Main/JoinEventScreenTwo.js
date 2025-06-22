@@ -15,6 +15,7 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import HeaderBar from '../../components/HeaderBar';
+import JoinEventBottomNavigator from '../../components/JoinEventBottomNavigator';
 import { db, auth } from '../../firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, onSnapshot, addDoc } from 'firebase/firestore';
 import { useAlert } from '../../context/AlertContext';
@@ -22,8 +23,8 @@ import { useAlert } from '../../context/AlertContext';
 const { width, height } = Dimensions.get('window');
 
 export default function JoinEventScreenTwo({ route, navigation }) {
-  // Extract eventId from route params
-  const { eventId } = route.params || {};
+  // Extract eventId and guest info from route params
+  const { eventId, username: guestUsername } = route.params || {};
   
   // State variables
   const [eventName, setEventName] = useState(''); 
@@ -47,6 +48,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   // Updated state for different photo categories
   const [eventPhotos, setEventPhotos] = useState([]);
   const [myPhotos, setMyPhotos] = useState([]);
+  const [photographerPhotos, setPhotographerPhotos] = useState([]); // Add new state for photographer photos
   const [photosLoading, setPhotosLoading] = useState(false);
   
   // Add alert hook
@@ -304,40 +306,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     return 'active';
   };
 
-  // Function to determine if event is in the future, present, or past
-  const getEventTimeStatus = () => {
-    const now = new Date();
-    
-    if (eventStartDate) {
-      const startDate = new Date(eventStartDate);
-      startDate.setHours(0, 0, 0, 0);
-      
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      if (startDate > today) {
-        return 'future';
-      } else if (eventEndDate) {
-        const endDate = new Date(eventEndDate);
-        endDate.setHours(23, 59, 59, 999);
-        
-        if (now >= startDate && now <= endDate) {
-          return 'present';
-        } else if (now > endDate) {
-          return 'past';
-        }
-      } else {
-        if (startDate.getTime() === today.getTime()) {
-          return 'present';
-        } else if (startDate < today) {
-          return 'past';
-        }
-      }
-    }
-    
-    return 'present';
-  };
-
   // Function to fetch all event photos from Firebase
   const fetchEventPhotos = async () => {
     if (!eventId) return;
@@ -389,25 +357,38 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     }
   };
 
-  // Function to fetch current user's photos from this event
+  // Function to fetch current user's photos (including guest photos)
   const fetchMyPhotos = async () => {
     if (!eventId) return;
     
     const currentUser = auth.currentUser;
-    if (!currentUser) {
-      setMyPhotos([]);
-      return;
-    }
     
     try {
       setPhotosLoading(true);
       
       const photosRef = collection(db, 'photos_tbl');
-      const q = query(
-        photosRef,
-        where('event_id', '==', eventId),
-        where('user_id', '==', currentUser.uid)
-      );
+      let q;
+      
+      if (currentUser) {
+        // Authenticated user - get their photos
+        q = query(
+          photosRef,
+          where('event_id', '==', eventId),
+          where('user_id', '==', currentUser.uid)
+        );
+      } else if (guestUsername) {
+        // Guest user - get photos by guest username
+        q = query(
+          photosRef,
+          where('event_id', '==', eventId),
+          where('is_guest', '==', true),
+          where('guest_username', '==', guestUsername)
+        );
+      } else {
+        // No user and no guest username - return empty
+        setMyPhotos([]);
+        return;
+      }
       
       const querySnapshot = await getDocs(q);
       const photos = [];
@@ -423,7 +404,9 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           filterName: photoData.filter_name,
           likes: photoData.likes || 0,
           comments: photoData.comments || 0,
-          userId: photoData.user_id
+          userId: photoData.user_id,
+          isGuest: photoData.is_guest || false,
+          guestUsername: photoData.guest_username
         });
       });
       
@@ -442,6 +425,84 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       
     } catch (error) {
       setMyPhotos([]);
+    } finally {
+      setPhotosLoading(false);
+    }
+  };
+
+  // New function to fetch photographer photos
+  const fetchPhotographerPhotos = async () => {
+    if (!eventId) return;
+    
+    try {
+      setPhotosLoading(true);
+      
+      // First, get all photographers for this event
+      const joinedRef = collection(db, 'joined_tbl');
+      const photographersQuery = query(
+        joinedRef,
+        where('event_id', '==', eventId),
+        where('isPhotographer', '==', true)
+      );
+      
+      const photographersSnapshot = await getDocs(photographersQuery);
+      const photographerIds = [];
+      
+      photographersSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.user_id) {
+          photographerIds.push(data.user_id);
+        }
+      });
+      
+      if (photographerIds.length === 0) {
+        setPhotographerPhotos([]);
+        return;
+      }
+      
+      // Then, get all photos taken by these photographers
+      const photosRef = collection(db, 'photos_tbl');
+      const photosQuery = query(
+        photosRef,
+        where('event_id', '==', eventId),
+        where('user_id', 'in', photographerIds)
+      );
+      
+      const photosSnapshot = await getDocs(photosQuery);
+      const photos = [];
+      
+      photosSnapshot.forEach((doc) => {
+        const photoData = doc.data();
+        photos.push({
+          id: doc.id,
+          imageUrl: photoData.photo_url,
+          username: photoData.username || 'Unknown User',
+          uploadedAt: photoData.uploaded_at,
+          filter: photoData.filter,
+          filterName: photoData.filter_name,
+          likes: photoData.likes || 0,
+          comments: photoData.comments || 0,
+          userId: photoData.user_id
+        });
+      });
+      
+      // Sort photos by upload date (newest first)
+      const sortedPhotos = photos.sort((a, b) => {
+        if (!a.uploadedAt && !b.uploadedAt) return 0;
+        if (!a.uploadedAt) return 1;
+        if (!b.uploadedAt) return -1;
+        
+        const dateA = a.uploadedAt.toDate ? a.uploadedAt.toDate() : new Date(a.uploadedAt);
+        const dateB = b.uploadedAt.toDate ? b.uploadedAt.toDate() : new Date(b.uploadedAt);
+        
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      setPhotographerPhotos(sortedPhotos);
+      
+    } catch (error) {
+      console.error('Error fetching photographer photos:', error);
+      setPhotographerPhotos([]);
     } finally {
       setPhotosLoading(false);
     }
@@ -579,6 +640,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         fetchEventPhotos();
       } else if (selectedCategory === 'group') {
         fetchMyPhotos();
+      } else if (selectedCategory === 'camera') {
+        fetchPhotographerPhotos(); // Fetch photographer photos when camera tab is selected
       }
     }
   }, [selectedCategory]);
@@ -636,7 +699,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     images = eventPhotos;
     galleryTitle = 'All Photos';
   } else if (selectedCategory === 'camera') {
-    images = cameraImages;
+    images = photographerPhotos; // Use real photographer photos instead of static data
     galleryTitle = 'Photographer';
   } else if (selectedCategory === 'group') {
     images = myPhotos;
@@ -659,14 +722,17 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     
-    if (!eventId) {
-      return;
-    }
-    
+    // Pass guest info when navigating
     if (tab === 'camera') {
-      navigation.navigate('Camera', { eventId });
+      navigation.navigate('Camera', { 
+        eventId, 
+        username: guestUsername 
+      });
     } else if (tab === 'settings') {
-      navigation.navigate('JoinEventSettings', { eventId });
+      navigation.navigate('JoinEventSettings', { 
+        eventId, 
+        username: guestUsername 
+      });
     }
   };
 
@@ -719,6 +785,14 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                   <Ionicons name="star" size={12} color="#FFD700" />
                   <Text style={styles.creatorText}>Event Creator</Text>
                   <Text style={styles.creditsText}>{userCredits} Credits</Text>
+                </View>
+              )}
+
+              {/* Guest Badge */}
+              {guestUsername && !auth.currentUser && (
+                <View style={styles.guestStatusBadge}>
+                  <Ionicons name="person-outline" size={12} color="#4CAF50" />
+                  <Text style={styles.guestStatusText}>Guest: {guestUsername}</Text>
                 </View>
               )}
             </View>
@@ -857,7 +931,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         </View>
 
         {/* Loading indicator for photos */}
-        {photosLoading && (selectedCategory === 'person' || selectedCategory === 'group') && (
+        {photosLoading && (selectedCategory === 'person' || selectedCategory === 'group' || selectedCategory === 'camera') && (
           <View style={styles.photosLoadingContainer}>
             <ActivityIndicator size="small" color="#FF6F61" />
             <Text style={styles.photosLoadingText}>Loading photos...</Text>
@@ -877,16 +951,48 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         {!photosLoading && selectedCategory === 'group' && myPhotos.length === 0 && (
           <View style={styles.noPhotosContainer}>
             <Ionicons name="camera-outline" size={48} color="#CCC" />
-            <Text style={styles.noPhotosText}>You haven't captured any photos yet</Text>
-            <Text style={styles.noPhotosSubtext}>Start taking photos to see them here!</Text>
+            <Text style={styles.noPhotosText}>
+              {guestUsername && !auth.currentUser ? 
+                "You haven't captured any photos yet as a guest" :
+                "You haven't captured any photos yet"
+              }
+            </Text>
+            <Text style={styles.noPhotosSubtext}>
+              {guestUsername && !auth.currentUser ? 
+                "Start taking photos to see them here! Create an account to save your memories permanently." :
+                "Start taking photos to see them here!"
+              }
+            </Text>
+            
+            {/* Account creation prompt for guests */}
+            {guestUsername && !auth.currentUser && (
+              <TouchableOpacity 
+                style={styles.createAccountButton}
+                onPress={() => navigation.navigate('SignUp', { 
+                  guestUsername, 
+                  eventId 
+                })}
+              >
+                <Text style={styles.createAccountButtonText}>Create Account</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* No photos message for Photographer category */}
+        {!photosLoading && selectedCategory === 'camera' && photographerPhotos.length === 0 && (
+          <View style={styles.noPhotosContainer}>
+            <Ionicons name="camera-outline" size={48} color="#CCC" />
+            <Text style={styles.noPhotosText}>No photographer photos yet</Text>
+            <Text style={styles.noPhotosSubtext}>Photos taken by event photographers will appear here</Text>
           </View>
         )}
 
         {/* Image Gallery Grid - Instagram Style */}
         {images.length > 0 && (
           <View style={styles.instaGrid}>
-            {(selectedCategory === 'person' || selectedCategory === 'group') ? (
-              // For dynamic photo arrays (All Photos and My Photos)
+            {(selectedCategory === 'person' || selectedCategory === 'group' || selectedCategory === 'camera') ? (
+              // For all dynamic photo arrays (All Photos, My Photos, and Photographer Photos)
               images.map((photo, index) => {
                 const isFirstInRow = index % 3 === 0;
                 
@@ -922,71 +1028,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                 }
                 return null;
               })
-            ) : (
-              // Original static grid for photographer category
-              [0, 3, 6].map((rowStart, rowIndex) => (
-                <View key={`row-${rowIndex}`} style={styles.instaGridRow}>
-                  {rowStart === 0 ? (
-                    <>
-                      <TouchableOpacity
-                        style={styles.instaMainImage}
-                        onPress={() => images[0]?.imageUrl && handleImageClick(images[0].imageUrl)}
-                      >
-                        <Image 
-                          source={images[0]?.imageUrl} 
-                          style={styles.eventImage}
-                          resizeMode="cover" 
-                        />
-                      </TouchableOpacity>
-                      <View style={styles.instaSecondaryColumn}>
-                        <TouchableOpacity
-                          style={styles.instaSecondaryImage}
-                          onPress={() => images[1]?.imageUrl && handleImageClick(images[1].imageUrl)}
-                        >
-                          <Image 
-                            source={images[1]?.imageUrl} 
-                            style={styles.eventImage} 
-                            resizeMode="cover"
-                          />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.instaSecondaryImage}
-                          onPress={() => images[2]?.imageUrl && handleImageClick(images[2].imageUrl)}
-                        >
-                          <Image 
-                            source={images[2]?.imageUrl} 
-                            style={styles.eventImage} 
-                            resizeMode="cover"
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    </>
-                  ) : (
-                    <>
-                      {[0, 1, 2].map((colIndex) => {
-                        const imageIndex = rowStart + colIndex;
-                        return (
-                          <TouchableOpacity
-                            key={`image-${imageIndex}`}
-                            style={styles.instaEqualImage}
-                            onPress={() => 
-                              images[imageIndex]?.imageUrl && 
-                              handleImageClick(images[imageIndex].imageUrl)
-                            }
-                          >
-                            <Image 
-                              source={images[imageIndex]?.imageUrl} 
-                              style={styles.eventImage} 
-                              resizeMode="cover"
-                            />
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </>
-                  )}
-                </View>
-              ))
-            )}
+            ) : null}
           </View>
         )}
 
@@ -1026,57 +1068,13 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       </Modal>
 
       {/* Enhanced Floating Bottom Navigator */}
-      <View style={styles.bottomNavContainer}>
-        <View style={styles.bottomNav}>
-          {/* Gallery Tab */}
-          <TouchableOpacity 
-            style={styles.navTab} 
-            onPress={() => handleTabChange('gallery')}
-          >
-            <View style={[styles.navIcon, activeTab === 'gallery' && styles.activeNavIcon]}>
-              <Ionicons 
-                name="images" 
-                size={24} 
-                color={activeTab === 'gallery' ? '#FF6F61' : '#8E8E93'} 
-              />
-            </View>
-            {activeTab === 'gallery' && <View style={styles.activeIndicator} />}
-          </TouchableOpacity>
-
-          {/* Camera Tab */}
-          <TouchableOpacity 
-            style={styles.cameraTab} 
-            onPress={() => handleTabChange('camera')}
-          >
-            <LinearGradient
-              colors={['#FF8D76', '#FF6F61']}
-              style={styles.cameraButton}
-            >
-              <Ionicons 
-                name="camera" 
-                size={26} 
-                color="#FFFFFF" 
-              />
-            </LinearGradient>
-            {activeTab === 'camera' && <View style={styles.cameraIndicator} />}
-          </TouchableOpacity>
-
-          {/* Settings Tab */}
-          <TouchableOpacity 
-            style={styles.navTab} 
-            onPress={() => handleTabChange('settings')}
-          >
-            <View style={[styles.navIcon, activeTab === 'settings' && styles.activeNavIcon]}>
-              <Ionicons 
-                name="settings" 
-                size={24} 
-                color={activeTab === 'settings' ? '#FF6F61' : '#8E8E93'} 
-              />
-            </View>
-            {activeTab === 'settings' && <View style={styles.activeIndicator} />}
-          </TouchableOpacity>
-        </View>
-      </View>
+      <JoinEventBottomNavigator 
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        eventId={eventId}
+        navigation={navigation}
+        guestUsername={guestUsername} // Pass guest info
+      />
     </View>
   );
 }
@@ -1157,6 +1155,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 10,
+  },
+  // Guest Status Badge Styles
+  guestStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.5)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  guestStatusText: {
+    color: '#4CAF50',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   // Event Card Styles
   eventCard: {
@@ -1422,91 +1439,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#888',
   },
-  // Bottom navigator styles
-  bottomNavContainer: {
-    position: 'absolute',
-    bottom: 24,
-    left: 24,
-    right: 24,
-    alignItems: 'center',
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    paddingVertical: 8,
-    paddingHorizontal: 13,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
-    width: '100%',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    height: 66,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
-  },
-  navTab: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    position: 'relative',
-  },
-  navIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
-  activeNavIcon: {
-    backgroundColor: 'rgba(255, 111, 97, 0.12)',
-    transform: [{ scale: 1.1 }],
-  },
-  cameraTab: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    position: 'relative',
-  },
-  cameraButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#FF6F61',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  activeIndicator: {
-    position: 'absolute',
-    bottom: -8,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FF6F61',
-  },
-  cameraIndicator: {
-    position: 'absolute',
-    bottom: -10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF6F61',
-    shadowColor: '#FF6F61',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 3,
-  },
   // Instagram-style grid
   instaGrid: {
     paddingHorizontal: 20,
@@ -1596,5 +1528,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: '500',
+  },
+  // Create Account Button Styles
+  createAccountButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    marginTop: 16,
+  },
+  createAccountButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
 });

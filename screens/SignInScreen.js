@@ -95,8 +95,11 @@ export default function SignInScreen({ navigation }) {
         'Welcome Back!',
         'Successfully signed in to your account.',
         () => {
-          // Navigate to tabs after user clicks OK
-          nav.navigate('Tabs');
+          // Use navigation.reset to prevent going back to SignIn
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Tabs' }],
+          });
         }
       );
       
@@ -443,6 +446,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: height,
     position: 'relative',
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
   },
   backgroundElements: {
     position: 'absolute',
@@ -633,6 +637,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
+    marginTop: 20,
   },
   footerText: {
     fontSize: 16,
