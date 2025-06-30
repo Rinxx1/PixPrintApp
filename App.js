@@ -6,7 +6,7 @@ import { AuthProvider } from './context/authContext'; // Import the AuthProvider
 import MainNavigator from './navigation/MainNavigator'; // Import your navigation stack
 
 
-import SplashAnimation from './screens/SplashAnimation'; // NEW animation screens
+import SplashAnimation from './screens/SplashAnimation'; // NEW animation screens s
 import MainScreen from './screens/MainScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
