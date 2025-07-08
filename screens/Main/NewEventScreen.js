@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  Alert,
   ScrollView,
   Animated,
   Dimensions,
@@ -19,22 +18,32 @@ import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { auth, db } from '../../firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, addDoc } from 'firebase/firestore';
+import { useAlert } from '../../context/AlertContext'; // Add this import
 
 const { width } = Dimensions.get('window');
+
+// Hour packages configuration
+const HOUR_PACKAGES = [
+  { hours: 2, credits: 10, label: '2 Hours', popular: false },
+  { hours: 4, credits: 15, label: '4 Hours', popular: true },
+  { hours: 6, credits: 25, label: '6 Hours', popular: false },
+];
 
 export default function NewEventScreen({ navigation }) {
   const [eventName, setEventName] = useState('');
   const [eventStartDate, setEventStartDate] = useState(null);
   const [eventEndDate, setEventEndDate] = useState(null);
   const [eventDescription, setEventDescription] = useState('');
-  const [eventLocation, setEventLocation] = useState(''); // New location field
+  const [eventLocation, setEventLocation] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
-  const [datePickerMode, setDatePickerMode] = useState('start'); // 'start' or 'end'
   const [userCredits, setUserCredits] = useState(0);
-  const [eventPrice, setEventPrice] = useState(50);
+  const [selectedPackage, setSelectedPackage] = useState(null); // Selected hour package
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+
+  // Add alert hook
+  const { showAlert, showError, showSuccess, showConfirm } = useAlert();
 
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -62,7 +71,16 @@ export default function NewEventScreen({ navigation }) {
     if (!accessCode) {
       generateUniqueAccessCode();
     }
-  }, []); // Empty dependency array
+  }, []);
+
+  // Update end date when start date or package changes
+  useEffect(() => {
+    if (eventStartDate && selectedPackage) {
+      const endDate = new Date(eventStartDate);
+      endDate.setHours(endDate.getHours() + selectedPackage.hours);
+      setEventEndDate(endDate);
+    }
+  }, [eventStartDate, selectedPackage]);
 
   const fetchUserCredits = async () => {
     const user = auth.currentUser;
@@ -80,31 +98,17 @@ export default function NewEventScreen({ navigation }) {
     }
   };
 
-  const showDatePicker = (mode) => {
-    setDatePickerMode(mode);
+  const showDatePicker = () => {
     setDatePickerVisibility(true);
   };
   
   const hideDatePicker = () => setDatePickerVisibility(false);
 
   const handleConfirm = (date) => {
-    if (datePickerMode === 'start') {
-      setEventStartDate(date);
-      // If end date is before start date or not set, update it
-      if (!eventEndDate || eventEndDate < date) {
-        // Set end date to same day initially
-        const endOfDay = new Date(date);
-        endOfDay.setHours(23, 59, 59, 999);
-        setEventEndDate(endOfDay);
-      }
-    } else {
-      // Ensure end date is not before start date
-      if (eventStartDate && date < eventStartDate) {
-        Alert.alert('Error', 'End date cannot be before start date');
-        return;
-      }
-      setEventEndDate(date);
-    }
+    // Round to nearest hour
+    const roundedDate = new Date(date);
+    roundedDate.setMinutes(0, 0, 0);
+    setEventStartDate(roundedDate);
     hideDatePicker();
   };
 
@@ -135,93 +139,174 @@ export default function NewEventScreen({ navigation }) {
       } else {
         console.error('Could not generate a unique code after multiple attempts');
         setAccessCode('');
+        showError(
+          'Code Generation Failed',
+          'Unable to generate a unique access code. Please try again.',
+          () => generateUniqueAccessCode()
+        );
       }
     } catch (error) {
       console.error('Error generating unique code:', error);
+      showError(
+        'Connection Error',
+        'Failed to generate access code due to network issues. Please check your connection and try again.',
+        () => generateUniqueAccessCode()
+      );
     } finally {
       setIsGeneratingCode(false);
     }
   };
 
   const handleCreateEvent = async () => {
+    // Validation with custom alerts
     if (!eventName.trim()) {
-      Alert.alert('Error', 'Please enter an event name');
+      showAlert({
+        title: 'Event Name Required',
+        message: 'Please enter a name for your event. This will help guests identify and join your event.',
+        type: 'warning',
+        buttons: [
+          { text: 'OK', style: 'primary' }
+        ]
+      });
       return;
     }
     
     if (!eventLocation.trim()) {
-      Alert.alert('Error', 'Please enter an event location');
+      showAlert({
+        title: 'Event Location Required',
+        message: 'Please specify where your event will take place. This helps guests know where to go.',
+        type: 'warning',
+        buttons: [
+          { text: 'OK', style: 'primary' }
+        ]
+      });
       return;
     }
     
     if (!eventStartDate) {
-      Alert.alert('Error', 'Please select a start date');
+      showAlert({
+        title: 'Start Date Required',
+        message: 'Please select when your event will begin. Guests need to know the event schedule.',
+        type: 'warning',
+        buttons: [
+          { text: 'Select Date', style: 'primary', onPress: () => showDatePicker() }
+        ]
+      });
       return;
     }
     
-    if (!eventEndDate) {
-      Alert.alert('Error', 'Please select an end date');
+    if (!selectedPackage) {
+      showAlert({
+        title: 'Duration Package Required',
+        message: 'Please choose how long your event will last. This determines the event cost and duration.',
+        type: 'warning',
+        buttons: [
+          { text: 'OK', style: 'primary' }
+        ]
+      });
       return;
     }
     
     if (!accessCode) {
-      Alert.alert('Error', 'Please wait while the access code is being generated');
+      showAlert({
+        title: 'Access Code Missing',
+        message: 'Please wait while we generate a unique access code for your event, or try refreshing the code.',
+        type: 'info',
+        buttons: [
+          { text: 'Wait', style: 'cancel' },
+          { text: 'Refresh Code', style: 'primary', onPress: () => generateUniqueAccessCode() }
+        ]
+      });
       return;
     }
 
-    // ⭐ IMPORTANT: Capture the current access code to ensure it doesn't change
     const finalAccessCode = accessCode;
     
-    if (userCredits >= eventPrice) {
-      setIsLoading(true);
-      
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          console.log("About to create event with code:", finalAccessCode);
-          
-          await createEventInFirestore(
-            eventName, 
-            eventLocation, // Add location parameter
-            eventStartDate, 
-            eventEndDate, 
-            eventDescription, 
-            finalAccessCode, // Use the captured code
-            user.uid
-          );
-          await updateCredits(user.uid, userCredits - eventPrice);
-          
-          Alert.alert(
-            'Event Created Successfully!', 
-            `"${eventName}" has been created and is ready for guests.\n\nEvent Code: ${finalAccessCode}\nLocation: ${eventLocation}`, // Show location in success message
-            [{ text: 'OK', onPress: () => navigation.navigate('Tabs') }]
-          );
+    if (userCredits >= selectedPackage.credits) {
+      // Show confirmation dialog
+      showConfirm(
+        'Create Event?',
+        `Are you sure you want to create "${eventName}"?\n\n📍 Location: ${eventLocation}\n⏰ Duration: ${selectedPackage.hours} hours\n🎫 Access Code: ${finalAccessCode}\n💎 Cost: ${selectedPackage.credits} credits\n\n📅 Start: ${formatDateTime(eventStartDate)}\n📅 End: ${formatDateTime(eventEndDate)}`,
+        async () => {
+          // User confirmed - create the event
+          await processEventCreation(finalAccessCode);
+        },
+        () => {
+          // User cancelled - no action needed
+          console.log('Event creation cancelled');
         }
-      } catch (error) {
-        console.error("Error during event creation:", error);
-        Alert.alert('Error', 'Failed to create event. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      Alert.alert(
-        'Insufficient Credits', 
-        `You need ${eventPrice} credits but only have ${userCredits}. Would you like to purchase more credits?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Buy Credits', onPress: () => navigation.navigate('AddMoreCredits') }
-        ]
       );
+    } else {
+      // Insufficient credits
+      showAlert({
+        title: 'Insufficient Credits 💎',
+        message: `You need ${selectedPackage.credits} credits to create this ${selectedPackage.hours}-hour event, but you only have ${userCredits} credits.\n\nWould you like to purchase more credits to continue?`,
+        type: 'warning',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Buy Credits', 
+            style: 'primary', 
+            onPress: () => navigation.navigate('AddMoreCredits') 
+          }
+        ]
+      });
+    }
+  };
+
+  const processEventCreation = async (finalAccessCode) => {
+    setIsLoading(true);
+    
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        console.log("About to create event with code:", finalAccessCode);
+        
+        await createEventInFirestore(
+          eventName, 
+          eventLocation,
+          eventStartDate, 
+          eventEndDate, 
+          eventDescription, 
+          finalAccessCode,
+          selectedPackage.hours,
+          user.uid
+        );
+        await updateCredits(user.uid, userCredits - selectedPackage.credits);
+        
+        // Show success with detailed information
+        showSuccess(
+          'Event Created Successfully! 🎉',
+          `"${eventName}" is now live and ready for guests!\n\n🎫 Share this code with your guests:\n${finalAccessCode}\n\n📍 ${eventLocation}\n⏰ ${selectedPackage.hours} hours\n📅 ${formatDateTime(eventStartDate)}`,
+          () => {
+            // Navigate back to tabs after success
+            navigation.navigate('Tabs');
+          }
+        );
+      }
+    } catch (error) {
+      console.error("Error during event creation:", error);
+      
+      // Show detailed error with retry option
+      showError(
+        'Event Creation Failed',
+        'There was an issue creating your event. This could be due to a network connection problem or server issue. Your credits have not been deducted.',
+        () => processEventCreation(finalAccessCode), // Retry function
+        () => setIsLoading(false) // Cancel function
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const createEventInFirestore = async (
     eventName, 
-    eventLocation, // Add location parameter
+    eventLocation,
     eventStartDate, 
     eventEndDate, 
     eventDescription, 
-    accessCode, 
+    accessCode,
+    duration,
     userId
   ) => {
     try {
@@ -229,10 +314,11 @@ export default function NewEventScreen({ navigation }) {
       const eventRef = collection(db, 'event_tbl');
       await addDoc(eventRef, {
         event_name: eventName,
-        event_location: eventLocation, // Add location field
+        event_location: eventLocation,
         event_start_date: eventStartDate,
         event_end_date: eventEndDate,
         event_description: eventDescription,
+        event_duration_hours: duration,
         user_id: userId,
         event_code: accessCode,
         created_at: new Date(),
@@ -245,8 +331,7 @@ export default function NewEventScreen({ navigation }) {
   };
 
   const generateEventCode = () => {
-    // Generate a code with letters and numbers (more visually distinct than base36)
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed similar looking chars like I, 1, O, 0
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let result = '';
     for (let i = 0; i < 6; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -273,27 +358,37 @@ export default function NewEventScreen({ navigation }) {
     }
   };
 
-  // Format date for display
-  const formatDate = (date) => {
+  // Format date and time for display
+  const formatDateTime = (date) => {
     if (!date) return '';
     return date.toLocaleDateString('en-US', {
-      weekday: 'short', 
-      month: 'short', 
+      weekday: 'short',
+      month: 'short',
       day: 'numeric',
-      year: 'numeric'
-    });
-  };
-
-  // Format time for display  
-  const formatTime = (date) => {
-    if (!date) return '';
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit', 
+      year: 'numeric',
+      hour: '2-digit',
       minute: '2-digit'
     });
   };
 
-  const hasEnoughCredits = userCredits >= eventPrice;
+  // Enhanced package selection with feedback
+  const handlePackageSelection = (pkg) => {
+    setSelectedPackage(pkg);
+    
+    // Show brief info about the selected package
+    if (pkg.popular) {
+      showAlert({
+        title: 'Great Choice! ⭐',
+        message: `You've selected our most popular ${pkg.label} package. This gives you plenty of time for photos while being cost-effective at ${pkg.credits} credits.`,
+        type: 'success',
+        buttons: [
+          { text: 'Perfect!', style: 'primary' }
+        ]
+      });
+    }
+  };
+
+  const hasEnoughCredits = selectedPackage ? userCredits >= selectedPackage.credits : false;
 
   return (
     <View style={styles.container}>
@@ -322,51 +417,6 @@ export default function NewEventScreen({ navigation }) {
         >
           <Text style={styles.title}>Create New Event</Text>
           <Text style={styles.subtitle}>Set up your event details and start capturing memories</Text>
-        </Animated.View>
-
-        {/* Credits Display Card */}
-        <Animated.View 
-          style={[
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }]
-            }
-          ]}
-        >
-          <LinearGradient
-            colors={hasEnoughCredits ? ['#4CAF50', '#45A049'] : ['#FF6B6B', '#FF5252']}
-            style={styles.creditsCard}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-          >
-            <View style={styles.creditsContent}>
-              <View style={styles.creditsLeft}>
-                <View style={styles.creditsIconWrapper}>
-                  <Ionicons 
-                    name={hasEnoughCredits ? "checkmark-circle" : "alert-circle"} 
-                    size={24} 
-                    color="#FFFFFF" 
-                  />
-                </View>
-                <View style={styles.creditsInfo}>
-                  <Text style={styles.creditsLabel}>Event Cost</Text>
-                  <Text style={styles.creditsAmount}>{eventPrice} Credits</Text>
-                </View>
-              </View>
-              <View style={styles.creditsRight}>
-                <Text style={styles.yourCreditsLabel}>Your Credits</Text>
-                <Text style={styles.yourCreditsAmount}>{userCredits}</Text>
-                {!hasEnoughCredits && (
-                  <TouchableOpacity 
-                    style={styles.addCreditsButton}
-                    onPress={() => navigation.navigate('AddMoreCredits')}
-                  >
-                    <Text style={styles.addCreditsText}>+ Add</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </LinearGradient>
         </Animated.View>
 
         {/* Form Card */}
@@ -412,61 +462,64 @@ export default function NewEventScreen({ navigation }) {
             </Text>
           </View>
 
+          {/* Hour Package Selection */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Select Event Duration</Text>
+            <View style={styles.packageContainer}>
+              {HOUR_PACKAGES.map((pkg, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.packageCard,
+                    selectedPackage?.hours === pkg.hours && styles.packageCardSelected
+                  ]}
+                  onPress={() => handlePackageSelection(pkg)}
+                >
+                  {pkg.popular && (
+                    <View style={styles.popularBadge}>
+                      <Text style={styles.popularText}>Popular</Text>
+                    </View>
+                  )}
+                  <Text style={styles.packageHours}>{pkg.label}</Text>
+                  <Text style={styles.packageCredits}>{pkg.credits} Credits</Text>
+                  <View style={styles.packageCheckbox}>
+                    {selectedPackage?.hours === pkg.hours && (
+                      <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
           {/* Event Start Date */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Event Start</Text>
-            <TouchableOpacity onPress={() => showDatePicker('start')} style={styles.inputContainer}>
+            <Text style={styles.label}>Event Start Date & Time</Text>
+            <TouchableOpacity onPress={showDatePicker} style={styles.inputContainer}>
               <Ionicons name="calendar-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
               <Text style={[styles.input, styles.dateText]}>
-                {eventStartDate ? formatDate(eventStartDate) : 'Select start date'}
+                {eventStartDate ? formatDateTime(eventStartDate) : 'Select start date & time'}
               </Text>
               <Ionicons name="chevron-down" size={20} color="#AAAAAA" />
             </TouchableOpacity>
           </View>
 
-          {/* Event End Date */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Event End</Text>
-            <TouchableOpacity 
-              onPress={() => showDatePicker('end')} 
-              style={[
-                styles.inputContainer,
-                !eventStartDate && styles.disabledInput
-              ]}
-              disabled={!eventStartDate}
-            >
-              <Ionicons 
-                name="calendar-outline" 
-                size={20} 
-                color={!eventStartDate ? "#CCCCCC" : "#AAAAAA"} 
-                style={styles.inputIcon} 
-              />
-              <Text 
-                style={[
-                  styles.input, 
-                  styles.dateText,
-                  !eventStartDate && styles.disabledText
-                ]}
-              >
-                {eventEndDate 
-                  ? formatDate(eventEndDate) 
-                  : !eventStartDate 
-                    ? 'Select start date first' 
-                    : 'Select end date'
-                }
+          {/* Event End Date (Auto-calculated) */}
+          {eventStartDate && selectedPackage && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Event End Date & Time</Text>
+              <View style={[styles.inputContainer, styles.disabledInput]}>
+                <Ionicons name="calendar-outline" size={20} color="#CCCCCC" style={styles.inputIcon} />
+                <Text style={[styles.input, styles.dateText, styles.disabledText]}>
+                  {formatDateTime(eventEndDate)}
+                </Text>
+                <Ionicons name="lock-closed" size={16} color="#CCCCCC" />
+              </View>
+              <Text style={styles.autoCalculatedText}>
+                Automatically calculated based on selected duration
               </Text>
-              <Ionicons 
-                name="chevron-down" 
-                size={20} 
-                color={!eventStartDate ? "#CCCCCC" : "#AAAAAA"} 
-              />
-            </TouchableOpacity>
-            {eventStartDate && eventEndDate && (
-              <Text style={styles.dateRangeText}>
-                Duration: {calculateDurationText(eventStartDate, eventEndDate)}
-              </Text>
-            )}
-          </View>
+            </View>
+          )}
 
           {/* Event Description */}
           <View style={styles.inputGroup}>
@@ -511,6 +564,53 @@ export default function NewEventScreen({ navigation }) {
           </View>
         </Animated.View>
 
+        {/* Credits Display Card */}
+        {selectedPackage && (
+          <Animated.View 
+            style={[
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }]
+              }
+            ]}
+          >
+            <LinearGradient
+              colors={hasEnoughCredits ? ['#4CAF50', '#45A049'] : ['#FF6B6B', '#FF5252']}
+              style={styles.creditsCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <View style={styles.creditsContent}>
+                <View style={styles.creditsLeft}>
+                  <View style={styles.creditsIconWrapper}>
+                    <Ionicons 
+                      name={hasEnoughCredits ? "checkmark-circle" : "alert-circle"} 
+                      size={24} 
+                      color="#FFFFFF" 
+                    />
+                  </View>
+                  <View style={styles.creditsInfo}>
+                    <Text style={styles.creditsLabel}>Event Cost ({selectedPackage.label})</Text>
+                    <Text style={styles.creditsAmount}>{selectedPackage.credits} Credits</Text>
+                  </View>
+                </View>
+                <View style={styles.creditsRight}>
+                  <Text style={styles.yourCreditsLabel}>Your Credits</Text>
+                  <Text style={styles.yourCreditsAmount}>{userCredits}</Text>
+                  {!hasEnoughCredits && (
+                    <TouchableOpacity 
+                      style={styles.addCreditsButton}
+                      onPress={() => navigation.navigate('AddMoreCredits')}
+                    >
+                      <Text style={styles.addCreditsText}>+ Add</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            </LinearGradient>
+          </Animated.View>
+        )}
+
         {/* Features Info */}
         <Animated.View 
           style={[
@@ -554,13 +654,13 @@ export default function NewEventScreen({ navigation }) {
           <TouchableOpacity 
             style={[
               styles.createButton, 
-              (!hasEnoughCredits || isLoading || isGeneratingCode) && styles.createButtonDisabled
+              (!hasEnoughCredits || isLoading || isGeneratingCode || !selectedPackage) && styles.createButtonDisabled
             ]} 
             onPress={handleCreateEvent}
-            disabled={!hasEnoughCredits || isLoading || isGeneratingCode}
+            disabled={!hasEnoughCredits || isLoading || isGeneratingCode || !selectedPackage}
           >
             <LinearGradient
-              colors={(!hasEnoughCredits || isLoading || isGeneratingCode) ? ['#CCCCCC', '#AAAAAA'] : ['#FF8D76', '#FF6F61']}
+              colors={(!hasEnoughCredits || isLoading || isGeneratingCode || !selectedPackage) ? ['#CCCCCC', '#AAAAAA'] : ['#FF8D76', '#FF6F61']}
               style={styles.createButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -584,26 +684,12 @@ export default function NewEventScreen({ navigation }) {
         mode="datetime"
         onConfirm={handleConfirm}
         onCancel={hideDatePicker}
-        minimumDate={datePickerMode === 'start' ? new Date() : eventStartDate || new Date()}
-        date={datePickerMode === 'start' ? (eventStartDate || new Date()) : (eventEndDate || eventStartDate || new Date())}
+        minimumDate={new Date()}
+        date={eventStartDate || new Date()}
+        minuteInterval={60} // Only allow hour intervals
       />
     </View>
   );
-}
-
-// Helper function to calculate duration between two dates
-function calculateDurationText(startDate, endDate) {
-  const diffTime = Math.abs(endDate - startDate);
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  const diffHours = Math.floor((diffTime % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  
-  if (diffDays === 0) {
-    return `${diffHours} hour${diffHours !== 1 ? 's' : ''}`;
-  } else if (diffHours === 0) {
-    return `${diffDays} day${diffDays !== 1 ? 's' : ''}`;
-  } else {
-    return `${diffDays} day${diffDays !== 1 ? 's' : ''} ${diffHours} hour${diffHours !== 1 ? 's' : ''}`;
-  }
 }
 
 const styles = StyleSheet.create({
@@ -658,6 +744,145 @@ const styles = StyleSheet.create({
     color: '#666666',
     textAlign: 'center',
     lineHeight: 22,
+  },
+  formCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333333',
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1.5,
+    borderColor: '#EEEEEE',
+    minHeight: 50,
+  },
+  disabledInput: {
+    backgroundColor: '#F9F9F9',
+    borderColor: '#EEEEEE',
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333333',
+    paddingVertical: 0,
+  },
+  disabledText: {
+    color: '#AAAAAA',
+  },
+  dateText: {
+    paddingVertical: 14,
+  },
+  locationHelpText: {
+    fontSize: 12,
+    color: '#666666',
+    marginTop: 6,
+    marginLeft: 4,
+    fontStyle: 'italic',
+  },
+  autoCalculatedText: {
+    fontSize: 12,
+    color: '#4CAF50',
+    marginTop: 6,
+    marginLeft: 4,
+    fontStyle: 'italic',
+  },
+  textArea: {
+    paddingVertical: 12,
+    textAlignVertical: 'top',
+  },
+  codeText: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 18,
+    letterSpacing: 1,
+    color: '#FF6F61',
+    fontWeight: '700',
+  },
+  codeHelpText: {
+    fontSize: 12,
+    color: '#666666',
+    marginTop: 6,
+    marginLeft: 4,
+  },
+  refreshButton: {
+    padding: 8,
+  },
+  disabledButton: {
+    padding: 8,
+    opacity: 0.5,
+  },
+  packageContainer: {
+    gap: 12,
+  },
+  packageCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: '#EEEEEE',
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  packageCardSelected: {
+    borderColor: '#FF6F61',
+    backgroundColor: '#FFF8F7',
+  },
+  popularBadge: {
+    position: 'absolute',
+    top: -8,
+    right: 16,
+    backgroundColor: '#FF6F61',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  popularText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  packageHours: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333333',
+    flex: 1,
+  },
+  packageCredits: {
+    fontSize: 16,
+    color: '#666666',
+    marginRight: 12,
+  },
+  packageCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FF6F61',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   creditsCard: {
     borderRadius: 16,
@@ -726,93 +951,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
-  },
-  formCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333333',
-    marginBottom: 8,
-    marginLeft: 4,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: '#EEEEEE',
-    minHeight: 50,
-  },
-  disabledInput: {
-    backgroundColor: '#F9F9F9',
-    borderColor: '#EEEEEE',
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333333',
-    paddingVertical: 0,
-  },
-  disabledText: {
-    color: '#AAAAAA',
-  },
-  dateText: {
-    paddingVertical: 14,
-  },
-  dateRangeText: {
-    fontSize: 12,
-    color: '#666666',
-    marginTop: 6,
-    marginLeft: 4,
-  },
-  locationHelpText: {
-    fontSize: 12,
-    color: '#666666',
-    marginTop: 6,
-    marginLeft: 4,
-    fontStyle: 'italic',
-  },
-  textArea: {
-    paddingVertical: 12,
-    textAlignVertical: 'top',
-  },
-  codeText: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontSize: 18,
-    letterSpacing: 1,
-    color: '#FF6F61',
-    fontWeight: '700',
-  },
-  codeHelpText: {
-    fontSize: 12,
-    color: '#666666',
-    marginTop: 6,
-    marginLeft: 4,
-  },
-  refreshButton: {
-    padding: 8,
-  },
-  disabledButton: {
-    padding: 8,
-    opacity: 0.5,
   },
   featuresCard: {
     backgroundColor: '#FFFFFF',

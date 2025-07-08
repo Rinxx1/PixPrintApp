@@ -5,7 +5,6 @@ import {
   TextInput, 
   TouchableOpacity, 
   StyleSheet, 
-  Alert, 
   ScrollView,
   Animated,
   Dimensions
@@ -16,6 +15,7 @@ import HeaderBar from '../../components/HeaderBar';
 import { auth, db } from '../../firebase'; // Firebase auth import
 import { reauthenticateWithCredential, EmailAuthProvider, updatePassword } from 'firebase/auth'; // For password update
 import { doc, updateDoc } from 'firebase/firestore'; // For Firestore update
+import { useAlert } from '../../context/AlertContext'; // Add this import
 
 const { width } = Dimensions.get('window');
 
@@ -28,6 +28,9 @@ export default function ChangePasswordScreen({ navigation }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Add alert hook
+  const { showAlert, showError, showSuccess, showConfirm } = useAlert();
   
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -109,64 +112,204 @@ export default function ChangePasswordScreen({ navigation }) {
     // Clear previous error message
     setErrorMessage('');
     
+    // Enhanced validation with custom alerts
     if (!currentPassword.trim()) {
-      setErrorMessage('Current password is required.');
+      showAlert({
+        title: 'Current Password Required',
+        message: 'Please enter your current password to verify your identity before changing to a new password.',
+        type: 'warning',
+        buttons: [
+          { text: 'OK', style: 'primary' }
+        ]
+      });
       return;
     }
 
     if (!newPassword.trim()) {
-      setErrorMessage('New password is required.');
+      showAlert({
+        title: 'New Password Required',
+        message: 'Please create a new password that meets the security requirements shown below.',
+        type: 'warning',
+        buttons: [
+          { text: 'OK', style: 'primary' }
+        ]
+      });
       return;
     }
     
     if (passwordStrength < 2) {
-      setErrorMessage('Please choose a stronger password.');
+      showAlert({
+        title: 'Password Too Weak 🔒',
+        message: 'Your new password needs to be stronger for better security. Please make sure it meets at least 2 of the requirements:\n\n✓ At least 8 characters\n✓ Contains numbers\n✓ Contains uppercase letters\n✓ Contains special characters',
+        type: 'warning',
+        buttons: [
+          { text: 'I\'ll Make It Stronger', style: 'primary' }
+        ]
+      });
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setErrorMessage('New passwords do not match!');
+      showAlert({
+        title: 'Passwords Don\'t Match',
+        message: 'The new password and confirmation password don\'t match. Please make sure both fields contain the same password.',
+        type: 'error',
+        buttons: [
+          { text: 'Fix It', style: 'primary' }
+        ]
+      });
       return;
     }
-    
+
+    // Check if new password is the same as current
+    if (currentPassword === newPassword) {
+      showAlert({
+        title: 'Same Password Detected',
+        message: 'Your new password appears to be the same as your current password. Please choose a different password for better security.',
+        type: 'info',
+        buttons: [
+          { text: 'Choose Different Password', style: 'primary' }
+        ]
+      });
+      return;
+    }
+
+    // Show confirmation dialog before proceeding
+    showConfirm(
+      'Update Password?',
+      'Are you sure you want to change your password?\n\n🔒 This will update your password for signing into PixPrint\n🔄 You\'ll need to use the new password for future logins\n✨ Your account security will be enhanced\n\nProceed with the password change?',
+      async () => {
+        // User confirmed - proceed with password change
+        await processPasswordChange();
+      },
+      () => {
+        // User cancelled - no action needed
+        console.log('Password change cancelled');
+      }
+    );
+  };
+
+  const processPasswordChange = async () => {
     setLoading(true);
 
     const user = auth.currentUser;
-    if (user) {
+    if (!user) {
+      showError(
+        'Authentication Error',
+        'Unable to verify your identity. Please sign in again and try updating your password.',
+        () => navigation.navigate('SignIn'), // Navigate to sign in
+        () => setLoading(false) // Cancel function
+      );
+      return;
+    }
+
+    try {
       const credential = EmailAuthProvider.credential(user.email, currentPassword);
 
-      try {
-        // Reauthenticate the user with the current password
-        await reauthenticateWithCredential(user, credential);
+      // Reauthenticate the user with the current password
+      await reauthenticateWithCredential(user, credential);
 
-        // Proceed with updating the password
-        await updatePassword(user, newPassword);
-        
-        // Update password in Firestore as well
-        const userRef = doc(db, 'user_tbl', user.uid);
-        await updateDoc(userRef, {
-          user_password: newPassword, // Update user_password field in Firestore
-        });
+      // Proceed with updating the password
+      await updatePassword(user, newPassword);
+      
+      // Update password in Firestore as well
+      const userRef = doc(db, 'user_tbl', user.uid);
+      await updateDoc(userRef, {
+        user_password: newPassword, // Update user_password field in Firestore
+      });
 
-        setErrorMessage('');  // Clear error message
-        Alert.alert(
-          'Success', 
-          'Your password has been updated successfully!',
-          [{ text: 'Great!', onPress: () => navigation.goBack() }]
-        );
-      } catch (error) {
-        console.log(error);
-        if (error.code === 'auth/wrong-password') {
-          setErrorMessage('Incorrect current password! Please try again.');
-        } else if (error.code === 'auth/weak-password') {
-          setErrorMessage('The new password is too weak. Please choose a stronger password.');
-        } else {
-          setErrorMessage('Error updating password. Please try again later.');
+      setErrorMessage('');  // Clear error message
+      
+      // Show detailed success message
+      showSuccess(
+        'Password Updated Successfully! 🎉',
+        'Your password has been securely updated and saved.\n\n🔒 Your account is now protected with the new password\n📱 Use this new password for future logins\n✅ All your data remains safe and accessible\n\nRemember to keep your new password secure!',
+        () => {
+          // Clear form and navigate back
+          setCurrentPassword('');
+          setNewPassword('');
+          setConfirmPassword('');
+          navigation.goBack();
         }
-      } finally {
-        setLoading(false);
+      );
+
+    } catch (error) {
+      console.error('Password update error:', error);
+      
+      // Enhanced error handling with specific messages
+      if (error.code === 'auth/wrong-password') {
+        showAlert({
+          title: 'Current Password Incorrect 🔑',
+          message: 'The current password you entered is not correct. Please double-check and enter your actual current password to proceed with the update.',
+          type: 'error',
+          buttons: [
+            { text: 'Try Again', style: 'primary' },
+            { 
+              text: 'Forgot Password?', 
+              style: 'secondary', 
+              onPress: () => navigation.navigate('ForgotPassword') 
+            }
+          ]
+        });
+        setErrorMessage('Incorrect current password! Please try again.');
+      } else if (error.code === 'auth/weak-password') {
+        showAlert({
+          title: 'Password Requirements Not Met',
+          message: 'The new password doesn\'t meet Firebase security requirements. Please create a stronger password with at least 6 characters, including letters and numbers.',
+          type: 'warning',
+          buttons: [
+            { text: 'Create Stronger Password', style: 'primary' }
+          ]
+        });
+        setErrorMessage('The new password is too weak. Please choose a stronger password.');
+      } else if (error.code === 'auth/requires-recent-login') {
+        showAlert({
+          title: 'Recent Login Required 🔐',
+          message: 'For security reasons, you need to sign in again before changing your password. This helps protect your account from unauthorized changes.',
+          type: 'info',
+          buttons: [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Sign In Again', 
+              style: 'primary', 
+              onPress: () => navigation.navigate('SignIn') 
+            }
+          ]
+        });
+        setErrorMessage('Please sign in again to change your password.');
+      } else if (error.code === 'auth/network-request-failed') {
+        showError(
+          'Network Connection Error',
+          'Unable to update your password due to network issues. Please check your internet connection and try again.',
+          () => processPasswordChange(), // Retry function
+          () => setLoading(false) // Cancel function
+        );
+      } else {
+        showError(
+          'Password Update Failed',
+          'There was an unexpected error while updating your password. This could be due to server issues or connectivity problems. Please try again in a moment.',
+          () => processPasswordChange(), // Retry function
+          () => setLoading(false) // Cancel function
+        );
+        setErrorMessage('Error updating password. Please try again later.');
       }
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Enhanced forgot password handler
+  const handleForgotPassword = () => {
+    showConfirm(
+      'Forgot Current Password?',
+      'If you\'ve forgotten your current password, you can reset it using the password reset feature.\n\n📧 We\'ll send a reset link to your email\n🔑 You can create a new password\n🔄 Then return here if needed\n\nWould you like to proceed with password reset?',
+      () => {
+        navigation.navigate('ForgotPassword');
+      },
+      () => {
+        console.log('Password reset cancelled');
+      }
+    );
   };
 
   return (
@@ -390,7 +533,7 @@ export default function ChangePasswordScreen({ navigation }) {
         
         {/* Footer */}
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.forgotButton} onPress={() => navigation.navigate('ForgotPassword')}>
+          <TouchableOpacity style={styles.forgotButton} onPress={handleForgotPassword}>
             <Text style={styles.forgotText}>Forgot current password?</Text>
           </TouchableOpacity>
         </View>

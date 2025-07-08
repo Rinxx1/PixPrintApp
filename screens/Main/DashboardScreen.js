@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import HeaderBar from '../../components/HeaderBar';
 import { 
   View, 
@@ -9,16 +9,18 @@ import {
   Image, 
   ScrollView, 
   Animated,
-  Alert,
   Dimensions,
   StatusBar,
   Platform,
-  ImageBackground
+  ImageBackground,
+  RefreshControl
 } from 'react-native';
 import { auth, db } from '../../firebase';
 import { collection, query, where, getDocs, doc, getDoc, signOut, addDoc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAlert } from '../../context/AlertContext'; // Add this import
+import { useFocusEffect } from '@react-navigation/native'; // Add this import
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.85;
@@ -29,7 +31,11 @@ export default function DashboardScreen({ navigation }) {
   const [createdEvents, setCreatedEvents] = useState([]);
   const [joinedEvents, setJoinedEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  
+  // Add alert hook
+  const { showAlert, showError, showSuccess, showConfirm } = useAlert();
   
   // Enhanced but minimal animation values for loading
   const rotateAnim = useState(new Animated.Value(0))[0];
@@ -51,20 +57,244 @@ export default function DashboardScreen({ navigation }) {
     extrapolate: 'clamp',
   });
 
-  // Function to count attendees for a specific event
-  const getEventAttendeeCount = async (eventId) => {
+  // Fetch user data
+  const fetchUserData = async () => {
     try {
-      const joinedRef = collection(db, 'joined_tbl');
-      const q = query(joinedRef, where('event_id', '==', eventId));
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.size; // Returns the number of documents (attendees)
+      const user = auth.currentUser;
+      if (user) {
+        const userRef = doc(db, 'user_tbl', user.uid);
+        const docSnap = await getDoc(userRef);
+        if (docSnap.exists()) {
+          setUsername(docSnap.data().user_firstname);
+        }
+      }
     } catch (error) {
-      console.error("Error counting attendees:", error);
-      return 0;
+      console.error("Error fetching user data:", error);
     }
   };
 
-  // Fetch user data and events from Firebase
+  // Updated fetchCreatedEvents function without attendee count
+  const fetchCreatedEvents = async () => {
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        const eventsRef = collection(db, 'event_tbl');
+        const q = query(eventsRef, where('user_id', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+
+        const events = [];
+        
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          const eventId = doc.id;
+          
+          // Format start date
+          let formattedStartDate = 'No date specified';
+          let startDateObj = null;
+          
+          if (data.event_start_date && typeof data.event_start_date.toDate === 'function') {
+            startDateObj = data.event_start_date.toDate();
+            formattedStartDate = startDateObj.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+            });
+          }
+          
+          // Format end date
+          let formattedEndDate = '';
+          let dateRangeText = '';
+          
+          if (data.event_end_date && typeof data.event_end_date.toDate === 'function') {
+            const endDateObj = data.event_end_date.toDate();
+            
+            formattedEndDate = endDateObj.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+            });
+            
+            // Get year from start date
+            const eventYear = startDateObj ? startDateObj.getFullYear() : new Date().getFullYear();
+            
+            // Create a formatted date range
+            if (formattedStartDate === formattedEndDate) {
+              // Single day event
+              dateRangeText = `${formattedStartDate}, ${eventYear}`;
+            } else {
+              // Multi-day event
+              dateRangeText = `${formattedStartDate} - ${formattedEndDate}, ${eventYear}`;
+            }
+          } else {
+            // Only start date available
+            if (startDateObj) {
+              dateRangeText = `${formattedStartDate}, ${startDateObj.getFullYear()}`;
+            } else {
+              dateRangeText = formattedStartDate;
+            }
+          }
+          
+          events.push({
+            id: eventId,
+            name: data.event_name,
+            startDate: formattedStartDate,
+            endDate: formattedEndDate,
+            dateRange: dateRangeText,
+            code: data.event_code,
+            description: data.event_description || 'No description available',
+            image: require('../../assets/event-wedding.png'),
+          });
+        });
+        
+        setCreatedEvents(events);
+      }
+    } catch (error) {
+      console.error("Error fetching created events:", error);
+    }
+  };
+
+  // Updated fetchJoinedEvents function to include converted guest events
+  const fetchJoinedEvents = async () => {
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        const joinedRef = collection(db, 'joined_tbl');
+        
+        // Query for events where user_id matches current user
+        // This will include both originally joined events and converted guest events
+        const q = query(
+          joinedRef,
+          where('user_id', '==', user.uid),
+          where('joined', '==', true)
+        );
+        
+        const querySnapshot = await getDocs(q);
+        console.log(`Found ${querySnapshot.size} joined events for user ${user.uid}`);
+
+        const eventPromises = [];
+        
+        querySnapshot.forEach(joinedDoc => {
+          const joinedData = joinedDoc.data();
+          const eventId = joinedData.event_id;
+          
+          console.log(`Processing joined event: ${eventId}, converted: ${joinedData.converted_from_guest}`);
+          
+          const eventPromise = getDoc(doc(db, 'event_tbl', eventId))
+            .then(eventDoc => {
+              if (eventDoc.exists()) {
+                const eventData = eventDoc.data();
+                
+                // Format dates as before...
+                let formattedStartDate = 'No date specified';
+                let startDateObj = null;
+                
+                if (eventData.event_start_date && typeof eventData.event_start_date.toDate === 'function') {
+                  startDateObj = eventData.event_start_date.toDate();
+                  formattedStartDate = startDateObj.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  });
+                }
+                
+                let formattedEndDate = '';
+                let dateRangeText = '';
+                
+                if (eventData.event_end_date && typeof eventData.event_end_date.toDate === 'function') {
+                  const endDateObj = eventData.event_end_date.toDate();
+                  
+                  formattedEndDate = endDateObj.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  });
+                  
+                  const eventYear = startDateObj ? startDateObj.getFullYear() : new Date().getFullYear();
+                  
+                  if (formattedStartDate === formattedEndDate) {
+                    dateRangeText = `${formattedStartDate}, ${eventYear}`;
+                  } else {
+                    dateRangeText = `${formattedStartDate} - ${formattedEndDate}, ${eventYear}`;
+                  }
+                } else {
+                  if (startDateObj) {
+                    dateRangeText = `${formattedStartDate}, ${startDateObj.getFullYear()}`;
+                  } else {
+                    dateRangeText = formattedStartDate;
+                  }
+                }
+                
+                return {
+                  id: eventDoc.id,
+                  name: eventData.event_name,
+                  startDate: formattedStartDate,
+                  endDate: formattedEndDate,
+                  dateRange: dateRangeText,
+                  code: eventData.event_code,
+                  description: eventData.event_description || 'No description available',
+                  image: require('../../assets/event-wedding.png'),
+                  joinedId: joinedDoc.id,
+                  // Mark if this was converted from guest
+                  wasGuest: joinedData.converted_from_guest || false
+                };
+              }
+              return null;
+            })
+            .catch(error => {
+              console.error(`Error fetching event ${eventId}:`, error);
+              return null;
+            });
+          
+          eventPromises.push(eventPromise);
+        });
+        
+        const eventResults = await Promise.all(eventPromises);
+        const validEvents = eventResults.filter(event => event !== null);
+        
+        console.log(`Successfully loaded ${validEvents.length} joined events`);
+        setJoinedEvents(validEvents);
+      }
+    } catch (error) {
+      console.error("Error fetching joined events:", error);
+    }
+  };
+
+  // Combined fetch function for refresh
+  const fetchAllData = async (showLoadingState = false) => {
+    if (showLoadingState) {
+      setLoading(true);
+    }
+    
+    try {
+      await Promise.all([
+        fetchUserData(),
+        fetchCreatedEvents(),
+        fetchJoinedEvents()
+      ]);
+    } catch (error) {
+      console.error("Error in data fetching:", error);
+      showError(
+        'Data Loading Failed',
+        'Unable to load your events. Please check your connection and try again.',
+        () => fetchAllData(true), // Retry function
+        () => {} // Cancel function
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Pull to refresh handler
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchAllData(false);
+  }, []);
+
+  // Auto-refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchAllData(false);
+    }, [])
+  );
+
+  // Initial data fetch
   useEffect(() => {
     // Start minimal loading animations
     Animated.parallel([
@@ -107,247 +337,86 @@ export default function DashboardScreen({ navigation }) {
       }),
     ]).start();
 
-    const fetchUserData = async () => {
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          const userRef = doc(db, 'user_tbl', user.uid);
-          const docSnap = await getDoc(userRef);
-          if (docSnap.exists()) {
-            setUsername(docSnap.data().user_firstname);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-      }
-    };
-
-    // Updated fetchCreatedEvents function with real attendee count
-    const fetchCreatedEvents = async () => {
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          const eventsRef = collection(db, 'event_tbl');
-          const q = query(eventsRef, where('user_id', '==', user.uid));
-          const querySnapshot = await getDocs(q);
-
-          const events = [];
-          
-          // Create array of promises to fetch attendee counts
-          const eventPromises = [];
-          
-          querySnapshot.forEach(doc => {
-            const data = doc.data();
-            const eventId = doc.id;
-            
-            // Create promise for each event to get attendee count
-            const eventPromise = getEventAttendeeCount(eventId).then(attendeeCount => {
-              // Format start date
-              let formattedStartDate = 'No date specified';
-              let startDateObj = null;
-              
-              if (data.event_start_date && typeof data.event_start_date.toDate === 'function') {
-                startDateObj = data.event_start_date.toDate();
-                formattedStartDate = startDateObj.toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                });
-              }
-              
-              // Format end date
-              let formattedEndDate = '';
-              let dateRangeText = '';
-              
-              if (data.event_end_date && typeof data.event_end_date.toDate === 'function') {
-                const endDateObj = data.event_end_date.toDate();
-                
-                formattedEndDate = endDateObj.toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                });
-                
-                // Get year from start date
-                const eventYear = startDateObj ? startDateObj.getFullYear() : new Date().getFullYear();
-                
-                // Create a formatted date range
-                if (formattedStartDate === formattedEndDate) {
-                  // Single day event
-                  dateRangeText = `${formattedStartDate}, ${eventYear}`;
-                } else {
-                  // Multi-day event
-                  dateRangeText = `${formattedStartDate} - ${formattedEndDate}, ${eventYear}`;
-                }
-              } else {
-                // Only start date available
-                if (startDateObj) {
-                  dateRangeText = `${formattedStartDate}, ${startDateObj.getFullYear()}`;
-                } else {
-                  dateRangeText = formattedStartDate;
-                }
-              }
-              
-              return {
-                id: eventId,
-                name: data.event_name,
-                startDate: formattedStartDate,
-                endDate: formattedEndDate,
-                dateRange: dateRangeText,
-                code: data.event_code,
-                description: data.event_description || 'No description available',
-                image: require('../../assets/event-wedding.png'),
-                attendees: attendeeCount, // Real attendee count from joined_tbl
-              };
-            });
-            
-            eventPromises.push(eventPromise);
-          });
-          
-          // Wait for all attendee counts to be fetched
-          const eventsWithAttendees = await Promise.all(eventPromises);
-          setCreatedEvents(eventsWithAttendees);
-        }
-      } catch (error) {
-        console.error("Error fetching created events:", error);
-      }
-    };
-
-    // Updated fetchJoinedEvents function with real attendee count
-    const fetchJoinedEvents = async () => {
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          const joinedRef = collection(db, 'joined_tbl');
-          const q = query(joinedRef, where('user_id', '==', user.uid));
-          const querySnapshot = await getDocs(q);
-
-          const eventPromises = [];
-          
-          querySnapshot.forEach(joinedDoc => {
-            const joinedData = joinedDoc.data();
-            const eventId = joinedData.event_id;
-            
-            const eventPromise = getDoc(doc(db, 'event_tbl', eventId))
-              .then(async eventDoc => {
-                if (eventDoc.exists()) {
-                  const eventData = eventDoc.data();
-                  
-                  // Get real attendee count for this event
-                  const attendeeCount = await getEventAttendeeCount(eventId);
-                  
-                  // Format start date
-                  let formattedStartDate = 'No date specified';
-                  let startDateObj = null;
-                  
-                  if (eventData.event_start_date && typeof eventData.event_start_date.toDate === 'function') {
-                    startDateObj = eventData.event_start_date.toDate();
-                    formattedStartDate = startDateObj.toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                    });
-                  }
-                  
-                  // Format end date
-                  let formattedEndDate = '';
-                  let dateRangeText = '';
-                  
-                  if (eventData.event_end_date && typeof eventData.event_end_date.toDate === 'function') {
-                    const endDateObj = eventData.event_end_date.toDate();
-                    
-                    formattedEndDate = endDateObj.toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                    });
-                    
-                    // Get year from start date
-                    const eventYear = startDateObj ? startDateObj.getFullYear() : new Date().getFullYear();
-                    
-                    // Create a formatted date range
-                    if (formattedStartDate === formattedEndDate) {
-                      // Single day event
-                      dateRangeText = `${formattedStartDate}, ${eventYear}`;
-                    } else {
-                      // Multi-day event
-                      dateRangeText = `${formattedStartDate} - ${formattedEndDate}, ${eventYear}`;
-                    }
-                  } else {
-                    // Only start date available
-                    if (startDateObj) {
-                      dateRangeText = `${formattedStartDate}, ${startDateObj.getFullYear()}`;
-                    } else {
-                      dateRangeText = formattedStartDate;
-                    }
-                  }
-                  
-                  return {
-                    id: eventDoc.id,
-                    name: eventData.event_name,
-                    startDate: formattedStartDate,
-                    endDate: formattedEndDate,
-                    dateRange: dateRangeText,
-                    code: eventData.event_code,
-                    description: eventData.event_description || 'No description available',
-                    image: require('../../assets/event-wedding.png'),
-                    joinedId: joinedDoc.id,
-                    attendees: attendeeCount, // Real attendee count from joined_tbl
-                  };
-                }
-                return null;
-              });
-            
-            eventPromises.push(eventPromise);
-          });
-          
-          const eventResults = await Promise.all(eventPromises);
-          const validEvents = eventResults.filter(event => event !== null);
-          
-          setJoinedEvents(validEvents);
-        }
-      } catch (error) {
-        console.error("Error fetching joined events:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // Fetch data
-    Promise.all([fetchUserData(), fetchCreatedEvents(), fetchJoinedEvents()])
-      .catch(error => {
-        console.error("Error in data fetching:", error);
-        setLoading(false);
-      });
+    // Initial data fetch
+    fetchAllData(true);
   }, []);
 
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      Alert.alert('Logged Out', 'You have been logged out successfully.');
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'SignIn' }],
-      });
-    } catch (error) {
-      Alert.alert('Error', 'There was an issue logging out. Please try again.');
-    }
+    showConfirm(
+      'Confirm Logout',
+      'Are you sure you want to log out of your account? You will need to sign in again to access your events.',
+      async () => {
+        try {
+          await signOut(auth);
+          
+          showSuccess(
+            'Logged Out Successfully',
+            'You have been safely logged out of your account.',
+            () => {
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'SignIn' }],
+              });
+            }
+          );
+          
+        } catch (error) {
+          console.error('Logout error:', error);
+          showError(
+            'Logout Failed',
+            'There was an issue logging out. Please check your connection and try again.',
+            () => handleLogout(), // Retry function
+            () => {} // Cancel function
+          );
+        }
+      },
+      () => {
+        // User cancelled logout
+        console.log('Logout cancelled');
+      }
+    );
   };
 
   const handleJoinEvent = async () => {
     if (eventCode.trim() === '') {
-      Alert.alert('Error', 'Please enter the event code');
+      showAlert({
+        title: 'Event Code Required',
+        message: 'Please enter a valid event code to join an event. You can get this code from the event organizer.',
+        type: 'warning',
+        buttons: [
+          { text: 'OK', style: 'primary' }
+        ]
+      });
       return;
     }
 
+    // Show loading state
+    setLoading(true);
+
     try {
+      // Check if event exists
       const eventRef = collection(db, 'event_tbl');
-      const q = query(eventRef, where('event_code', '==', eventCode));
+      const q = query(eventRef, where('event_code', '==', eventCode.toUpperCase()));
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
-        Alert.alert('Error', 'Invalid event code');
+        showAlert({
+          title: 'Event Not Found',
+          message: `No event found with code "${eventCode.toUpperCase()}". Please check the code and try again, or contact the event organizer.`,
+          type: 'error',
+          buttons: [
+            { text: 'Try Again', style: 'primary' }
+          ]
+        });
+        setLoading(false);
         return;
       }
 
-      const eventId = querySnapshot.docs[0].id;
+      const eventDoc = querySnapshot.docs[0];
+      const eventId = eventDoc.id;
+      const eventData = eventDoc.data();
 
+      // Check if user already joined this event
       const joinedRef = collection(db, 'joined_tbl');
       const joinedQuery = query(
         joinedRef, 
@@ -357,34 +426,85 @@ export default function DashboardScreen({ navigation }) {
       const joinedSnapshot = await getDocs(joinedQuery);
 
       if (!joinedSnapshot.empty) {
-        Alert.alert('Already Joined', 'You have already joined this event');
+        showAlert({
+          title: 'Already Joined! 🎉',
+          message: `You're already part of "${eventData.event_name}". You can view the event and start sharing photos right away!`,
+          type: 'info',
+          buttons: [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'View Event', 
+              style: 'primary', 
+              onPress: () => {
+                navigation.navigate('JoinEventTwo', { eventId, eventCode: eventCode.toUpperCase() });
+                setEventCode('');
+              }
+            }
+          ]
+        });
+        setLoading(false);
         return;
       }
 
-      const newEntry = {
-        event_id: eventId,
-        user_id: auth.currentUser.uid,
-        username: username || 'Guest',
-        joined: true,
-      };
+      // Show join confirmation with event details
+      showConfirm(
+        'Join Event?',
+        `Do you want to join "${eventData.event_name}"?\n\n📅 ${eventData.event_start_date ? new Date(eventData.event_start_date.seconds * 1000).toLocaleDateString() : 'Date TBD'}\n📍 ${eventData.event_location || 'Location TBD'}\n🎫 Code: ${eventCode.toUpperCase()}\n\nYou'll be able to view and share photos with other attendees.`,
+        async () => {
+          // User confirmed joining
+          try {
+            const newEntry = {
+              event_id: eventId,
+              user_id: auth.currentUser.uid,
+              username: username || 'Guest',
+              joined: true,
+              isPhotographer: false,
+              joined_at: new Date(),
+            };
 
-      await addDoc(joinedRef, newEntry);
-      
-      // Success animation or feedback
-      Alert.alert('Success', 'You have successfully joined the event!');
-      
-      // Navigate to the event
-      navigation.navigate('JoinEventTwo', { eventId, eventCode });
-      
-      // Clear the input
-      setEventCode('');
-      
-      // Refresh joined events (optional)
-      fetchJoinedEvents();
+            await addDoc(joinedRef, newEntry);
+            
+            // Show success and navigate
+            showSuccess(
+              'Successfully Joined! 🎉',
+              `Welcome to "${eventData.event_name}"! You can now view photos and share your own memories with other attendees.`,
+              () => {
+                // Navigate to the event
+                navigation.navigate('JoinEventTwo', { eventId, eventCode: eventCode.toUpperCase() });
+                // Clear the input
+                setEventCode('');
+                // Refresh the events list
+                fetchAllData(false);
+              }
+            );
+            
+          } catch (joinError) {
+            console.error("Error joining event:", joinError);
+            showError(
+              'Join Failed',
+              'Unable to join the event right now. This could be due to a network issue. Please try again.',
+              () => handleJoinEvent(), // Retry function
+              () => setLoading(false) // Cancel function
+            );
+          }
+        },
+        () => {
+          // User cancelled joining
+          setLoading(false);
+          console.log('Join event cancelled');
+        }
+      );
       
     } catch (error) {
       console.error("Error joining event:", error);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      showError(
+        'Connection Error',
+        'Unable to check the event code due to network issues. Please check your internet connection and try again.',
+        () => handleJoinEvent(), // Retry function
+        () => setLoading(false) // Cancel function
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -400,7 +520,7 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" backgroundColor="#FFFFFF" />
@@ -443,10 +563,6 @@ export default function DashboardScreen({ navigation }) {
               ]}
             />
           </View>
-
-          {/* Brand name with elegant typography */}
-          <Text style={styles.brandName}>PixPrint</Text>
-
           {/* Loading text with animated dots */}
           <View style={styles.loadingTextContainer}>
             <Text style={styles.loadingText}>Loading your events</Text>
@@ -524,6 +640,16 @@ export default function DashboardScreen({ navigation }) {
           { useNativeDriver: true }
         )}
         scrollEventThrottle={16}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#FF6F61']}
+            tintColor="#FF6F61"
+            title="Pull to refresh events..."
+            titleColor="#666"
+          />
+        }
       >
         {/* Welcome Header Section */}
         <Animated.View 
@@ -596,15 +722,20 @@ export default function DashboardScreen({ navigation }) {
                 placeholder="Enter Event Code"
                 style={styles.codeInput}
                 value={eventCode}
-                onChangeText={setEventCode}
+                onChangeText={(text) => setEventCode(text.toUpperCase())}
                 placeholderTextColor="#999"
+                autoCapitalize="characters"
+                maxLength={10}
               />
             </View>
             <TouchableOpacity 
-              style={styles.joinButton}
+              style={[styles.joinButton, loading && styles.joinButtonDisabled]}
               onPress={handleJoinEvent}
+              disabled={loading}
             >
-              <Text style={styles.joinButtonText}>Join</Text>
+              <Text style={styles.joinButtonText}>
+                {loading ? 'Joining...' : 'Join'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -723,16 +854,11 @@ export default function DashboardScreen({ navigation }) {
                     {event.description}
                   </Text>
                   
-                  {/* Update this section in the event card */}
+                  {/* Updated event details section without attendees */}
                   <View style={styles.eventDetailsRow}>
                     <View style={styles.eventDetail}>
                       <Ionicons name="calendar-outline" size={14} color="#FF6F61" />
                       <Text style={styles.eventDetailText}>{event.dateRange}</Text>
-                    </View>
-                    
-                    <View style={styles.eventDetail}>
-                      <Ionicons name="people-outline" size={14} color="#FF6F61" />
-                      <Text style={styles.eventDetailText}>{event.attendees} Attendees</Text>
                     </View>
                   </View>
                   
@@ -983,6 +1109,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
     color: '#333',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   joinButton: {
     backgroundColor: '#FF6F61',
@@ -994,6 +1121,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 3,
+  },
+  joinButtonDisabled: {
+    backgroundColor: '#CCCCCC',
+    shadowOpacity: 0.1,
   },
   joinButtonText: {
     color: '#FFFFFF',

@@ -21,6 +21,7 @@ import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import NetInfo from '@react-native-community/netinfo';
+import { useAlert } from '../context/AlertContext'; // Add this import
 
 const { width, height } = Dimensions.get('window');
 
@@ -45,6 +46,9 @@ export default function ContinueAsGuestScreen({ navigation }) {
   const slideAnim = useState(new Animated.Value(50))[0];
   const scaleAnim = useState(new Animated.Value(0.8))[0];
   const networkBannerAnim = useState(new Animated.Value(-60))[0];
+
+  // Add alert hook
+  const { showAlert, showError, showSuccess, showConfirm } = useAlert();
 
   useEffect(() => {
     // Start entrance animations
@@ -156,6 +160,36 @@ export default function ContinueAsGuestScreen({ navigation }) {
     }
   };
 
+  // Enhanced function to check if username belongs to a registered user
+  const checkIfUsernameHasUserId = async (eventId, username) => {
+    try {
+      const joinedRef = collection(db, 'joined_tbl');
+      const usernameQuery = query(
+        joinedRef, 
+        where('event_id', '==', eventId), 
+        where('username', '==', username)
+      );
+      const usernameSnapshot = await getDocs(usernameQuery);
+      
+      if (!usernameSnapshot.empty) {
+        const userData = usernameSnapshot.docs[0].data();
+        // Check if this username has a user_id (registered user)
+        return {
+          exists: true,
+          hasUserId: userData.user_id ? true : false,
+          docData: userData
+        };
+      }
+      
+      return { exists: false, hasUserId: false, docData: null };
+    } catch (error) {
+      console.error("Error checking username ownership:", error);
+      return { exists: false, hasUserId: false, docData: null };
+    }
+  };
+
+  // REMOVE OR COMMENT OUT this useEffect that auto-navigates without validation
+  /*
   useEffect(() => {
     const checkUserEvent = async () => {
       if (eventCode.trim() === '' || username.trim() === '') return;
@@ -191,6 +225,51 @@ export default function ContinueAsGuestScreen({ navigation }) {
 
     return () => clearTimeout(debounceTimer);
   }, [eventCode, username, navigation, networkStatus]);
+  */
+
+  // Add a new safe auto-check function that only validates format, not permissions
+  useEffect(() => {
+    const autoCheckEventValidity = async () => {
+      // Only auto-check if both fields are filled and user is not currently interacting
+      if (eventCode.trim() === '' || username.trim() === '' || isLoading) return;
+
+      try {
+        // Only check if event exists, don't auto-navigate
+        const eventRef = collection(db, 'event_tbl');
+        const eventQuery = query(eventRef, where('event_code', '==', eventCode.trim().toUpperCase()));
+        const eventSnapshot = await getDocs(eventQuery);
+
+        if (!eventSnapshot.empty) {
+          const eventId = eventSnapshot.docs[0].id;
+          
+          // Check username validation but don't auto-navigate
+          const usernameCheck = await checkIfUsernameHasUserId(eventId, username.trim());
+          
+          // Only auto-navigate if it's a returning guest (exists but no user_id)
+          if (usernameCheck.exists && !usernameCheck.hasUserId) {
+            // This is a returning guest - safe to auto-navigate
+            navigation.navigate('JoinEventTwo', { 
+              eventId, 
+              eventCode: eventCode.trim().toUpperCase(), 
+              username: username.trim() 
+            });
+          }
+          // For all other cases (new users, registered users), require manual join button press
+        }
+      } catch (error) {
+        console.error("Error in auto-check:", error);
+      }
+    };
+
+    // Only run auto-check after a longer delay to avoid interfering with user input
+    const autoCheckTimer = setTimeout(() => {
+      if (networkStatus === 'online' && !isLoading) {
+        autoCheckEventValidity();
+      }
+    }, 2000); // Increased delay to 2 seconds
+
+    return () => clearTimeout(autoCheckTimer);
+  }, [eventCode, username, networkStatus, isLoading]);
 
   // Retry mechanism for failed requests
   const retryRequest = async (requestFn, ...args) => {
@@ -218,7 +297,12 @@ export default function ContinueAsGuestScreen({ navigation }) {
     
     // First check network status
     if (networkStatus === 'offline') {
-      Alert.alert('No Connection', 'Please check your internet connection and try again.');
+      showError(
+        '🌐 No Internet Connection',
+        'Please check your internet connection and try again to join the event.',
+        () => handleJoin(), // Retry function
+        () => {} // Cancel function
+      );
       return;
     }
     
@@ -232,11 +316,54 @@ export default function ContinueAsGuestScreen({ navigation }) {
     setNetworkTimeout();
     
     try {
+      // Enhanced input validation with better alerts
       if (eventCode.trim() === '') {
-        Alert.alert('Error', 'Please enter the event code');
-        setIsLoading(false);
-        clearNetworkTimeout();
-        return;
+        showAlert({
+          title: '🎫 Event Code Required',
+          message: 'Please enter the event code provided by the event organizer to continue.',
+          type: 'warning',
+          buttons: [
+            { text: 'OK', style: 'primary' }
+          ]
+        });
+        return; // Early return to prevent navigation
+      }
+
+      if (username.trim() === '') {
+        showAlert({
+          title: '👤 Username Required',
+          message: 'Please enter a display name that others will see when you share photos in this event.',
+          type: 'warning',
+          buttons: [
+            { text: 'OK', style: 'primary' }
+          ]
+        });
+        return; // Early return to prevent navigation
+      }
+
+      // Validate username length and format
+      if (username.trim().length < 2) {
+        showAlert({
+          title: '👤 Username Too Short',
+          message: 'Your display name must be at least 2 characters long. Please choose a longer name.',
+          type: 'warning',
+          buttons: [
+            { text: 'OK', style: 'primary' }
+          ]
+        });
+        return; // Early return to prevent navigation
+      }
+
+      if (username.trim().length > 30) {
+        showAlert({
+          title: '👤 Username Too Long',
+          message: 'Your display name must be 30 characters or less. Please choose a shorter name.',
+          type: 'warning',
+          buttons: [
+            { text: 'OK', style: 'primary' }
+          ]
+        });
+        return; // Early return to prevent navigation
       }
 
       // Check if event code is valid in event_tbl
@@ -247,66 +374,130 @@ export default function ContinueAsGuestScreen({ navigation }) {
       try {
         querySnapshot = await retryRequest(getDocs, q);
       } catch (error) {
-        throw new Error('Failed to verify event code. Please try again.');
+        showError(
+          '🔍 Event Verification Failed',
+          'Unable to verify the event code due to network issues. Please check your connection and try again.',
+          () => handleJoin(), // Retry function
+          () => {} // Cancel function
+        );
+        return; // Early return to prevent navigation
       }
 
       if (querySnapshot.empty) {
-        Alert.alert('Error', 'Invalid event code');
-        setIsLoading(false);
-        clearNetworkTimeout();
-        return;
-      }
-
-      // If event code is valid, check if the username is entered
-      if (username.trim() === '') {
-        Alert.alert('Error', 'Please enter your username');
-        setIsLoading(false);
-        clearNetworkTimeout();
-        return;
+        showAlert({
+          title: '❌ Invalid Event Code',
+          message: `The event code "${eventCode.trim().toUpperCase()}" could not be found.\n\n• Double-check the code with the event organizer\n• Make sure you're entering it correctly\n• Codes are case-sensitive`,
+          type: 'error',
+          buttons: [
+            { text: 'Try Again', style: 'primary' }
+          ]
+        });
+        return; // Early return to prevent navigation
       }
 
       // Get the event ID from the query result
       const eventId = querySnapshot.docs[0].id;
+      const eventData = querySnapshot.docs[0].data();
 
-      // Check if the username already exists in joined_tbl for this event
-      let isAlreadyJoined;
+      // Enhanced username validation - check if username belongs to a registered user
+      let usernameCheck;
       try {
-        isAlreadyJoined = await retryRequest(checkIfAlreadyJoined, eventId, username);
+        usernameCheck = await retryRequest(checkIfUsernameHasUserId, eventId, username.trim());
       } catch (error) {
-        throw new Error('Failed to check username. Please try again.');
+        showError(
+          '👤 Username Validation Failed',
+          'Unable to validate your username. Please check your connection and try again.',
+          () => handleJoin(), // Retry function
+          () => {} // Cancel function
+        );
+        return; // Early return to prevent navigation
       }
 
-      if (isAlreadyJoined) {
-        // If already joined, just navigate to the event
-        navigation.navigate('JoinEventTwo', { eventId, eventCode: eventCode.trim().toUpperCase(), username });
-        setIsLoading(false);
-        clearNetworkTimeout();
-        return;
+      if (usernameCheck.exists && usernameCheck.hasUserId) {
+        // Username exists and belongs to a registered user - deny access with appealing alert
+        showAlert({
+          title: '⚠️ Username Not Available',
+          message: `The username "${username.trim()}" is already taken by a registered user in "${eventData.event_name}".\n\n🔐 This username belongs to someone with an account\n💡 Please choose a different username to join as a guest\n\n✨ Suggestion: Try adding numbers or your initials!`,
+          type: 'warning',
+          buttons: [
+            { text: 'Choose Different Name', style: 'primary' }
+          ]
+        });
+        return; // Early return to prevent navigation
       }
 
-      // Add the user to the "joined_tbl" if username is not found
-      const newEntry = {
-        event_id: eventId,
-        joined: true,
-        username: username.trim(),
-        isPhotographer: false, // Add isPhotographer field
-        joined_date: new Date()
-      };
-
-      // Add the document to the "joined_tbl"
-      const joinedRef = collection(db, 'joined_tbl');
-      try {
-        await retryRequest(addDoc, joinedRef, newEntry);
-      } catch (error) {
-        throw new Error('Failed to join event. Please try again.');
+      if (usernameCheck.exists && !usernameCheck.hasUserId) {
+        // Username exists but belongs to a guest (no user_id) - allow rejoining with success message
+        showSuccess(
+          '🎉 Welcome Back!',
+          `Great! You're rejoining "${eventData.event_name}" as ${username.trim()}.\n\n📸 Your previous photos and activity will still be available\n🚀 Ready to capture more memories?`,
+          () => {
+            navigation.navigate('JoinEventTwo', { 
+              eventId, 
+              eventCode: eventCode.trim().toUpperCase(), 
+              username: username.trim() 
+            });
+          }
+        );
+        return; // Navigation handled in success callback
       }
 
-      // Navigate to the JoinEventScreenTwo with event details
-      navigation.navigate('JoinEventTwo', { eventId, eventCode: eventCode.trim().toUpperCase(), username });
+      // Username doesn't exist - create new guest entry with confirmation
+      showConfirm(
+        '🎊 Join Event as Guest?',
+        `You're about to join "${eventData.event_name}" as ${username.trim()}!\n\n✅ You'll be able to:\n• 📸 Take and share photos\n• 👀 View everyone's memories\n• 💾 Download your favorites\n\n🎫 Event Code: ${eventCode.trim().toUpperCase()}\n\nReady to get started?`,
+        async () => {
+          // User confirmed - create the entry
+          try {
+            const newEntry = {
+              event_id: eventId,
+              joined: true,
+              username: username.trim(),
+              isPhotographer: false,
+              joined_date: new Date(),
+              user_id: null // Explicitly set to null for guest users
+            };
+
+            // Add the document to the "joined_tbl"
+            await retryRequest(addDoc, collection(db, 'joined_tbl'), newEntry);
+
+            // Show success and navigate
+            showSuccess(
+              '🎉 Successfully Joined!',
+              `Welcome to "${eventData.event_name}", ${username.trim()}!\n\n🎊 You're now part of this amazing event\n📱 Start capturing and sharing memories right away!`,
+              () => {
+                navigation.navigate('JoinEventTwo', { 
+                  eventId, 
+                  eventCode: eventCode.trim().toUpperCase(), 
+                  username: username.trim() 
+                });
+              }
+            );
+
+          } catch (joinError) {
+            console.error('Error creating guest entry:', joinError);
+            showError(
+              '❌ Failed to Join Event',
+              'Unable to complete your registration for this event. This could be due to network issues.',
+              () => handleJoin(), // Retry function
+              () => {} // Cancel function
+            );
+          }
+        },
+        () => {
+          // User cancelled
+          console.log('User cancelled joining event');
+        }
+      );
       
     } catch (error) {
       console.error("Error joining event:", error);
-      Alert.alert('Error', error.message || 'Something went wrong. Please try again.');
+      showError(
+        '💥 Something Went Wrong',
+        'An unexpected error occurred while trying to join the event. Please check your internet connection and try again.',
+        () => handleJoin(), // Retry function
+        () => {} // Cancel function
+      );
     } finally {
       // Reset loading state regardless of success or failure
       setIsLoading(false);
@@ -414,7 +605,7 @@ export default function ContinueAsGuestScreen({ navigation }) {
               <Text style={styles.welcomeSubtitle}>Join an event and start capturing memories</Text>
             </Animated.View>
 
-            {/* Form Card */}
+            {/* Enhanced Form Card with better validation feedback */}
             <Animated.View 
               style={[
                 styles.formCard,
@@ -430,25 +621,31 @@ export default function ContinueAsGuestScreen({ navigation }) {
               </View>
               
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Your Name</Text>
+                <Text style={styles.inputLabel}>Your Display Name</Text>
                 <View style={[
                   styles.inputContainer,
                   networkStatus === 'offline' && styles.disabledInput
                 ]}>
                   <Ionicons name="person-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
                   <TextInput
-                    placeholder="Enter your display name"
+                    placeholder="Enter your display name (2-30 characters)"
                     placeholderTextColor="#AAAAAA"
                     value={username}
                     onChangeText={setUsername}
                     style={styles.input}
                     editable={!isLoading && networkStatus !== 'offline'}
+                    maxLength={30}
                   />
                 </View>
+                {username.trim().length > 0 && (
+                  <Text style={styles.characterCount}>
+                    {username.trim().length}/30 characters
+                  </Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Event Code</Text>
+                <Text style={styles.inputLabel}>Event Access Code</Text>
                 <View style={[
                   styles.inputContainer,
                   networkStatus === 'offline' && styles.disabledInput
@@ -464,6 +661,9 @@ export default function ContinueAsGuestScreen({ navigation }) {
                     autoCapitalize="characters"
                   />
                 </View>
+                <Text style={styles.inputHint}>
+                  💡 Get this code from the event organizer
+                </Text>
               </View>
 
               <TouchableOpacity 
@@ -490,7 +690,7 @@ export default function ContinueAsGuestScreen({ navigation }) {
                       <ActivityIndicator size="small" color="#ffffff" />
                       {showSlowNetworkMessage && (
                         <Text style={[styles.buttonText, {marginLeft: 8}]}>
-                          {retryingRequest ? "Retrying..." : "Loading..."}
+                          {retryingRequest ? "Retrying..." : "Joining..."}
                         </Text>
                       )}
                     </>
@@ -842,5 +1042,19 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 12,
+  },
+  // Add new styles for enhanced validation feedback
+  characterCount: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  inputHint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    marginLeft: 4,
+    fontStyle: 'italic',
   },
 });

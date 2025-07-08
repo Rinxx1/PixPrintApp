@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -18,40 +18,98 @@ const { width, height } = Dimensions.get('window');
 
 export default function MainScreen({ navigation }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const fadeAnim = useState(new Animated.Value(0))[0];
-  const slideAnim = useState(new Animated.Value(50))[0];
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Enhanced animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const floatingAnim = useRef(new Animated.Value(0)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(user => {
       if (user) {
-        // If the user is logged in, navigate directly to the "Tabs" screen
         setIsLoggedIn(true);
-        navigation.replace('Tabs');  // Automatically go to Tabs if logged in
+        navigation.replace('Tabs');
       } else {
-        // If no user is logged in, stay on the MainScreen
         setIsLoggedIn(false);
+        setIsLoading(false);
       }
     });
 
-    // Start animation sequence
+    // Enhanced entrance animations
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: 1000,
         useNativeDriver: true
       }),
-      Animated.timing(slideAnim, {
+      Animated.spring(slideAnim, {
         toValue: 0,
-        duration: 800,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
         useNativeDriver: true
       })
     ]).start();
 
-    // Clean up the listener when the component unmounts
-    return () => unsubscribe();
-  }, [navigation, fadeAnim, slideAnim]);
+    // Continuous floating animation for logo
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatingAnim, {
+          toValue: -10,
+          duration: 2000,
+          useNativeDriver: true
+        }),
+        Animated.timing(floatingAnim, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: true
+        })
+      ])
+    ).start();
 
-  if (isLoggedIn) return null; // Avoid showing MainScreen while redirecting
+    // Subtle rotation animation for decorative elements
+    Animated.loop(
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 20000,
+        useNativeDriver: true
+      })
+    ).start();
+
+    // Pulse animation for call-to-action
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.05,
+          duration: 1500,
+          useNativeDriver: true
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true
+        })
+      ])
+    ).start();
+
+    return () => unsubscribe();
+  }, [navigation]);
+
+  if (isLoading || isLoggedIn) return null;
+
+  const handleSignUpNavigation = () => {
+    console.log('Navigating to SignUp...');
+    navigation.navigate('SignUp');
+  };
 
   return (
     <View style={styles.container}>
@@ -61,108 +119,218 @@ export default function MainScreen({ navigation }) {
         translucent={true}
       />
 
-      {/* Background with subtle pattern */}
-      <ImageBackground 
-        source={require('../assets/icon-pix-print.png')} 
-        style={styles.backgroundPattern}
-        imageStyle={styles.backgroundImage}
-      >
-        {/* Overlay gradient */}
+      {/* Enhanced Background */}
+      <View style={styles.backgroundContainer}>
+        {/* Animated background pattern */}
+        <Animated.View 
+          style={[
+            styles.backgroundPattern,
+            {
+              transform: [{
+                rotate: rotateAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0deg', '360deg']
+                })
+              }]
+            }
+          ]}
+        >
+          <Image 
+            source={require('../assets/icon-pix-print.png')} 
+            style={styles.patternImage}
+          />
+        </Animated.View>
+
+        {/* Enhanced gradient overlay */}
         <LinearGradient
-          colors={['rgba(255, 111, 97, 0.1)', 'rgba(255, 141, 118, 0.2)']}
+          colors={[
+            'rgba(255, 111, 97, 0.02)',
+            'rgba(255, 141, 118, 0.05)',
+            'rgba(255, 111, 97, 0.08)',
+            'rgba(255, 180, 162, 0.03)'
+          ]}
           style={styles.gradient}
+          locations={[0, 0.3, 0.7, 1]}
         />
-      </ImageBackground>
 
-      {/* Main content */}
+        {/* Floating geometric shapes */}
+        <Animated.View 
+          style={[
+            styles.floatingShape1,
+            {
+              transform: [
+                { translateY: floatingAnim },
+                { rotate: '15deg' }
+              ]
+            }
+          ]}
+        />
+        <Animated.View 
+          style={[
+            styles.floatingShape2,
+            {
+              transform: [
+                { 
+                  translateY: floatingAnim.interpolate({
+                    inputRange: [-10, 0],
+                    outputRange: [5, -5]
+                  })
+                },
+                { rotate: '-20deg' }
+              ]
+            }
+          ]}
+        />
+      </View>
+
+      {/* Main content container - No ScrollView */}
       <View style={styles.contentContainer}>
-        {/* Logo and branding */}
+        {/* Compact Hero Section */}
         <Animated.View 
           style={[
-            styles.logoContainer, 
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+            styles.heroSection,
+            {
+              opacity: fadeAnim,
+              transform: [
+                { translateY: slideAnim },
+                { scale: scaleAnim },
+                { translateY: floatingAnim }
+              ]
+            }
           ]}
         >
-          <View style={styles.logoWrapper}>
-            <Image source={require('../assets/icon-pix-print.png')} style={styles.logo} />
+          <View style={styles.logoContainer}>
+            <View style={styles.logoGlow} />
+            <View style={styles.logoWrapper}>
+              <Image source={require('../assets/icon-pix-print.png')} style={styles.logo} />
+            </View>
           </View>
-          <Text style={styles.title}>PixPrint</Text>
-          <Text style={styles.subtitle}>Capture. Print. Celebrate</Text>
+          
+          <Text style={styles.brandTitle}>PixPrint</Text>
+          <Text style={styles.brandTagline}>Capture. Create. Celebrate.</Text>
+          <Text style={styles.brandDescription}>
+            Transform your special moments into lasting memories
+          </Text>
         </Animated.View>
 
-        {/* Feature highlights */}
+        {/* Compact Features - Horizontal Cards */}
         <Animated.View 
           style={[
-            styles.featuresContainer,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+            styles.featuresSection,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }]
+            }
           ]}
         >
-          <View style={styles.featureItem}>
-            <View style={styles.featureIconContainer}>
-              <Ionicons name="camera-outline" size={22} color="#FF6F61" />
+          <View style={styles.featuresRow}>
+            <View style={styles.featureItem}>
+              <Ionicons name="camera" size={20} color="#FF6F61" />
+              <Text style={styles.featureText}>Smart Events</Text>
             </View>
-            <Text style={styles.featureText}>Create photo events</Text>
-          </View>
-
-          <View style={styles.featureItem}>
-            <View style={styles.featureIconContainer}>
-              <Ionicons name="people-outline" size={22} color="#FF6F61" />
+            <View style={styles.featureItem}>
+              <Ionicons name="people" size={20} color="#4CAF50" />
+              <Text style={styles.featureText}>Live Sharing</Text>
             </View>
-            <Text style={styles.featureText}>Share with everyone</Text>
-          </View>
-
-          <View style={styles.featureItem}>
-            <View style={styles.featureIconContainer}>
-              <Ionicons name="print-outline" size={22} color="#FF6F61" />
+            <View style={styles.featureItem}>
+              <Ionicons name="print" size={20} color="#9C27B0" />
+              <Text style={styles.featureText}>Premium Prints</Text>
             </View>
-            <Text style={styles.featureText}>Print your memories</Text>
           </View>
         </Animated.View>
 
-        {/* Action buttons */}
+        {/* Compact CTA Section */}
         <Animated.View 
           style={[
-            styles.buttonContainer,
-            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+            styles.ctaSection,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }]
+            }
           ]}
         >
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => navigation.navigate('SignIn')}
-          >
-            <LinearGradient
-              colors={['#FF8D76', '#FF6F61']}
-              style={styles.buttonGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+          {/* Primary CTA Button */}
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => navigation.navigate('SignIn')}
+              activeOpacity={0.8}
             >
-              <Text style={styles.buttonText}>Sign In</Text>
-              <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
-            </LinearGradient>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={['#FF8D76', '#FF6F61', '#FF5722']}
+                style={styles.primaryButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.buttonContent}>
+                  <Text style={styles.primaryButtonText}>Get Started</Text>
+                  <View style={styles.buttonIconContainer}>
+                    <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                  </View>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
 
+          {/* Guest Access Button */}
           <TouchableOpacity
-            style={styles.secondaryButton}
+            style={styles.guestButton}
             onPress={() => navigation.navigate('ContinueAsGuest')}
+            activeOpacity={0.7}
           >
-            <Text style={styles.secondaryButtonText}>Continue as guest</Text>
+            <View style={styles.guestButtonContent}>
+              <Ionicons name="person-outline" size={18} color="#FF6F61" />
+              <Text style={styles.guestButtonText}>Continue as Guest</Text>
+            </View>
           </TouchableOpacity>
 
-          {/* Sign Up Link */}
-          <View style={styles.signupContainer}>
-            <Text style={styles.footerText}>
-              Don't have an account?
-            </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
-              <Text style={styles.linkText}>Create one now</Text>
+          {/* Sign Up Prompt */}
+          <View style={styles.signupPrompt}>
+            <Text style={styles.signupText}>New to PixPrint?</Text>
+            <TouchableOpacity 
+              onPress={handleSignUpNavigation}
+              style={styles.signupLink}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.signupLinkText}>Create free account</Text>
+              <Ionicons name="chevron-forward" size={14} color="#FF6F61" />
             </TouchableOpacity>
           </View>
         </Animated.View>
+      </View>
 
-        {/* Decorative elements */}
-        <View style={styles.circle1} />
-        <View style={styles.circle2} />
-        <View style={styles.circle3} />
+      {/* Enhanced decorative elements */}
+      <View style={styles.decorativeElements}>
+        <Animated.View 
+          style={[
+            styles.circle1,
+            {
+              transform: [
+                { 
+                  rotate: rotateAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0deg', '45deg']
+                  })
+                }
+              ]
+            }
+          ]} 
+        />
+        <Animated.View 
+          style={[
+            styles.circle2,
+            {
+              transform: [
+                { 
+                  rotate: rotateAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['360deg', '315deg']
+                  })
+                }
+              ]
+            }
+          ]} 
+        />
       </View>
     </View>
   );
@@ -173,18 +341,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  backgroundContainer: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+  },
   backgroundPattern: {
     position: 'absolute',
-    width: width * 2,
-    height: height * 2,
-    top: -height * 0.5,
-    left: -width * 0.5,
-    opacity: 0.05,
+    top: -100,
+    right: -100,
+    width: 200,
+    height: 200,
+    opacity: 0.03,
   },
-  backgroundImage: {
-    resizeMode: 'repeat',
-    opacity: 0.05,
-    transform: [{ rotate: '45deg' }]
+  patternImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'contain',
   },
   gradient: {
     position: 'absolute',
@@ -193,153 +366,213 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
   },
+  floatingShape1: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 111, 97, 0.08)',
+    top: height * 0.15,
+    right: 30,
+  },
+  floatingShape2: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: 'rgba(76, 175, 80, 0.06)',
+    top: height * 0.6,
+    left: 20,
+  },
   contentContainer: {
     flex: 1,
-    paddingTop: 100,
-    paddingHorizontal: 32,
-    justifyContent: 'space-between',
-    position: 'relative',
+    paddingTop: 60,
+    paddingHorizontal: 24,
+    justifyContent: 'space-evenly', // Changed to distribute content evenly
+  },
+  heroSection: {
+    alignItems: 'center',
   },
   logoContainer: {
-    alignItems: 'center',
-    marginBottom: 60,
+    position: 'relative',
+    marginBottom: 20, // Reduced
+  },
+  logoGlow: {
+    position: 'absolute',
+    width: 100, // Reduced
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255, 111, 97, 0.1)',
+    top: -5,
+    left: -5,
   },
   logoWrapper: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: 'rgba(255, 111, 97, 0.08)',
+    width: 90, // Reduced
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
     shadowColor: '#FF6F61',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 20,
-    elevation: 5,
+    elevation: 8,
   },
   logo: {
-    width: 80,
-    height: 80,
+    width: 55, // Reduced
+    height: 55,
     resizeMode: 'contain',
   },
-  title: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#333333',
-    marginBottom: 8,
+  brandTitle: {
+    fontSize: 36, // Reduced
+    fontWeight: '800',
+    color: '#2D2A32',
+    marginBottom: 6,
     textAlign: 'center',
+    letterSpacing: -1,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#666666',
-    textAlign: 'center',
-    letterSpacing: 0.5,
-  },
-  featuresContainer: {
-    marginBottom: 40,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-  featureIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 111, 97, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  featureText: {
-    fontSize: 16,
-    color: '#444444',
-    fontWeight: '500',
-  },
-  buttonContainer: {
-    width: '100%',
-    marginBottom: 40,
-  },
-  button: {
-    width: '100%',
-    borderRadius: 16,
-    marginBottom: 16,
-    elevation: 5,
-    shadowColor: '#FF6F61',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    overflow: 'hidden', // Required for iOS gradient to work with rounded corners
-  },
-  buttonGradient: {
-    paddingVertical: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginRight: 8,
-  },
-  secondaryButton: {
-    width: '100%',
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    marginBottom: 24,
-    backgroundColor: 'rgba(255, 111, 97, 0.08)',
-  },
-  secondaryButtonText: {
+  brandTagline: {
+    fontSize: 16, // Reduced
     color: '#FF6F61',
     fontWeight: '600',
-    fontSize: 16,
+    marginBottom: 12,
+    textAlign: 'center',
+    letterSpacing: 1,
   },
-  signupContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  footerText: {
-    fontSize: 15,
+  brandDescription: {
+    fontSize: 14, // Reduced
     color: '#666666',
-    marginRight: 6,
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 20,
   },
-  linkText: {
+  featuresSection: {
+    alignItems: 'center',
+  },
+  featuresRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  featureItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  featureText: {
+    fontSize: 12,
+    color: '#666666',
+    marginTop: 8,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  ctaSection: {
+    alignItems: 'center',
+  },
+  primaryButton: {
+    borderRadius: 25,
+    marginBottom: 16,
+    shadowColor: '#FF6F61',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 6,
+    width: width * 0.8, // Make button wider - 80% of screen width
+  },
+  primaryButtonGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 25,
+    width: '100%', // Take full width of parent container
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    marginRight: 8,
+  },
+  buttonIconContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 10,
+    padding: 3,
+  },
+  guestButton: {
+    backgroundColor: 'rgba(255, 111, 97, 0.08)',
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 111, 97, 0.15)',
+    width: width * 0.8, // Make button wider - 80% of screen width
+  },
+  guestButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guestButtonText: {
+    fontSize: 14,
     color: '#FF6F61',
-    fontWeight: 'bold',
-    fontSize: 15,
+    fontWeight: '600',
+    marginLeft: 6,
   },
-  // Decorative elements
+  
+  // Remove all stats-related styles
+  // socialProofSection: { ... } - REMOVED
+  // statsContainer: { ... } - REMOVED
+  // statItem: { ... } - REMOVED
+  // statNumber: { ... } - REMOVED
+  // statLabel: { ... } - REMOVED
+  // statDivider: { ... } - REMOVED
+  
+  signupPrompt: {
+    alignItems: 'center',
+  },
+  signupText: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 6,
+  },
+  signupLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  signupLinkText: {
+    fontSize: 14,
+    color: '#FF6F61',
+    fontWeight: '600',
+    marginRight: 3,
+  },
+  decorativeElements: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    pointerEvents: 'none',
+  },
   circle1: {
     position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
+    width: 150, // Reduced
+    height: 150,
+    borderRadius: 75,
     backgroundColor: 'rgba(255, 111, 97, 0.05)',
-    bottom: -150,
-    right: -150,
+    top: -30,
+    right: -30,
   },
   circle2: {
     position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(255, 111, 97, 0.08)',
-    top: -100,
-    left: -100,
-  },
-  circle3: {
-    position: 'absolute',
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255, 141, 118, 0.06)',
-    top: height * 0.4,
-    left: -75,
+    width: 120, // Reduced
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(76, 175, 80, 0.04)',
+    bottom: 80,
+    left: -40,
   },
 });

@@ -6,7 +6,6 @@ import {
   TouchableOpacity, 
   StyleSheet, 
   Image, 
-  Alert, 
   Animated,
   Dimensions,
   StatusBar,
@@ -21,6 +20,7 @@ import Logo from '../assets/icon-pix-print.png';
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useNavigation } from '@react-navigation/native';
+import { useAlert } from '../context/AlertContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -32,6 +32,9 @@ export default function SignInScreen({ navigation }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const nav = useNavigation();
+  
+  // Get alert methods from context
+  const { showAlert, showError, showSuccess } = useAlert();
   
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -57,7 +60,28 @@ export default function SignInScreen({ navigation }) {
     if (isSubmitting) return; // Prevent multiple submissions
 
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showAlert({
+        title: 'Missing Information',
+        message: 'Please fill in all fields to continue.',
+        type: 'warning',
+        buttons: [
+          { text: 'OK', style: 'primary' }
+        ]
+      });
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      showAlert({
+        title: 'Invalid Email',
+        message: 'Please enter a valid email address.',
+        type: 'error',
+        buttons: [
+          { text: 'OK', style: 'primary' }
+        ]
+      });
       return;
     }
 
@@ -65,32 +89,170 @@ export default function SignInScreen({ navigation }) {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // Navigation will be handled by auth state listener
-      nav.navigate('Tabs');
+      
+      // Show success message and navigate
+      showSuccess(
+        'Welcome Back!',
+        'Successfully signed in to your account.',
+        () => {
+          // Use navigation.reset to prevent going back to SignIn
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Tabs' }],
+          });
+        }
+      );
+      
     } catch (error) {
+      // Remove the console.error to prevent showing Firebase errors
+      // console.error('Sign in error:', error);
+      
+      let title = 'Sign In Failed';
       let errorMessage = 'An error occurred during sign in';
       
       switch (error.code) {
         case 'auth/user-not-found':
-          errorMessage = 'No account found with this email';
-          break;
+          title = 'Account Not Found';
+          errorMessage = 'No account found with this email address. Would you like to create a new account?';
+          showAlert({
+            title,
+            message: errorMessage,
+            type: 'warning',
+            buttons: [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Sign Up', 
+                style: 'primary', 
+                onPress: () => navigation.navigate('SignUp')
+              }
+            ]
+          });
+          return;
+          
         case 'auth/wrong-password':
-          errorMessage = 'Incorrect password';
-          break;
+        case 'auth/invalid-credential':
+          title = 'Incorrect Password';
+          errorMessage = 'The password you entered is incorrect. Please try again or reset your password.';
+          showAlert({
+            title,
+            message: errorMessage,
+            type: 'error',
+            buttons: [
+              { text: 'Try Again', style: 'primary' }
+            ]
+          });
+          return;
+          
         case 'auth/invalid-email':
-          errorMessage = 'Please enter a valid email address';
+          title = 'Invalid Email';
+          errorMessage = 'Please enter a valid email address.';
           break;
+          
+        case 'auth/user-disabled':
+          title = 'Account Disabled';
+          errorMessage = 'This account has been disabled. Please contact support for assistance.';
+          showAlert({
+            title,
+            message: errorMessage,
+            type: 'error',
+            buttons: [
+              { text: 'OK', style: 'primary' },
+              { text: 'Contact Support', style: 'default', onPress: () => handleContactSupport() }
+            ]
+          });
+          return;
+          
         case 'auth/too-many-requests':
-          errorMessage = 'Too many failed attempts. Please try again later';
+          title = 'Too Many Attempts';
+          errorMessage = 'Too many failed sign-in attempts. Please wait a few minutes before trying again.';
           break;
+          
+        case 'auth/network-request-failed':
+          title = 'Connection Error';
+          errorMessage = 'Please check your internet connection and try again.';
+          showError(
+            title,
+            errorMessage,
+            () => handleSignIn(), // Retry function
+            () => {} // Cancel function
+          );
+          return;
+          
         default:
-          errorMessage = error.message;
+          errorMessage = 'Please check your email and password and try again.';
       }
       
-      Alert.alert('Sign In Failed', errorMessage);
+      showAlert({
+        title,
+        message: errorMessage,
+        type: 'error',
+        buttons: [
+          { text: 'Try Again', style: 'primary' }
+        ]
+      });
+      
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleForgotPassword = () => {
+    if (!email.trim()) {
+      showAlert({
+        title: 'Email Required',
+        message: 'Please enter your email address first, then tap "Forgot Password?" again.',
+        type: 'info',
+        buttons: [
+          { text: 'OK', style: 'primary' }
+        ]
+      });
+      return;
+    }
+
+    showAlert({
+      title: 'Reset Password',
+      message: `We'll send a password reset link to ${email}. Check your email and follow the instructions.`,
+      type: 'info',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Send Reset Link', 
+          style: 'primary',
+          onPress: () => sendPasswordReset()
+        }
+      ]
+    });
+  };
+
+  const sendPasswordReset = async () => {
+    try {
+      // Import sendPasswordResetEmail from firebase/auth
+      const { sendPasswordResetEmail } = await import('firebase/auth');
+      await sendPasswordResetEmail(auth, email);
+      
+      showSuccess(
+        'Reset Link Sent!',
+        'Please check your email for password reset instructions.'
+      );
+    } catch (error) {
+      showAlert({
+        title: 'Error',
+        message: 'Failed to send reset email. Please try again.',
+        type: 'error',
+        buttons: [{ text: 'OK', style: 'primary' }]
+      });
+    }
+  };
+
+  const handleContactSupport = () => {
+    showAlert({
+      title: 'Contact Support',
+      message: 'You can reach our support team at support@pixprint.com or through the Help & Support section in the app.',
+      type: 'info',
+      buttons: [
+        { text: 'OK', style: 'primary' }
+      ]
+    });
   };
 
   return (
@@ -142,7 +304,10 @@ export default function SignInScreen({ navigation }) {
               {/* Email Input */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Email Address</Text>
-                <View style={styles.inputContainer}>
+                <View style={[
+                  styles.inputContainer,
+                  !email.trim() && isSubmitting && styles.inputError
+                ]}>
                   <Ionicons name="mail-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
                   <TextInput
                     placeholder="Enter your email"
@@ -160,7 +325,10 @@ export default function SignInScreen({ navigation }) {
               {/* Password Input */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Password</Text>
-                <View style={styles.inputContainer}>
+                <View style={[
+                  styles.inputContainer,
+                  !password.trim() && isSubmitting && styles.inputError
+                ]}>
                   <Ionicons name="lock-closed-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
                   <TextInput
                     placeholder="Enter your password"
@@ -174,6 +342,7 @@ export default function SignInScreen({ navigation }) {
                   <TouchableOpacity 
                     onPress={() => setSecureText(!secureText)}
                     style={styles.eyeIcon}
+                    disabled={isSubmitting}
                   >
                     <Ionicons 
                       name={secureText ? "eye-off-outline" : "eye-outline"} 
@@ -185,7 +354,11 @@ export default function SignInScreen({ navigation }) {
               </View>
 
               {/* Forgot Password Link */}
-              <TouchableOpacity style={styles.forgotPasswordContainer}>
+              <TouchableOpacity 
+                style={styles.forgotPasswordContainer}
+                onPress={handleForgotPassword}
+                disabled={isSubmitting}
+              >
                 <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
               </TouchableOpacity>
 
@@ -202,7 +375,10 @@ export default function SignInScreen({ navigation }) {
                   end={{ x: 1, y: 0 }}
                 >
                   {isSubmitting ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <View style={styles.loadingContainer}>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <Text style={styles.loadingText}>Signing In...</Text>
+                    </View>
                   ) : (
                     <>
                       <Text style={styles.signInButtonText}>Sign In</Text>
@@ -270,6 +446,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: height,
     position: 'relative',
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
   },
   backgroundElements: {
     position: 'absolute',
@@ -460,6 +637,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
+    marginTop: 20,
   },
   footerText: {
     fontSize: 16,
@@ -479,5 +657,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#777777',
     marginLeft: 4,
+  },
+  inputError: {
+    borderColor: '#FF5252',
+    borderWidth: 2,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 });
