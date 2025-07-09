@@ -11,7 +11,6 @@ import {
 import HeaderBar from '../../components/HeaderBar';
 import { db, auth } from '../../firebase';
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
-import { v4 as uuidv4 } from 'uuid';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAlert } from '../../context/AlertContext'; // Add this import

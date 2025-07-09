@@ -167,7 +167,7 @@ export default function DashboardScreen({ navigation }) {
         );
         
         const querySnapshot = await getDocs(q);
-        console.log(`Found ${querySnapshot.size} joined events for user ${user.uid}`);
+        //console.log(`Found ${querySnapshot.size} joined events for user ${user.uid}`);
 
         const eventPromises = [];
         
@@ -175,7 +175,7 @@ export default function DashboardScreen({ navigation }) {
           const joinedData = joinedDoc.data();
           const eventId = joinedData.event_id;
           
-          console.log(`Processing joined event: ${eventId}, converted: ${joinedData.converted_from_guest}`);
+         // console.log(`Processing joined event: ${eventId}, converted: ${joinedData.converted_from_guest}`);
           
           const eventPromise = getDoc(doc(db, 'event_tbl', eventId))
             .then(eventDoc => {
