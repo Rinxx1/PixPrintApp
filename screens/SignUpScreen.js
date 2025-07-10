@@ -27,15 +27,13 @@ const { width, height } = Dimensions.get('window');
 export default function SignUpScreen({ route, navigation }) {
   // Get guest info from route params
   const { guestUsername, eventId, fromGuestSettings } = route.params || {};
-
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false); // Renamed this variable
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [firstName, setFirstName] = useState(guestUsername || '');
   const [lastName, setLastName] = useState('');
-  const [address, setAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   // Add alert hook
@@ -171,33 +169,7 @@ export default function SignUpScreen({ route, navigation }) {
           { text: 'Fix Email', style: 'primary' }
         ]
       });
-      return false;
-    }
-
-    // Address validation
-    if (!address.trim()) {
-      showAlert({
-        title: 'Address Required',
-        message: 'Please enter your address. This information helps with:\n\n📍 Location-based event features\n📦 Potential delivery services\n🎯 Personalized event recommendations\n🔒 Your address is kept private and secure',
-        type: 'warning',
-        buttons: [
-          { text: 'OK', style: 'primary' }
-        ]
-      });
-      return false;
-    }
-
-    if (address.trim().length < 5) {
-      showAlert({
-        title: 'Address Too Short',
-        message: 'Please enter a more complete address. Include at least your street and city for better accuracy.',
-        type: 'warning',
-        buttons: [
-          { text: 'Add More Details', style: 'primary' }
-        ]
-      });
-      return false;
-    }
+      return false;    }
 
     // Password validation
     if (!password.trim()) {
@@ -273,14 +245,12 @@ export default function SignUpScreen({ route, navigation }) {
 
   // Handle sign-up logic with enhanced error handling
   const handleSignUp = async () => {
-    if (isLoading) return;
-
-    if (!validateInputs()) return;
-
+    if (isLoading) return;    if (!validateInputs()) return;
+    
     // Show confirmation dialog before creating account
     showConfirm(
       'Create Your PixPrint Account?',
-      `You're about to create an account with:\n\n👤 Name: ${firstName} ${lastName}\n📧 Email: ${email}\n📍 Address: ${address}\n\n🎉 You'll be able to:\n• Create and join photo events\n• Capture and share memories\n• Access your photos anywhere\n• Connect with friends and family\n\nReady to get started?`,
+      `You're about to create an account with:\n\n👤 Name: ${firstName} ${lastName}\n📧 Email: ${email}\n\n🎉 You'll be able to:\n• Create and join photo events\n• Capture and share memories\n• Access your photos anywhere\n• Connect with friends and family\n\nReady to get started?`,
       async () => {
         await processSignUp();
       },
@@ -320,15 +290,12 @@ export default function SignUpScreen({ route, navigation }) {
       // Update user profile with displayName
       await updateProfile(currentUser, {
         displayName: `${firstName.trim()} ${lastName.trim()}`
-      });
-
-      // Add user profile to Firestore
+      });      // Add user profile to Firestore
       await setDoc(doc(db, 'user_tbl', currentUser.uid), {
         user_email: email.toLowerCase().trim(),
         user_firstname: firstName.trim(),
         user_lastname: lastName.trim(),
         user_password: password,
-        user_address: address.trim(),
         user_id: currentUser.uid,
         created_at: new Date().toISOString(),
         profile_completed: true,
@@ -620,27 +587,7 @@ export default function SignUpScreen({ route, navigation }) {
                     style={styles.input}
                     keyboardType="email-address"
                     autoCapitalize="none"
-                    editable={!isLoading}
-                    maxLength={100}
-                  />
-                </View>
-              </View>
-
-              {/* Address Input */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Address</Text>
-                <View style={styles.inputContainer}>
-                  <View style={styles.inputIcon}>
-                    <Ionicons name="location-outline" size={20} color="#AAAAAA" />
-                  </View>
-                  <TextInput
-                    placeholder="Enter your address"
-                    placeholderTextColor="#AAAAAA"
-                    value={address}
-                    onChangeText={setAddress}
-                    style={styles.input}
-                    editable={!isLoading}
-                    maxLength={200}
+                    editable={!isLoading}                    maxLength={100}
                   />
                 </View>
               </View>

@@ -12,6 +12,7 @@ import {
   Dimensions,
   ImageBackground
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import HeaderBar from '../../components/HeaderBar';
@@ -305,14 +306,32 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     
     return 'active';
   };
-
-  // Function to fetch all event photos from Firebase
+  // Function to fetch all event photos from Firebase (excluding photographer photos)
   const fetchEventPhotos = async () => {
     if (!eventId) return;
     
     try {
       setPhotosLoading(true);
       
+      // First, get all photographers for this event to exclude their photos
+      const joinedRef = collection(db, 'joined_tbl');
+      const photographersQuery = query(
+        joinedRef,
+        where('event_id', '==', eventId),
+        where('isPhotographer', '==', true)
+      );
+      
+      const photographersSnapshot = await getDocs(photographersQuery);
+      const photographerIds = [];
+      
+      photographersSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.user_id) {
+          photographerIds.push(data.user_id);
+        }
+      });
+      
+      // Now fetch all event photos
       const photosRef = collection(db, 'photos_tbl');
       const q = query(
         photosRef,
@@ -324,17 +343,21 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       
       querySnapshot.forEach((doc) => {
         const photoData = doc.data();
-        photos.push({
-          id: doc.id,
-          imageUrl: photoData.photo_url,
-          username: photoData.username || 'Unknown User',
-          uploadedAt: photoData.uploaded_at,
-          filter: photoData.filter,
-          filterName: photoData.filter_name,
-          likes: photoData.likes || 0,
-          comments: photoData.comments || 0,
-          userId: photoData.user_id
-        });
+        
+        // Exclude photos taken by photographers since they have their own dedicated album
+        if (!photographerIds.includes(photoData.user_id)) {
+          photos.push({
+            id: doc.id,
+            imageUrl: photoData.photo_url,
+            username: photoData.username || 'Unknown User',
+            uploadedAt: photoData.uploaded_at,
+            filter: photoData.filter,
+            filterName: photoData.filter_name,
+            likes: photoData.likes || 0,
+            comments: photoData.comments || 0,
+            userId: photoData.user_id
+          });
+        }
       });
       
       const sortedPhotos = photos.sort((a, b) => {
@@ -664,7 +687,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       }
     };
   }, [isEventCreator, eventEndDate, extensionAlertShown]);
-
   // Cleanup credits listener on unmount
   useEffect(() => {
     return () => {
@@ -673,19 +695,23 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       }
     };
   }, []);
+
+  // Refresh photos when screen comes into focus (e.g., returning from camera)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (eventId) {
+        // Refresh the current category's photos when screen comes into focus
+        if (selectedCategory === 'person') {
+          fetchEventPhotos();
+        } else if (selectedCategory === 'group') {
+          fetchMyPhotos();
+        } else if (selectedCategory === 'camera') {
+          fetchPhotographerPhotos();
+        }
+      }
+    }, [eventId, selectedCategory])
+  );
   
-  // Image grids for photographer category - keep static data
-  const cameraImages = [
-    { id: 1, imageUrl: require('../../assets/avatar.png') },
-    { id: 2, imageUrl: require('../../assets/avatar.png') },
-    { id: 3, imageUrl: require('../../assets/avatar.png') },
-    { id: 4, imageUrl: require('../../assets/avatar.png') },
-    { id: 5, imageUrl: require('../../assets/avatar.png') },
-    { id: 6, imageUrl: require('../../assets/avatar.png') },
-    { id: 7, imageUrl: require('../../assets/avatar.png') },
-    { id: 8, imageUrl: require('../../assets/avatar.png') },
-    { id: 9, imageUrl: require('../../assets/avatar.png') },
-  ];
 
   const handleCategoryChange = (category) => {
     setSelectedCategory(category);

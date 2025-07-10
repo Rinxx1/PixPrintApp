@@ -691,8 +691,7 @@ export default function CameraScreen({ route, navigation }) {
         } catch (error) {
           console.error(`Error uploading image ${i + 1}:`, error);
           failCount++;
-        }
-      }
+        }      }
 
       // Show detailed final result
       if (successCount > 0 && failCount === 0) {
@@ -700,9 +699,9 @@ export default function CameraScreen({ route, navigation }) {
           'Upload Complete! 🎉',
           `Successfully uploaded all ${successCount} photo${successCount > 1 ? 's' : ''} to ${eventId ? 'the event gallery' : 'your personal collection'}!\n`,
           () => {
-            // Optional: Navigate to gallery to view uploaded photos
+            // Navigate back to the event screen to see uploaded photos
             if (eventId) {
-              navigation.navigate('JoinEventTwo', { eventId });
+              navigation.goBack();
             }
           }
         );
@@ -803,12 +802,11 @@ export default function CameraScreen({ route, navigation }) {
                 styles.filterDot,
                 { backgroundColor: filterDotColors[filter.color] || filterDotColors.null },
                 isActive && styles.activeDot
-              ]} 
-            />
+              ]}            />
           );
         })}
       </View>
-
+      
       {/* Controls Layer */}
       <View style={styles.controls} pointerEvents="box-none">
         {/* Back Button */}
@@ -1551,42 +1549,7 @@ const styles = StyleSheet.create({
   },
   
   viewGalleryContent: {
-    backgroundColor: '#00000077',
-    borderRadius: 20,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  
-  guestBadge: {
-    position: 'absolute',
-    top: 110, // Below event badge
-    right: 20,
-    backgroundColor: 'rgba(76, 175, 80, 0.8)',
-    borderRadius: 20,
-    padding: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  guestBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    marginLeft: 4,
-    fontWeight: '600',
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  viewGalleryButton: {
-    position: 'absolute',
-    bottom: 100,
-    left: 20,
-    zIndex: 10,
-  },
-  
-  viewGalleryContent: {
-    backgroundColor: '#00000077',
+      backgroundColor: '#00000077',
     borderRadius: 20,
     padding: 8,
     borderWidth: 1,

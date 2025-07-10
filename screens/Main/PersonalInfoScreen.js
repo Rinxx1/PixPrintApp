@@ -27,7 +27,6 @@ export default function PersonalInfoScreen({ navigation }) {
   const [firstName, setFirstName] = useState(userData?.user_firstname || '');
   const [lastName, setLastName] = useState(userData?.user_lastname || '');
   const [email, setEmail] = useState(userData?.user_email || '');
-  const [address, setAddress] = useState(userData?.user_address || '');
   const [profileImage, setProfileImage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -52,12 +51,10 @@ export default function PersonalInfoScreen({ navigation }) {
         useNativeDriver: true,
       })
     ]).start();
-    
-    if (userData) {
+      if (userData) {
       setFirstName(userData.user_firstname || '');
       setLastName(userData.user_lastname || '');
       setEmail(userData.user_email || '');
-      setAddress(userData.user_address || '');
       setProfileImage(userData.user_profile_image || null);
     }
   }, [userData]);
@@ -216,14 +213,11 @@ export default function PersonalInfoScreen({ navigation }) {
     // Validate form first
     if (!validateForm()) {
       return;
-    }
-
-    // Show confirmation dialog with preview of changes
+    }    // Show confirmation dialog with preview of changes
     const changes = [];
     if (firstName !== (userData?.user_firstname || '')) changes.push(`✓ First Name: ${firstName}`);
     if (lastName !== (userData?.user_lastname || '')) changes.push(`✓ Last Name: ${lastName}`);
     if (email !== (userData?.user_email || '')) changes.push(`✓ Email: ${email}`);
-    if (address !== (userData?.user_address || '')) changes.push(`✓ Address: ${address || 'Not provided'}`);
     if (profileImage !== (userData?.user_profile_image || null)) changes.push('✓ Profile Picture: Updated');
 
     if (changes.length === 0) {
@@ -263,14 +257,11 @@ export default function PersonalInfoScreen({ navigation }) {
           () => setIsLoading(false) // Cancel function
         );
         return;
-      }
-
-      // Prepare the updated data
+      }      // Prepare the updated data
       const updatedData = {
         user_firstname: firstName.trim(),
         user_lastname: lastName.trim(),
         user_email: email.trim().toLowerCase(),
-        user_address: address.trim(),
         user_profile_image: profileImage || '',
         updated_at: new Date().toISOString(), // Add timestamp for tracking
       };
@@ -334,10 +325,9 @@ export default function PersonalInfoScreen({ navigation }) {
   };
 
   // Enhanced help function
-  const handleHelp = () => {
-    showAlert({
+  const handleHelp = () => {    showAlert({
       title: 'Profile Help 💡',
-      message: 'Having trouble with your profile? Here are some tips:\n\n📸 Profile Picture: Tap the camera icon to change\n✍️ Names: Use only letters, spaces, and hyphens\n📧 Email: Must be a valid email format\n🏠 Address: Optional but helps with event location features\n💾 Save: Don\'t forget to save your changes!\n\nNeed more help? Contact our support team.',
+      message: 'Having trouble with your profile? Here are some tips:\n\n📸 Profile Picture: Tap the camera icon to change\n✍️ Names: Use only letters, spaces, and hyphens\n📧 Email: Must be a valid email format\n💾 Save: Don\'t forget to save your changes!\n\nNeed more help? Contact our support team.',
       type: 'info',
       buttons: [
         { text: 'Got It!', style: 'primary' },
@@ -477,23 +467,7 @@ export default function PersonalInfoScreen({ navigation }) {
                   autoCapitalize="none"
                   maxLength={100}
                 />
-              </View>
-            </View>
-            
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Address (Optional)</Text>
-              <View style={styles.inputContainer}>
-                <Ionicons name="location-outline" size={18} color="#AAAAAA" style={styles.inputIcon} />
-                <TextInput 
-                  style={styles.input} 
-                  value={address} 
-                  onChangeText={setAddress}
-                  placeholder="Enter your address"
-                  placeholderTextColor="#AAAAAA"
-                  maxLength={200}
-                />
-              </View>
-            </View>
+              </View>            </View>
 
             {/* Required fields note */}
             <View style={styles.requiredNote}>
