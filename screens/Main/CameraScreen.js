@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Modal,
   Linking,
+  Platform,
+  Alert,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -167,7 +169,7 @@ export default function CameraScreen({ route, navigation }) {
     })
   ).current;
 
-  // Take photo function - updated to support guests
+  // Take photo function - updated to support guests and fix iOS issues
   const takePicture = async () => {
     if (isTakingPicture || !cameraRef.current) {
       return;
@@ -243,18 +245,34 @@ export default function CameraScreen({ route, navigation }) {
         processedPhoto = await applyFilterToImage(photo.uri, null);
       }
       
-      // Set preview data and show modal
+      // iOS fix: Reset modal animation first
+      modalAnim.setValue(0);
+      
+      // Set preview data
       setPreviewImageUri(processedPhoto.uri);
       setPreviewFilterName(filterOptions[filterIndex].name);
       setShowPreviewModal(true);
       
-      // Animate modal appearance
-      Animated.spring(modalAnim, {
-        toValue: 1,
-        friction: 8,
-        tension: 40,
-        useNativeDriver: true,
-      }).start();
+      // iOS fix: Use requestAnimationFrame for better timing
+      if (Platform.OS === 'ios') {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            Animated.spring(modalAnim, {
+              toValue: 1,
+              friction: 8,
+              tension: 40,
+              useNativeDriver: true,
+            }).start();
+          });
+        });
+      } else {
+        Animated.spring(modalAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
+        }).start();
+      }
       
     } catch (error) {
       console.error("Error taking picture:", error);
@@ -269,9 +287,9 @@ export default function CameraScreen({ route, navigation }) {
     }
   };
 
-  // Handle save photo
+  // Handle save photo - cleaned up version using native alert
   const handleSavePhoto = async () => {
-    if (!previewImageUri) return;
+    if (!previewImageUri || isUploading) return;
     
     try {
       setIsUploading(true);
@@ -282,46 +300,58 @@ export default function CameraScreen({ route, navigation }) {
       // Upload the photo to Firebase Storage
       await uploadPhotoToStorage(previewImageUri);
       
-      // Show success message
-      showSuccess(
+      // Reset upload state
+      setIsUploading(false);
+      
+      // Show success message using native alert
+      Alert.alert(
         'Photo Saved! 📸',
         `Your ${previewFilterName !== 'None' ? `${previewFilterName} filtered ` : ''}photo has been successfully saved to ${eventId ? 'the event gallery' : 'your personal collection'}.`,
-        () => {
-          // Close modal after success
-          handleClosePreview();
-        }
+        [
+          {
+            text: 'OK',
+            onPress: () => handleClosePreview()
+          }
+        ]
       );
       
     } catch (error) {
       console.error("Error saving photo:", error);
-      showError(
+      setIsUploading(false);
+      
+      // Show error using native alert
+      Alert.alert(
         'Save Failed',
         'Unable to save your photo. This could be due to network issues or storage problems. Please try again.',
-        () => handleSavePhoto(), // Retry function
-        () => setIsUploading(false) // Cancel function
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Retry', onPress: () => handleSavePhoto() }
+        ]
       );
     }
   };
 
-  // Handle print photo with enhanced dialog
+  // Handle print photo with enhanced dialog using native alert
   const handlePrintPhoto = () => {
-    showAlert({
-      title: '🖨️ Print Coming Soon!',
-      message: `Print functionality is currently in development and will be available in the next update!\n\nFor now, your ${previewFilterName !== 'None' ? `${previewFilterName} filtered ` : ''}photo will be saved to the gallery where you can access it anytime.`,
-      type: 'info',
-      buttons: [
+    Alert.alert(
+      '🖨️ Print Coming Soon!',
+      `Print functionality is currently in development and will be available in the next update!\n\nFor now, your ${previewFilterName !== 'None' ? `${previewFilterName} filtered ` : ''}photo will be saved to the gallery where you can access it anytime.`,
+      [
         { text: 'Cancel', style: 'cancel' },
         { 
           text: 'Save Photo Instead', 
-          style: 'primary', 
+          style: 'default',
           onPress: () => handleSavePhoto()
         }
       ]
-    });
+    );
   };
 
   // Handle closing preview modal
   const handleClosePreview = () => {
+    // Reset upload state when closing modal
+    setIsUploading(false);
+    
     Animated.timing(modalAnim, {
       toValue: 0,
       duration: 300,
@@ -330,7 +360,6 @@ export default function CameraScreen({ route, navigation }) {
       setShowPreviewModal(false);
       setPreviewImageUri(null);
       setPreviewFilterName('None');
-      setIsUploading(false);
     });
   };
 
@@ -342,7 +371,7 @@ export default function CameraScreen({ route, navigation }) {
   // Simplified applyFilterToImage function - just resize and compress
   const applyFilterToImage = async (imageUri, filterColor) => {
     try {
-      console.log('Applying filter:', filterColor);
+      //console.log('Applying filter:', filterColor);
       
       let manipulations = [{ resize: { width: 1080 } }];
       
@@ -380,7 +409,7 @@ export default function CameraScreen({ route, navigation }) {
         }
       );
 
-      console.log('Filter applied successfully');
+      //console.log('Filter applied successfully');
       return result;
 
     } catch (error) {
@@ -395,20 +424,16 @@ export default function CameraScreen({ route, navigation }) {
     }
   };
 
-  // Upload photo to Firebase Storage
+  // Upload photo to Firebase Storage - with iOS improvements
   const uploadPhotoToStorage = async (imageUri, updateThumbnail = true) => {
+    console.log('uploadPhotoToStorage called with:', imageUri);
+    
     try {
       const user = auth.currentUser;
       
       // For non-event photos, require authentication
       if (!eventId && !user) {
-        showError(
-          'Authentication Required',
-          'You must be logged in to save personal photos. Please sign in to continue.',
-          () => navigation.navigate('SignIn'),
-          () => {}
-        );
-        return;
+        throw new Error('Authentication required for personal photos');
       }
       
       let storageRef;
@@ -459,24 +484,36 @@ export default function CameraScreen({ route, navigation }) {
         };
       }
       
-      // Convert image URI to blob
+      //console.log('Converting image to blob...');
+      
+      // iOS fix: Better blob conversion
       const response = await fetch(imageUri);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+      }
+      
       const blob = await response.blob();
       
-      // Upload the image
+      //console.log('Blob created, size:', blob.size);
+      
+      // iOS fix: Direct upload without timeout wrapper
+      //console.log('Starting Firebase upload...');
       const snapshot = await uploadBytes(storageRef, blob);
+      //console.log('Firebase upload completed');
       
       // Get download URL
       const downloadURL = await getDownloadURL(snapshot.ref);
+      //console.log('Download URL obtained:', downloadURL);
       
       // Update the photo_url field with the actual URL
       firestoreData.photo_url = downloadURL;
       
       // Save photo info to Firestore
       const photoCollection = eventId ? 'photos_tbl' : 'user_photos_tbl';
+      //console.log('Saving to Firestore...');
       await addDoc(collection(db, photoCollection), firestoreData);
       
-      console.log("Photo uploaded successfully:", downloadURL);
+      //console.log("Photo uploaded successfully:", downloadURL);
       
     } catch (error) {
       console.error("Error uploading photo:", error);
@@ -568,10 +605,16 @@ export default function CameraScreen({ route, navigation }) {
         const selectedImages = result.assets;
         
         if (selectedImages.length > 0) {
+          //           showConfirm(
+          //   `Upload ${selectedImages.length} Photo${selectedImages.length > 1 ? 's' : ''}?`,
+          //   `You selected ${selectedImages.length} photo${selectedImages.length > 1 ? 's' : ''} from your gallery.\n\n📸 Destination: ${eventId ? 'Event Gallery' : 'Personal Collection'}\n📱 Source: Gallery Upload\n🔄 Processing: Photos will be optimized for sharing\n\nProceed with upload?`,
+          //   () => handleMultipleImageUpload(selectedImages), // Confirm function
+          //   () => console.log('Gallery upload cancelled') // Cancel function
+          // );
           // Enhanced confirmation dialog with more details
           showConfirm(
             `Upload ${selectedImages.length} Photo${selectedImages.length > 1 ? 's' : ''}?`,
-            `You selected ${selectedImages.length} photo${selectedImages.length > 1 ? 's' : ''} from your gallery.\n\n📸 Destination: ${eventId ? 'Event Gallery' : 'Personal Collection'}\n📱 Source: Gallery Upload\n🔄 Processing: Photos will be optimized for sharing\n\nProceed with upload?`,
+            `You selected ${selectedImages.length} photo${selectedImages.length > 1 ? 's' : ''} from your gallery.\n\nProceed with upload?`,
             () => handleMultipleImageUpload(selectedImages), // Confirm function
             () => console.log('Gallery upload cancelled') // Cancel function
           );
@@ -655,11 +698,11 @@ export default function CameraScreen({ route, navigation }) {
       if (successCount > 0 && failCount === 0) {
         showSuccess(
           'Upload Complete! 🎉',
-          `Successfully uploaded all ${successCount} photo${successCount > 1 ? 's' : ''} to ${eventId ? 'the event gallery' : 'your personal collection'}!\n\n📸 All photos are now available for viewing and sharing.`,
+          `Successfully uploaded all ${successCount} photo${successCount > 1 ? 's' : ''} to ${eventId ? 'the event gallery' : 'your personal collection'}!\n`,
           () => {
             // Optional: Navigate to gallery to view uploaded photos
             if (eventId) {
-              navigation.navigate('Gallery', { eventId });
+              navigation.navigate('JoinEventTwo', { eventId });
             }
           }
         );
@@ -883,12 +926,15 @@ export default function CameraScreen({ route, navigation }) {
         </View>
       )}
 
-      {/* Photo Preview Modal */}
+      {/* Photo Preview Modal - with iOS-optimized rendering */}
       <Modal
         visible={showPreviewModal}
         transparent={true}
         animationType="none"
         onRequestClose={handleClosePreview}
+        supportedOrientations={['portrait']}
+        statusBarTranslucent={Platform.OS === 'android'}
+        presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : 'fullScreen'}
       >
         <View style={styles.previewModalContainer}>
           {/* Header with filter info and close button */}
@@ -951,7 +997,14 @@ export default function CameraScreen({ route, navigation }) {
           >
             {previewImageUri && (
               <View style={styles.previewImageContainer}>
-                <Image source={{ uri: previewImageUri }} style={styles.previewImage} />
+                <Image 
+                  source={{ uri: previewImageUri }} 
+                  style={styles.previewImage}
+                  resizeMode="cover"
+                  onError={(error) => {
+                    console.error('Error loading preview image:', error);
+                  }}
+                />
                 
                 {/* Filter Overlay for Preview */}
                 {filterIndex > 0 && filterOptions[filterIndex].color && (
@@ -991,6 +1044,7 @@ export default function CameraScreen({ route, navigation }) {
               style={styles.printButtonPrimary}
               onPress={handlePrintPhoto}
               disabled={isUploading}
+              activeOpacity={0.8}
             >
               <LinearGradient
                 colors={['#FF8D76', '#FF6F61']}
@@ -998,26 +1052,29 @@ export default function CameraScreen({ route, navigation }) {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                {isUploading ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <View style={styles.printButtonContent}>
-                    <Ionicons name="print" size={24} color="#fff" />
-                    <Text style={styles.printButtonText}>Print Photo</Text>
-                  </View>
-                )}
+                <View style={styles.printButtonContent}>
+                  <Ionicons name="print" size={24} color="#fff" />
+                  <Text style={styles.printButtonText}>Print Photo</Text>
+                </View>
               </LinearGradient>
             </TouchableOpacity>
 
             {/* Save Button */}
             <TouchableOpacity 
-              style={styles.saveButtonSecondary}
+              style={[
+                styles.saveButtonSecondary,
+                isUploading && styles.disabledButton
+              ]}
               onPress={handleSavePhoto}
               disabled={isUploading}
+              activeOpacity={0.8}
             >
               <View style={styles.saveButtonContent}>
                 {isUploading ? (
-                  <ActivityIndicator size="small" color="#4CAF50" />
+                  <>
+                    <ActivityIndicator size="small" color="#4CAF50" />
+                    <Text style={[styles.saveButtonText, { marginLeft: 8 }]}>Saving...</Text>
+                  </>
                 ) : (
                   <>
                     <Ionicons name="cloud-upload-outline" size={22} color="#4CAF50" />
@@ -1032,6 +1089,7 @@ export default function CameraScreen({ route, navigation }) {
               style={styles.retakeButton}
               onPress={handleRetakePhoto}
               disabled={isUploading}
+              activeOpacity={0.8}
             >
               <View style={styles.retakeButtonContent}>
                 <Ionicons name="camera-outline" size={22} color="#666" />
@@ -1517,4 +1575,43 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontWeight: '600',
   },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  viewGalleryButton: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    zIndex: 10,
+  },
+  
+  viewGalleryContent: {
+    backgroundColor: '#00000077',
+    borderRadius: 20,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  
+  guestBadge: {
+    position: 'absolute',
+    top: 110, // Below event badge
+    right: 20,
+    backgroundColor: 'rgba(76, 175, 80, 0.8)',
+    borderRadius: 20,
+    padding: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  guestBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    marginLeft: 4,
+    fontWeight: '600',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
 });
+
