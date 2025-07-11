@@ -250,7 +250,7 @@ export default function SignUpScreen({ route, navigation }) {
     // Show confirmation dialog before creating account
     showConfirm(
       'Create Your PixPrint Account?',
-      `You're about to create an account with:\n\n👤 Name: ${firstName} ${lastName}\n📧 Email: ${email}\n\n🎉 You'll be able to:\n• Create and join photo events\n• Capture and share memories\n• Access your photos anywhere\n• Connect with friends and family\n\nReady to get started?`,
+      `You're creating an account with:\n\n👤 ${firstName} ${lastName}\n📧 ${email}\n\n🎉 You'll be able to:\n• Join photo events\n• Share and access memories\n• Stay connected anytime\n\nLet’s get started!`,
       async () => {
         await processSignUp();
       },
@@ -269,7 +269,7 @@ export default function SignUpScreen({ route, navigation }) {
       if (emailExists) {
         showAlert({
           title: 'Email Already Registered 📧',
-          message: `An account with the email "${email}" already exists.\n\n🔑 If this is your email, try signing in instead\n🤔 Forgot your password? Use the password reset option\n📝 Want to use a different email? Go back and change it`,
+          message: `An account with "${email}" already exists.\n\n🔑 Try signing in\n🤔 Need help? Reset your password\n📝 Using a different email? Go back to change it`,
           type: 'warning',
           buttons: [
             { text: 'Try Different Email', style: 'cancel' },
@@ -319,8 +319,7 @@ export default function SignUpScreen({ route, navigation }) {
       showSuccess(
         guestUsername ? 'Account Converted Successfully! 🎉' : 'Welcome to PixPrint! 🎉',
         guestUsername ? 
-          `Your guest account has been converted to a full PixPrint account!\n\n✅ Account: ${firstName} ${lastName}\n📧 Email: ${email}\n🎯 Your event participation has been preserved\n\nYou're now signed in and ready to explore your dashboard!` :
-          `Your account has been created successfully!\n\n✅ Account: ${firstName} ${lastName}\n📧 Email: ${email}\n🔐 You're now signed in and ready to start capturing memories!`,
+          `Your account is now ready!\n\n✅ ${firstName} ${lastName}\n📧 ${email}\n🎉 Events and photos are saved\n\nYou're signed in—explore your dashboard!`:
         () => {
           // Navigate directly to Dashboard since user is already signed in
           navigation.reset({

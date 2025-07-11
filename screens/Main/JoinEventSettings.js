@@ -470,7 +470,7 @@ export default function JoinEventSettings({ route, navigation }) {
   const handleCreateAccount = () => {
     showConfirm(
       'Create Your PixPrint Account',
-      `Hi ${guestUsername}! Creating an account will allow you to:\n\n✓ Save your events to your dashboard\n✓ Access your photos anytime\n✓ Create and manage your own events\n✓ Keep track of all your memories\n\nYour current event participation and photos will be preserved.`,
+      `Hi ${guestUsername}! Create an account to:\n\n✓ Save events\n✓ Access your photos\n✓ Manage your events\n✓ Track your memories\n\nYour current info is safe.`,
       () => {
         navigation.navigate('SignUp', { 
           guestUsername, 

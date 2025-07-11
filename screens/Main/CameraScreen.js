@@ -238,10 +238,8 @@ export default function CameraScreen({ route, navigation }) {
       // Apply filter if one is selected (filterIndex > 0 means a filter is applied)
       let processedPhoto = photo;
       if (filterIndex > 0 && filterOptions[filterIndex].color) {
-        // Apply the filter effect to the image using ImageManipulator
         processedPhoto = await applyFilterToImage(photo.uri, filterOptions[filterIndex].color);
       } else {
-        // No filter, just resize for consistency
         processedPhoto = await applyFilterToImage(photo.uri, null);
       }
       
@@ -371,7 +369,6 @@ export default function CameraScreen({ route, navigation }) {
   // Simplified applyFilterToImage function - just resize and compress
   const applyFilterToImage = async (imageUri, filterColor) => {
     try {
-      //console.log('Applying filter:', filterColor);
       
       let manipulations = [{ resize: { width: 1080 } }];
       
@@ -483,9 +480,6 @@ export default function CameraScreen({ route, navigation }) {
           source: 'camera'
         };
       }
-      
-      //console.log('Converting image to blob...');
-      
       // iOS fix: Better blob conversion
       const response = await fetch(imageUri);
       if (!response.ok) {
@@ -493,28 +487,18 @@ export default function CameraScreen({ route, navigation }) {
       }
       
       const blob = await response.blob();
-      
-      //console.log('Blob created, size:', blob.size);
-      
-      // iOS fix: Direct upload without timeout wrapper
-      //console.log('Starting Firebase upload...');
+  
       const snapshot = await uploadBytes(storageRef, blob);
-      //console.log('Firebase upload completed');
-      
-      // Get download URL
+
       const downloadURL = await getDownloadURL(snapshot.ref);
-      //console.log('Download URL obtained:', downloadURL);
-      
-      // Update the photo_url field with the actual URL
+
       firestoreData.photo_url = downloadURL;
       
       // Save photo info to Firestore
       const photoCollection = eventId ? 'photos_tbl' : 'user_photos_tbl';
-      //console.log('Saving to Firestore...');
+
       await addDoc(collection(db, photoCollection), firestoreData);
-      
-      //console.log("Photo uploaded successfully:", downloadURL);
-      
+
     } catch (error) {
       console.error("Error uploading photo:", error);
       throw error;
