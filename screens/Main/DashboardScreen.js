@@ -28,6 +28,7 @@ const CARD_WIDTH = width * 0.85;
 export default function DashboardScreen({ navigation }) {
   const [eventCode, setEventCode] = useState('');
   const [username, setUsername] = useState('');
+  const [userProfileUrl, setUserProfileUrl] = useState('');
   const [createdEvents, setCreatedEvents] = useState([]);
   const [joinedEvents, setJoinedEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -65,7 +66,9 @@ export default function DashboardScreen({ navigation }) {
         const userRef = doc(db, 'user_tbl', user.uid);
         const docSnap = await getDoc(userRef);
         if (docSnap.exists()) {
-          setUsername(docSnap.data().user_firstname);
+          const userData = docSnap.data();
+          setUsername(userData.user_firstname || 'User');
+          setUserProfileUrl(userData.user_profile_url || '');
         }
       }
     } catch (error) {
@@ -140,7 +143,9 @@ export default function DashboardScreen({ navigation }) {
             dateRange: dateRangeText,
             code: data.event_code,
             description: data.event_description || 'No description available',
-            image: require('../../assets/event-wedding.png'),
+            image: data.event_photo_url && data.event_photo_url.trim() !== '' 
+              ? { uri: data.event_photo_url } 
+              : require('../../assets/event-wedding.png'),
           });
         });
         
@@ -228,7 +233,9 @@ export default function DashboardScreen({ navigation }) {
                   dateRange: dateRangeText,
                   code: eventData.event_code,
                   description: eventData.event_description || 'No description available',
-                  image: require('../../assets/event-wedding.png'),
+                  image: eventData.event_photo_url && eventData.event_photo_url.trim() !== '' 
+                    ? { uri: eventData.event_photo_url } 
+                    : require('../../assets/event-wedding.png'),
                   joinedId: joinedDoc.id,
                   // Mark if this was converted from guest
                   wasGuest: joinedData.converted_from_guest || false
@@ -626,6 +633,14 @@ export default function DashboardScreen({ navigation }) {
     );
   }
 
+  // Helper function to get profile image source
+  const getProfileImageSource = () => {
+    if (userProfileUrl && userProfileUrl.trim() !== '') {
+      return { uri: userProfileUrl };
+    }
+    return require('../../assets/avatar.png');
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8F9FA" />
@@ -674,7 +689,10 @@ export default function DashboardScreen({ navigation }) {
                 <Text style={styles.welcomeSubtext}>Ready to capture more memories?</Text>
               </View>
               <View style={styles.avatarContainer}>
-                <Image source={require('../../assets/avatar.png')} style={styles.avatarLarge} />
+                <Image 
+                  source={getProfileImageSource()} 
+                  style={styles.avatarLarge} 
+                />
                 <View style={styles.statusDot}></View>
               </View>
             </View>

@@ -10,15 +10,19 @@ import {
   Animated,
   Dimensions,
   ActivityIndicator,
-  Platform 
+  Platform,
+  Linking
 } from 'react-native';
 import HeaderBar from '../../components/HeaderBar';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { auth, db } from '../../firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, addDoc } from 'firebase/firestore';
-import { useAlert } from '../../context/AlertContext'; // Add this import
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { storage } from '../../firebase';
+import { useAlert } from '../../context/AlertContext';
 
 const { width } = Dimensions.get('window');
 
@@ -35,12 +39,14 @@ export default function NewEventScreen({ navigation }) {
   const [eventEndDate, setEventEndDate] = useState(null);
   const [eventDescription, setEventDescription] = useState('');
   const [eventLocation, setEventLocation] = useState('');
+  const [eventImageUri, setEventImageUri] = useState(null); // Store local URI instead of uploaded URL
   const [accessCode, setAccessCode] = useState('');
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
   const [userCredits, setUserCredits] = useState(0);
-  const [selectedPackage, setSelectedPackage] = useState(null); // Selected hour package
+  const [selectedPackage, setSelectedPackage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Add alert hook
   const { showAlert, showError, showSuccess, showConfirm } = useAlert();
@@ -299,6 +305,151 @@ export default function NewEventScreen({ navigation }) {
     }
   };
 
+  // Function to upload event image to Firebase Storage
+  const uploadEventImageToStorage = async (imageUri) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Create a unique filename with timestamp
+      const timestamp = Date.now();
+      const fileName = `event_${user.uid}_${timestamp}.jpg`;
+      
+      // Create storage reference
+      const storageRef = ref(storage, `event-main-picture/${fileName}`);
+      
+      // Convert image URI to blob
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      
+      // Upload the image
+      const snapshot = await uploadBytes(storageRef, blob);
+      
+      // Get download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      return downloadURL;
+    } catch (error) {
+      console.error('Error uploading event image:', error);
+      throw error;
+    }
+  };
+
+  // Function to delete event image from storage
+  const deleteEventImage = async (imageUrl) => {
+    try {
+      if (!imageUrl || !imageUrl.includes('firebase')) {
+        return;
+      }
+
+      const urlParts = imageUrl.split('/o/');
+      if (urlParts.length < 2) {
+        console.log('Invalid Firebase Storage URL format');
+        return;
+      }
+
+      const pathPart = urlParts[1].split('?')[0];
+      const filePath = decodeURIComponent(pathPart);
+      
+      console.log('Attempting to delete event image at path:', filePath);
+
+      const oldImageRef = ref(storage, filePath);
+      await deleteObject(oldImageRef);
+      console.log('Event image deleted successfully:', filePath);
+      
+    } catch (error) {
+      console.error('Error deleting event image:', error);
+    }
+  };
+
+  // Function to pick event image (store locally, don't upload yet)
+  const pickEventImage = async () => {
+    try {
+      const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (!granted) {
+        showAlert({
+          title: 'Photo Access Required 📸',
+          message: 'PixPrint needs access to your photo library to add an event image. This helps make your event more appealing to guests.',
+          type: 'warning',
+          buttons: [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Open Settings', 
+              style: 'primary', 
+              onPress: () => Linking.openSettings() 
+            }
+          ]
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        aspect: [16, 9],
+        quality: 0.8,
+        allowsEditing: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedImage = result.assets[0];
+        
+        showConfirm(
+          'Use This Event Image?',
+          'This image will be shown to guests when they join your event. It will be uploaded when the event is created.',
+          () => {
+            setEventImageUri(selectedImage.uri); // Store local URI
+            
+            showAlert({
+              title: 'Event Image Selected! 🎉',
+              message: 'Your event image has been selected. It will be uploaded when you create the event.',
+              type: 'success',
+              buttons: [
+                { text: 'Great!', style: 'primary' }
+              ]
+            });
+          },
+          () => {
+            console.log('Event image selection cancelled');
+          }
+        );
+      }
+    } catch (error) {
+      console.error('Error picking event image:', error);
+      showError(
+        'Image Selection Failed',
+        'Unable to access your photo library. Please try again or check your device settings.',
+        () => pickEventImage(),
+        () => {}
+      );
+    }
+  };
+
+  // Function to remove event image
+  const removeEventImage = () => {
+    showConfirm(
+      'Remove Event Image?',
+      'Are you sure you want to remove this event image?',
+      () => {
+        setEventImageUri(null);
+        
+        showAlert({
+          title: 'Image Removed',
+          message: 'The event image has been removed. You can add a new one anytime.',
+          type: 'info',
+          buttons: [
+            { text: 'OK', style: 'primary' }
+          ]
+        });
+      },
+      () => {
+        console.log('Remove image cancelled');
+      }
+    );
+  };
+
   const createEventInFirestore = async (
     eventName, 
     eventLocation,
@@ -311,6 +462,16 @@ export default function NewEventScreen({ navigation }) {
   ) => {
     try {
       console.log("Creating event with access code:", accessCode);
+      
+      let eventPhotoUrl = '';
+      
+      // Upload image only if event creation is successful
+      if (eventImageUri) {
+        console.log("Uploading event image...");
+        eventPhotoUrl = await uploadEventImageToStorage(eventImageUri);
+        console.log("Event image uploaded successfully:", eventPhotoUrl);
+      }
+      
       const eventRef = collection(db, 'event_tbl');
       await addDoc(eventRef, {
         event_name: eventName,
@@ -319,11 +480,14 @@ export default function NewEventScreen({ navigation }) {
         event_end_date: eventEndDate,
         event_description: eventDescription,
         event_duration_hours: duration,
+        event_photo_url: eventPhotoUrl,
         user_id: userId,
         event_code: accessCode,
         created_at: new Date(),
         status: 'active'
       });
+      
+      console.log("Event created successfully with image URL:", eventPhotoUrl);
     } catch (e) {
       console.error('Error creating event: ', e);
       throw e;
@@ -460,6 +624,47 @@ export default function NewEventScreen({ navigation }) {
             <Text style={styles.locationHelpText}>
               e.g., "Central Park, New York" or "Wedding Hall, Downtown"
             </Text>
+          </View>
+
+          {/* Event Image Upload Section */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Event Image (Optional)</Text>
+            
+            {eventImageUri ? (
+              <View style={styles.imageContainer}>
+                <Image source={{ uri: eventImageUri }} style={styles.eventImage} />
+                <View style={styles.imageOverlay}>
+                  <TouchableOpacity 
+                    style={styles.imageActionButton}
+                    onPress={pickEventImage}
+                  >
+                    <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.imageActionButton, styles.removeButton]}
+                    onPress={removeEventImage}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.imageBadge}>
+                  <Text style={styles.imageBadgeText}>Will upload when event is created</Text>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity 
+                style={styles.imagePickerButton}
+                onPress={pickEventImage}
+              >
+                <View style={styles.imagePickerContent}>
+                  <Ionicons name="camera-outline" size={40} color="#AAAAAA" />
+                  <Text style={styles.imagePickerText}>Add Event Image</Text>
+                  <Text style={styles.imagePickerSubtext}>
+                    Help guests identify your event with a photo
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Hour Package Selection */}
@@ -1009,5 +1214,129 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
     marginLeft: 8,
+  },
+  imageContainer: {
+    position: 'relative',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#F5F5F5',
+  },
+  eventImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  imageActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeButton: {
+    backgroundColor: 'rgba(255, 59, 48, 0.8)',
+  },
+  uploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uploadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#FF6F61',
+    fontWeight: '500',
+  },
+  imagePickerButton: {
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#EEEEEE',
+    borderStyle: 'dashed',
+    backgroundColor: '#FAFAFA',
+    minHeight: 140,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imagePickerContent: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  imagePickerText: {
+    fontSize: 16,
+    color: '#666666',
+    fontWeight: '500',
+    marginTop: 12,
+  },
+  imagePickerSubtext: {
+    fontSize: 12,
+    color: '#AAAAAA',
+    marginTop: 4,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  imageBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: 'rgba(255, 111, 97, 0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  imageBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  uploadingOverlay: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uploadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#FF6F61',
+    fontWeight: '500',
+  },
+  imagePickerButton: {
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#EEEEEE',
+    borderStyle: 'dashed',
+    backgroundColor: '#FAFAFA',
+    minHeight: 140,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imagePickerContent: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  imagePickerText: {
+    fontSize: 16,
+    color: '#666666',
+    fontWeight: '500',
+    marginTop: 12,
+  },
+  imagePickerSubtext: {
+    fontSize: 12,
+    color: '#AAAAAA',
+    marginTop: 4,
+    textAlign: 'center',
+    lineHeight: 16,
   },
 });

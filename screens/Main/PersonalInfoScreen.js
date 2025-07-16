@@ -17,6 +17,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AuthContext } from '../../context/authContext';
 import { auth, db } from '../../firebase'; 
 import { doc, setDoc, getDoc } from 'firebase/firestore'; 
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { storage } from '../../firebase'; // Add this import
 import HeaderBar from '../../components/HeaderBar';
 import { useAlert } from '../../context/AlertContext'; // Add this import
 
@@ -27,8 +29,9 @@ export default function PersonalInfoScreen({ navigation }) {
   const [firstName, setFirstName] = useState(userData?.user_firstname || '');
   const [lastName, setLastName] = useState(userData?.user_lastname || '');
   const [email, setEmail] = useState(userData?.user_email || '');
-  const [profileImage, setProfileImage] = useState(null);
+  const [profileImage, setProfileImage] = useState(userData?.user_profile_url || null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   
   // Add alert hook
   const { showAlert, showError, showSuccess, showConfirm } = useAlert();
@@ -51,13 +54,27 @@ export default function PersonalInfoScreen({ navigation }) {
         useNativeDriver: true,
       })
     ]).start();
-      if (userData) {
+    
+    // Update state when userData changes
+    if (userData) {
       setFirstName(userData.user_firstname || '');
       setLastName(userData.user_lastname || '');
       setEmail(userData.user_email || '');
-      setProfileImage(userData.user_profile_image || null);
+      setProfileImage(userData.user_profile_url || null);
     }
   }, [userData]);
+
+  // Add a focus listener to refresh data when screen comes into focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      // Refresh profile data when screen is focused
+      if (userData) {
+        setProfileImage(userData.user_profile_url || null);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, userData]);
 
   // Enhanced email validation function
   const isValidEmail = (email) => {
@@ -68,6 +85,71 @@ export default function PersonalInfoScreen({ navigation }) {
   // Enhanced name validation function
   const isValidName = (name) => {
     return name.trim().length >= 2 && /^[a-zA-Z\s'-]+$/.test(name.trim());
+  };
+
+  // New function to upload image to Firebase Storage
+  const uploadImageToStorage = async (imageUri) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Create a unique filename with timestamp
+      const timestamp = Date.now();
+      const fileName = `${user.uid}_${timestamp}.jpg`;
+      
+      // Create storage reference
+      const storageRef = ref(storage, `user-profile-pictures/${fileName}`);
+      
+      // Convert image URI to blob
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      
+      // Upload the image
+      const snapshot = await uploadBytes(storageRef, blob);
+      
+      // Get download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      return downloadURL;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw error;
+    }
+  };
+
+  // New function to delete old profile picture from storage
+  const deleteOldProfilePicture = async (oldImageUrl) => {
+    try {
+      if (!oldImageUrl || !oldImageUrl.includes('firebase')) {
+        return; // Skip if no old image or not from Firebase storage
+      }
+
+      // Extract the file path from the Firebase Storage URL
+      // Firebase Storage URLs contain the path after '/o/' and before '?'
+      const urlParts = oldImageUrl.split('/o/');
+      if (urlParts.length < 2) {
+        console.log('Invalid Firebase Storage URL format');
+        return;
+      }
+
+      const pathPart = urlParts[1].split('?')[0];
+      const filePath = decodeURIComponent(pathPart);
+      
+      console.log('Attempting to delete file at path:', filePath);
+
+      // Create reference to the old image
+      const oldImageRef = ref(storage, filePath);
+      
+      // Delete the old image
+      await deleteObject(oldImageRef);
+      console.log('Old profile picture deleted successfully:', filePath);
+      
+    } catch (error) {
+      console.error('Error deleting old profile picture:', error);
+      // Don't throw error as this is cleanup - main functionality should continue
+    }
   };
 
   const pickImage = async () => {
@@ -104,17 +186,96 @@ export default function PersonalInfoScreen({ navigation }) {
         // Show confirmation for profile picture change
         showConfirm(
           'Update Profile Picture?',
-          'Would you like to use this image as your new profile picture?\n\n📸 This will be visible to other event participants\n✨ You can change it anytime in your profile settings\n💾 Don\'t forget to save your changes!',
-          () => {
-            setProfileImage(selectedImage.uri);
-            showAlert({
-              title: 'Profile Picture Updated! 🎉',
-              message: 'Your new profile picture looks great! Remember to tap "Save Changes" to make it permanent.',
-              type: 'success',
-              buttons: [
-                { text: 'Got It!', style: 'primary' }
-              ]
-            });
+          'Use this image as your profile picture? The image will be uploaded to secure cloud storage and saved to your profile.',
+          async () => {
+            setIsUploadingImage(true);
+            
+            try {
+              const user = auth.currentUser;
+              if (!user) {
+                throw new Error('User not authenticated');
+              }
+
+              // Store old profile picture URL for cleanup BEFORE uploading new one
+              const oldProfilePicUrl = userData?.user_profile_url || profileImage;
+              
+              // Upload new image to Firebase Storage
+              const downloadURL = await uploadImageToStorage(selectedImage.uri);
+              
+              // Immediately save to Firestore
+              const updatedData = {
+                user_profile_url: downloadURL,
+                updated_at: new Date().toISOString(),
+              };
+
+              const userRef = doc(db, 'user_tbl', user.uid);
+              await setDoc(userRef, updatedData, { merge: true });
+
+              // Delete old profile picture after successful upload and save
+              if (oldProfilePicUrl && oldProfilePicUrl !== downloadURL && oldProfilePicUrl.trim() !== '') {
+                console.log('Deleting old profile picture:', oldProfilePicUrl);
+                await deleteOldProfilePicture(oldProfilePicUrl);
+              }
+
+              // Update local state and context
+              setProfileImage(downloadURL);
+              setUserData({ 
+                ...userData, 
+                user_profile_url: downloadURL,
+                updated_at: updatedData.updated_at
+              });
+              
+              showAlert({
+                title: 'Profile Picture Updated! 🎉',
+                message: 'Your new profile picture has been uploaded and saved to your profile successfully!',
+                type: 'success',
+                buttons: [
+                  { text: 'Got It!', style: 'primary' }
+                ]
+              });
+              
+            } catch (error) {
+              console.error('Error uploading profile picture:', error);
+              
+              if (error.code === 'storage/unauthorized') {
+                showError(
+                  'Upload Permission Denied',
+                  'You don\'t have permission to upload images. Please check your account settings or contact support.',
+                  () => pickImage(),
+                  () => {}
+                );
+              } else if (error.code === 'storage/quota-exceeded') {
+                showError(
+                  'Storage Quota Exceeded',
+                  'Unable to upload image due to storage limitations. Please try a smaller image or contact support.',
+                  () => pickImage(),
+                  () => {}
+                );
+              } else if (error.message.includes('network')) {
+                showError(
+                  'Network Error',
+                  'Unable to upload image due to network issues. Please check your internet connection and try again.',
+                  () => pickImage(),
+                  () => {}
+                );
+              } else if (error.code === 'permission-denied') {
+                showError(
+                  'Database Permission Denied',
+                  'Unable to save profile picture to database. Please check your account permissions or contact support.',
+                  () => pickImage(),
+                  () => {}
+                );
+              } else {
+                showError(
+                  'Upload Failed',
+                  'There was an error uploading your profile picture. Please try again with a different image.',
+                  () => pickImage(),
+                  () => {}
+                );
+              }
+            } finally {
+              setIsUploadingImage(false);
+            }
           },
           () => {
             console.log('Profile picture change cancelled');
@@ -126,8 +287,8 @@ export default function PersonalInfoScreen({ navigation }) {
       showError(
         'Image Selection Failed',
         'Unable to access your photo library. This could be due to device restrictions or app permissions. Please try again or check your device settings.',
-        () => pickImage(), // Retry function
-        () => {} // Cancel function
+        () => pickImage(),
+        () => {}
       );
     }
   };
@@ -210,20 +371,21 @@ export default function PersonalInfoScreen({ navigation }) {
   };
 
   const saveChanges = async () => {
-    // Validate form first
     if (!validateForm()) {
       return;
-    }    // Show confirmation dialog with preview of changes
+    }
+
     const changes = [];
     if (firstName !== (userData?.user_firstname || '')) changes.push(`✓ First Name: ${firstName}`);
     if (lastName !== (userData?.user_lastname || '')) changes.push(`✓ Last Name: ${lastName}`);
     if (email !== (userData?.user_email || '')) changes.push(`✓ Email: ${email}`);
-    if (profileImage !== (userData?.user_profile_image || null)) changes.push('✓ Profile Picture: Updated');
+    // Remove profile image from changes since it's now saved immediately
+    // if (profileImage !== (userData?.user_profile_url || null)) changes.push('✓ Profile Picture: Updated');
 
     if (changes.length === 0) {
       showAlert({
         title: 'No Changes to Save',
-        message: 'Your profile information hasn\'t changed. Make some updates to your details and then save your changes.',
+        message: 'Your profile information hasn\'t changed. Profile picture updates are saved automatically when you upload them.',
         type: 'info',
         buttons: [
           { text: 'OK', style: 'primary' }
@@ -234,7 +396,7 @@ export default function PersonalInfoScreen({ navigation }) {
 
     showConfirm(
       'Save Profile Changes?',
-      `You're about to update the following information:\n\n${changes.join('\n')}\n\n💾 Changes will be saved to your account\n🔄 Updates will sync across all devices\n✨ Your new info will be visible in events\n\nProceed with saving these changes?`,
+      `You're about to update the following information:\n\n${changes.join('\n')}\n\n💾 Changes will be saved to your account\n🔄 Updates will sync across all devices\n✨ Your new info will be visible in events\n\nNote: Profile picture changes are saved automatically.\n\nProceed with saving these changes?`,
       async () => {
         await processSaveChanges();
       },
@@ -253,17 +415,18 @@ export default function PersonalInfoScreen({ navigation }) {
         showError(
           'Authentication Error',
           'Unable to verify your identity. Please sign in again to save your profile changes.',
-          () => navigation.navigate('SignIn'), // Navigate to sign in
-          () => setIsLoading(false) // Cancel function
+          () => navigation.navigate('SignIn'),
+          () => setIsLoading(false)
         );
         return;
-      }      // Prepare the updated data
+      }
+
+      // Prepare the updated data (excluding profile image since it's saved immediately)
       const updatedData = {
         user_firstname: firstName.trim(),
         user_lastname: lastName.trim(),
         user_email: email.trim().toLowerCase(),
-        user_profile_image: profileImage || '',
-        updated_at: new Date().toISOString(), // Add timestamp for tracking
+        updated_at: new Date().toISOString(),
       };
 
       // Save to Firestore
@@ -276,12 +439,10 @@ export default function PersonalInfoScreen({ navigation }) {
         ...updatedData
       });
 
-      // Show detailed success message
       showSuccess(
         'Profile Updated Successfully! 🎉',
         'Your personal information has been securely saved and updated across all your devices.\n\n✅ Your profile is now up to date\n🔄 Changes will appear in all events\n📱 Information synced across devices\n🔒 Data safely stored in your account\n\nYour updated profile looks great!',
         () => {
-          // Optional: Navigate back or refresh
           console.log('Profile update completed');
         }
       );
@@ -289,34 +450,33 @@ export default function PersonalInfoScreen({ navigation }) {
     } catch (error) {
       console.error('Error saving profile:', error);
       
-      // Enhanced error handling
       if (error.code === 'permission-denied') {
         showError(
           'Permission Denied',
           'You don\'t have permission to update this profile. This could be due to account restrictions or security settings.',
-          () => processSaveChanges(), // Retry function
-          () => setIsLoading(false) // Cancel function
+          () => processSaveChanges(),
+          () => setIsLoading(false)
         );
       } else if (error.code === 'network-request-failed') {
         showError(
           'Network Connection Error',
           'Unable to save your profile due to network issues. Please check your internet connection and try again.',
-          () => processSaveChanges(), // Retry function
-          () => setIsLoading(false) // Cancel function
+          () => processSaveChanges(),
+          () => setIsLoading(false)
         );
       } else if (error.message.includes('quota')) {
         showError(
           'Storage Limit Reached',
           'Unable to save your profile due to storage limitations. Please try again later or contact support if the problem persists.',
-          () => processSaveChanges(), // Retry function
-          () => setIsLoading(false) // Cancel function
+          () => processSaveChanges(),
+          () => setIsLoading(false)
         );
       } else {
         showError(
           'Save Failed',
           'There was an unexpected error while saving your profile. This could be due to server issues or connectivity problems. Please try again.',
-          () => processSaveChanges(), // Retry function
-          () => setIsLoading(false) // Cancel function
+          () => processSaveChanges(),
+          () => setIsLoading(false)
         );
       }
     } finally {
@@ -346,6 +506,22 @@ export default function PersonalInfoScreen({ navigation }) {
         }
       ]
     });
+  };
+
+  // Helper function to get profile image source
+  const getProfileImageSource = () => {
+    // First check if we have a profileImage in state
+    if (profileImage && profileImage.trim() !== '') {
+      return { uri: profileImage };
+    }
+    
+    // Then check if userData has a profile picture
+    if (userData?.user_profile_url && userData.user_profile_url.trim() !== '') {
+      return { uri: userData.user_profile_url };
+    }
+    
+    // Default to avatar.png if no profile picture
+    return require('../../assets/avatar.png');
   };
 
   return (
@@ -389,19 +565,34 @@ export default function PersonalInfoScreen({ navigation }) {
         >
           <View style={styles.avatarContainer}>
             <Image
-              source={profileImage ? { uri: profileImage } : require('../../assets/avatar.png')}
+              source={getProfileImageSource()}
               style={styles.avatar}
               resizeMode="cover"
             />
-            <TouchableOpacity style={styles.cameraButton} onPress={pickImage}>
+            <TouchableOpacity 
+              style={[
+                styles.cameraButton, 
+                isUploadingImage && styles.cameraButtonDisabled
+              ]} 
+              onPress={pickImage}
+              disabled={isUploadingImage}
+            >
               <LinearGradient
-                colors={['#FF8D76', '#FF6F61']}
+                colors={isUploadingImage ? ['#CCCCCC', '#AAAAAA'] : ['#FF8D76', '#FF6F61']}
                 style={styles.cameraGradient}
               >
-                <Ionicons name="camera" size={16} color="#FFFFFF" />
+                {isUploadingImage ? (
+                  <Text style={styles.uploadingText}>...</Text>
+                ) : (
+                  <Ionicons name="camera" size={16} color="#FFFFFF" />
+                )}
               </LinearGradient>
             </TouchableOpacity>
           </View>
+          
+          {isUploadingImage && (
+            <Text style={styles.uploadingStatus}>Uploading image...</Text>
+          )}
           
           <Text style={styles.profileName}>
             {firstName || lastName ? `${firstName} ${lastName}` : 'Add Your Name'}
@@ -604,6 +795,9 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
     overflow: 'hidden',
   },
+  cameraButtonDisabled: {
+    opacity: 0.6,
+  },
   cameraGradient: {
     width: '100%', 
     height: '100%', 
@@ -715,5 +909,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666666',
     marginLeft: 6,
+  },
+  uploadingText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  uploadingStatus: {
+    fontSize: 12,
+    color: '#FF6F61',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
 });

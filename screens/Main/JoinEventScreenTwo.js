@@ -34,6 +34,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const [eventLocation, setEventLocation] = useState('');
   const [eventStartDate, setEventStartDate] = useState(null);
   const [eventEndDate, setEventEndDate] = useState(null);
+  const [eventImage, setEventImage] = useState(null); // Add state for event image
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null); 
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -550,6 +551,13 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         setEventLocation(eventData.event_location || 'Location not specified');
         setEventCreatorId(eventData.user_id);
         
+        // Set event image - use uploaded image or default
+        if (eventData.event_photo_url && eventData.event_photo_url.trim() !== '') {
+          setEventImage({ uri: eventData.event_photo_url });
+        } else {
+          setEventImage(require('../../assets/avatar.png'));
+        }
+        
         // Check if current user is the event creator
         const currentUser = auth.currentUser;
         if (currentUser && eventData.user_id === currentUser.uid) {
@@ -638,9 +646,11 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         setEventDate('');
         setEventLocation('');
         setEventDescription('The requested event could not be found.');
+        setEventImage(require('../../assets/avatar.png')); // Default image for not found
       }
     } catch (error) {
       console.error('Error fetching event data:', error);
+      setEventImage(require('../../assets/avatar.png')); // Default image on error
     } finally {
       setLoading(false);
     }
@@ -790,7 +800,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         {/* Event Cover with Animated Parallax Effect */}
         <Animated.View style={[styles.coverContainer, { opacity: imageOpacity }]}>
           <ImageBackground
-            source={require('../../assets/avatar.png')}
+            source={eventImage || require('../../assets/avatar.png')}
             style={styles.coverImage}
             resizeMode="cover"
           >
