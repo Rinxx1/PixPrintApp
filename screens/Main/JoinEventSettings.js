@@ -46,9 +46,8 @@ export default function JoinEventSettings({ route, navigation }) {
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(30))[0];
-  
-  // Alert hook
-  const { showAlert, showSuccess, showError, showConfirm } = useAlert();
+    // Alert hook
+  const { showAlert, showSuccess, showError, showConfirm, showWarning } = useAlert();
 
   useEffect(() => {
     // Start entrance animation
@@ -108,8 +107,7 @@ export default function JoinEventSettings({ route, navigation }) {
             await fetchEventMembers();
             await fetchCurrentPhotographers();
           }
-        }
-      } else {
+        }      } else {
         showError('Event Not Found', 'The requested event could not be found.');
       }
     } catch (error) {
@@ -199,8 +197,7 @@ export default function JoinEventSettings({ route, navigation }) {
         }
       }
       
-      setEventMembers(members);
-    } catch (error) {
+      setEventMembers(members);    } catch (error) {
       console.error('Error fetching event members:', error);
       showError('Error', 'Failed to load event members. Please try again.');
     }
@@ -248,19 +245,18 @@ export default function JoinEventSettings({ route, navigation }) {
       console.error('Error fetching current photographers:', error);
     }
   };
-
   // Assign photographer
   const assignPhotographer = async (member) => {
-    try {
-      // Check if member is already a photographer
+    try {      // Check if member is already a photographer
       const isAlreadyPhotographer = currentPhotographers.some(p => p.userId === member.userId);
       
       if (isAlreadyPhotographer) {
-        showAlert(
-          'Already Assigned',
-          `${member.username} is already assigned as a photographer for this event.`,
-          () => {}
-        );
+        showAlert({
+          title: 'Already Assigned',
+          message: `${member.username} is already assigned as a photographer for this event.`,
+          type: 'info',
+          buttons: [{ text: 'OK', style: 'default' }]
+        });
         return;
       }
 
@@ -298,48 +294,48 @@ export default function JoinEventSettings({ route, navigation }) {
             setShowPhotographerModal(false);
             
             showSuccess(
-              'Photographer Added',
-              `${member.username} has been added as an event photographer!`,
-              () => {}
+              'Photographer Added! 🎉',
+              `${member.username} has been added as an event photographer!`
             );
             
           } catch (error) {
             console.error('Error assigning photographer:', error);
             showError(
               'Assignment Failed',
-              'Failed to assign photographer. Please try again.',
-              () => {},
-              () => {}
+              'Failed to assign photographer. Please try again.'
             );
           } finally {
             setLoading(false);
           }
-        },
-        () => {}
+        }
       );
     } catch (error) {
       console.error('Error in assignPhotographer:', error);
     }
-  };
-
-  // Remove photographer
+  };  // Remove photographer
   const removePhotographer = async (photographer) => {
-    showConfirm(
+    console.log('removePhotographer called with:', photographer);
+    showWarning(
       'Remove Photographer',
       `Are you sure you want to remove ${photographer.username} as an event photographer?`,
       async () => {
+        console.log('User confirmed removal of photographer:', photographer.username);
         try {
           setLoading(true);
           
           const photographerRef = doc(db, 'joined_tbl', photographer.id);
+          console.log('Updating photographer document:', photographer.id);
           await updateDoc(photographerRef, {
             isPhotographer: false
           });
+          console.log('Successfully updated photographer document');
           
           // Update local state - remove from photographers array
-          setCurrentPhotographers(prev => 
-            prev.filter(p => p.id !== photographer.id)
-          );
+          setCurrentPhotographers(prev => {
+            const updated = prev.filter(p => p.id !== photographer.id);
+            console.log('Updated photographers list:', updated);
+            return updated;
+          });
           
           // Update event members state
           setEventMembers(prevMembers => 
@@ -350,23 +346,19 @@ export default function JoinEventSettings({ route, navigation }) {
           
           showSuccess(
             'Photographer Removed',
-            `${photographer.username} has been removed as a photographer.`,
-            () => {}
+            `${photographer.username} has been removed as a photographer.`
           );
           
         } catch (error) {
           console.error('Error removing photographer:', error);
           showError(
             'Removal Failed',
-            'Failed to remove photographer. Please try again.',
-            () => {},
-            () => {}
+            'Failed to remove photographer. Please try again.'
           );
         } finally {
           setLoading(false);
         }
-      },
-      () => {}
+      }
     );
   };
 
@@ -464,9 +456,7 @@ export default function JoinEventSettings({ route, navigation }) {
         </View>
       </View>
     </Modal>
-  );
-
-  // Handle create account for guests
+  );  // Handle create account for guests
   const handleCreateAccount = () => {
     showConfirm(
       'Create Your PixPrint Account',
@@ -477,8 +467,7 @@ export default function JoinEventSettings({ route, navigation }) {
           eventId,
           fromGuestSettings: true 
         });
-      },
-      () => {}
+      }
     );
   };
 
@@ -494,21 +483,13 @@ export default function JoinEventSettings({ route, navigation }) {
   const handleOrderPrints = () => {
     navigation.navigate('OrderPrints', { eventId });
   };
-
   const handleLeaveEvent = () => {
-    Alert.alert(
+    showWarning(
       'Leave Event',
       'Are you sure you want to leave this event?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Leave', 
-          style: 'destructive', 
-          onPress: () => {
-            navigation.navigate('Events');
-          } 
-        }
-      ]
+      () => {
+        navigation.navigate('Events');
+      }
     );
   };
 

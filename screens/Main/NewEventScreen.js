@@ -11,8 +11,10 @@ import {
   Dimensions,
   ActivityIndicator,
   Platform,
-  Linking
+  Linking,
+  Alert
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import HeaderBar from '../../components/HeaderBar';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,6 +27,67 @@ import { storage } from '../../firebase';
 import { useAlert } from '../../context/AlertContext';
 
 const { width } = Dimensions.get('window');
+
+// Platform-specific alert helper
+const useHybridAlert = () => {
+  const { showAlert, showError, showSuccess, showConfirm } = useAlert();
+  
+  const hybridAlert = (title, message, buttons = []) => {
+    if (Platform.OS === 'ios') {
+      // Use native alerts on iOS for reliability
+      Alert.alert(title, message, buttons);
+    } else {
+      // Use custom alerts on Android for better design
+      const alertType = title.toLowerCase().includes('error') || title.toLowerCase().includes('failed') ? 'error' :
+                       title.toLowerCase().includes('success') ? 'success' :
+                       title.toLowerCase().includes('warning') || title.toLowerCase().includes('required') || title.toLowerCase().includes('insufficient') ? 'warning' : 'info';
+      
+      showAlert({
+        title,
+        message,
+        type: alertType,
+        buttons: buttons.map(btn => ({
+          text: btn.text,
+          style: btn.style || 'default',
+          onPress: btn.onPress
+        }))
+      });
+    }
+  };
+
+  const hybridError = (title, message, onRetry, onCancel) => {
+    if (Platform.OS === 'ios') {
+      const buttons = [];
+      if (onRetry) buttons.push({ text: 'Retry', onPress: onRetry });
+      if (onCancel) buttons.push({ text: 'Cancel', style: 'cancel', onPress: onCancel });
+      if (buttons.length === 0) buttons.push({ text: 'OK' });
+      Alert.alert(title, message, buttons);
+    } else {
+      showError(title, message, onRetry, onCancel);
+    }
+  };
+
+  const hybridSuccess = (title, message, onOk) => {
+    if (Platform.OS === 'ios') {
+      Alert.alert(title, message, [{ text: 'OK', onPress: onOk }]);
+    } else {
+      showSuccess(title, message, onOk);
+    }
+  };
+
+  const hybridConfirm = (title, message, onYes, onNo) => {
+    if (Platform.OS === 'ios') {
+      Alert.alert(title, message, [
+        { text: 'Cancel', style: 'cancel', onPress: onNo },
+        { text: 'OK', onPress: onYes }
+      ]);
+    } else {
+      showConfirm(title, message, onYes, onNo);
+    }
+  };
+
+  return { hybridAlert, hybridError, hybridSuccess, hybridConfirm };
+};
 
 // Hour packages configuration
 const HOUR_PACKAGES = [
@@ -47,14 +110,12 @@ export default function NewEventScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-
   // Add alert hook
-  const { showAlert, showError, showSuccess, showConfirm } = useAlert();
+  const { hybridAlert, hybridError, hybridSuccess, hybridConfirm } = useHybridAlert();
 
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(30))[0];
-
   useEffect(() => {
     // Start entrance animation
     Animated.parallel([
@@ -79,6 +140,13 @@ export default function NewEventScreen({ navigation }) {
     }
   }, []);
 
+  // Refresh credits when screen comes into focus (e.g., after returning from AddMoreCredits screen)
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUserCredits();
+    }, [])
+  );
+
   // Update end date when start date or package changes
   useEffect(() => {
     if (eventStartDate && selectedPackage) {
@@ -87,20 +155,30 @@ export default function NewEventScreen({ navigation }) {
       setEventEndDate(endDate);
     }
   }, [eventStartDate, selectedPackage]);
-
   const fetchUserCredits = async () => {
-    const user = auth.currentUser;
-    if (user) {
-      const creditsRef = collection(db, 'credits_tbl');
-      const q = query(creditsRef, where('user_id', '==', user.uid));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        querySnapshot.forEach(doc => {
-          setUserCredits(doc.data().credits);
-        });
-      } else {
-        console.log('No credits data available for this user!');
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        console.log('Fetching credits for user:', user.uid);
+        const creditsRef = collection(db, 'credits_tbl');
+        const q = query(creditsRef, where('user_id', '==', user.uid));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          querySnapshot.forEach(doc => {
+            const credits = doc.data().credits;
+            console.log('User credits updated:', credits);
+            setUserCredits(credits);
+          });
+        } else {
+          console.log('No credits data available for this user!');
+          setUserCredits(0);
+        }
       }
+    } catch (error) {
+      console.error('Error fetching user credits:', error);
+      // Silently fail - don't show error to user for credits fetch
+      setUserCredits(0);
     }
   };
 
@@ -139,26 +217,24 @@ export default function NewEventScreen({ navigation }) {
         isUnique = await isCodeUnique(newCode);
         if (isUnique) break;
       }
-      
-      if (isUnique) {
+        if (isUnique) {
         setAccessCode(newCode);
       } else {
         console.error('Could not generate a unique code after multiple attempts');
         setAccessCode('');
-        showError(
+        hybridError(
           'Code Generation Failed',
-          'Unable to generate a unique access code. Please try again.',
+          'Unable to generate unique access code.',
           () => generateUniqueAccessCode()
         );
       }
     } catch (error) {
       console.error('Error generating unique code:', error);
-      showError(
+      hybridError(
         'Connection Error',
-        'Failed to generate access code due to network issues. Please check your connection and try again.',
+        'Failed to generate access code. Check connection.',
         () => generateUniqueAccessCode()
-      );
-    } finally {
+      );    } finally {
       setIsGeneratingCode(false);
     }
   };
@@ -166,97 +242,85 @@ export default function NewEventScreen({ navigation }) {
   const handleCreateEvent = async () => {
     // Validation with custom alerts
     if (!eventName.trim()) {
-      showAlert({
-        title: 'Event Name Required',
-        message: 'Please enter a name for your event. This will help guests identify and join your event.',
-        type: 'warning',
-        buttons: [
-          { text: 'OK', style: 'primary' }
+      hybridAlert(
+        'Event Name Required',
+        'Please enter a name for your event.',
+        [
+          { text: 'OK', style: 'default' }
         ]
-      });
+      );
       return;
     }
     
     if (!eventLocation.trim()) {
-      showAlert({
-        title: 'Event Location Required',
-        message: 'Please specify where your event will take place. This helps guests know where to go.',
-        type: 'warning',
-        buttons: [
-          { text: 'OK', style: 'primary' }
+      hybridAlert(
+        'Event Location Required',
+        'Please specify where your event will take place.',
+        [
+          { text: 'OK', style: 'default' }
         ]
-      });
+      );
       return;
     }
     
     if (!eventStartDate) {
-      showAlert({
-        title: 'Start Date Required',
-        message: 'Please select when your event will begin. Guests need to know the event schedule.',
-        type: 'warning',
-        buttons: [
-          { text: 'Select Date', style: 'primary', onPress: () => showDatePicker() }
+      hybridAlert(
+        'Start Date Required',
+        'Please select when your event will begin.',
+        [
+          { text: 'Select Date', style: 'default', onPress: () => showDatePicker() }
         ]
-      });
+      );
       return;
     }
     
     if (!selectedPackage) {
-      showAlert({
-        title: 'Duration Package Required',
-        message: 'Please choose how long your event will last. This determines the event cost and duration.',
-        type: 'warning',
-        buttons: [
-          { text: 'OK', style: 'primary' }
+      hybridAlert(
+        'Duration Package Required',
+        'Please choose how long your event will last.',
+        [
+          { text: 'OK', style: 'default' }
         ]
-      });
+      );
       return;
     }
     
     if (!accessCode) {
-      showAlert({
-        title: 'Access Code Missing',
-        message: 'Please wait while we generate a unique access code for your event, or try refreshing the code.',
-        type: 'info',
-        buttons: [
+      hybridAlert(
+        'Access Code Missing',
+        'Please wait while we generate a unique access code.',
+        [
           { text: 'Wait', style: 'cancel' },
-          { text: 'Refresh Code', style: 'primary', onPress: () => generateUniqueAccessCode() }
+          { text: 'Refresh Code', style: 'default', onPress: () => generateUniqueAccessCode() }
         ]
-      });
+      );
       return;
     }
 
     const finalAccessCode = accessCode;
-    
-    if (userCredits >= selectedPackage.credits) {
+      if (userCredits >= selectedPackage.credits) {
       // Show confirmation dialog
-      showConfirm(
+      hybridConfirm(
         'Create Event?',
-        `Are you sure you want to create "${eventName}"?\n\n📍 Location: ${eventLocation}\n⏰ Duration: ${selectedPackage.hours} hours\n🎫 Access Code: ${finalAccessCode}\n💎 Cost: ${selectedPackage.credits} credits\n\n📅 Start: ${formatDateTime(eventStartDate)}\n📅 End: ${formatDateTime(eventEndDate)}`,
+        `Create "${eventName}" for ${selectedPackage.credits} credits?\n\nLocation: ${eventLocation}\nDuration: ${selectedPackage.hours} hours\nCode: ${finalAccessCode}`,
         async () => {
           // User confirmed - create the event
           await processEventCreation(finalAccessCode);
         },
         () => {
           // User cancelled - no action needed
-          console.log('Event creation cancelled');
-        }
+          console.log('Event creation cancelled');        }
       );
     } else {
       // Insufficient credits
-      showAlert({
-        title: 'Insufficient Credits 💎',
-        message: `You need ${selectedPackage.credits} credits to create this ${selectedPackage.hours}-hour event, but you only have ${userCredits} credits.\n\nWould you like to purchase more credits to continue?`,
-        type: 'warning',
-        buttons: [
+      hybridAlert(
+        'Insufficient Credits',
+        `Need ${selectedPackage.credits} credits (you have ${userCredits}). Purchase more?`,
+        [
           { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Buy Credits', 
-            style: 'primary', 
-            onPress: () => navigation.navigate('AddMoreCredits') 
-          }
+          { text: 'Buy Credits', style: 'default', onPress: () => navigation.navigate('AddMoreCredits') }
         ]
-      });
+      );
     }
   };
 
@@ -279,11 +343,10 @@ export default function NewEventScreen({ navigation }) {
           user.uid
         );
         await updateCredits(user.uid, userCredits - selectedPackage.credits);
-        
-        // Show success with detailed information
-        showSuccess(
-          'Event Created Successfully! 🎉',
-          `"${eventName}" is now live and ready for guests!\n\n🎫 Share this code with your guests:\n${finalAccessCode}\n\n📍 ${eventLocation}\n⏰ ${selectedPackage.hours} hours\n📅 ${formatDateTime(eventStartDate)}`,
+          // Show success with detailed information
+        hybridSuccess(
+          'Event Created Successfully',
+          `"${eventName}" is live! Share code: ${finalAccessCode}`,
           () => {
             // Navigate back to tabs after success
             navigation.navigate('Tabs');
@@ -294,9 +357,9 @@ export default function NewEventScreen({ navigation }) {
       console.error("Error during event creation:", error);
       
       // Show detailed error with retry option
-      showError(
+      hybridError(
         'Event Creation Failed',
-        'There was an issue creating your event. This could be due to a network connection problem or server issue. Your credits have not been deducted.',
+        'Failed to create event. Credits not deducted.',
         () => processEventCreation(finalAccessCode), // Retry function
         () => setIsLoading(false) // Cancel function
       );
@@ -368,21 +431,15 @@ export default function NewEventScreen({ navigation }) {
   const pickEventImage = async () => {
     try {
       const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (!granted) {
-        showAlert({
-          title: 'Photo Access Required 📸',
-          message: 'PixPrint needs access to your photo library to add an event image. This helps make your event more appealing to guests.',
-          type: 'warning',
-          buttons: [
+        if (!granted) {
+        hybridAlert(
+          'Photo Access Required',
+          'Grant photo library access to add event image.',
+          [
             { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Open Settings', 
-              style: 'primary', 
-              onPress: () => Linking.openSettings() 
-            }
+            { text: 'Open Settings', style: 'default', onPress: () => Linking.openSettings() }
           ]
-        });
+        );
         return;
       }
 
@@ -395,21 +452,19 @@ export default function NewEventScreen({ navigation }) {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const selectedImage = result.assets[0];
-        
-        showConfirm(
+          hybridConfirm(
           'Use This Event Image?',
-          'This image will be shown to guests when they join your event. It will be uploaded when the event is created.',
+          'Show this image to guests when they join your event?',
           () => {
             setEventImageUri(selectedImage.uri); // Store local URI
             
-            showAlert({
-              title: 'Event Image Selected! 🎉',
-              message: 'Your event image has been selected. It will be uploaded when you create the event.',
-              type: 'success',
-              buttons: [
-                { text: 'Great!', style: 'primary' }
+            hybridAlert(
+              'Event Image Selected',
+              'Image will be uploaded when event is created.',
+              [
+                { text: 'OK', style: 'default' }
               ]
-            });
+            );
           },
           () => {
             console.log('Event image selection cancelled');
@@ -417,10 +472,9 @@ export default function NewEventScreen({ navigation }) {
         );
       }
     } catch (error) {
-      console.error('Error picking event image:', error);
-      showError(
+      console.error('Error picking event image:', error);      hybridError(
         'Image Selection Failed',
-        'Unable to access your photo library. Please try again or check your device settings.',
+        'Unable to access photo library.',
         () => pickEventImage(),
         () => {}
       );
@@ -429,20 +483,12 @@ export default function NewEventScreen({ navigation }) {
 
   // Function to remove event image
   const removeEventImage = () => {
-    showConfirm(
+    hybridConfirm(
       'Remove Event Image?',
-      'Are you sure you want to remove this event image?',
+      'Remove this event image?',
       () => {
         setEventImageUri(null);
-        
-        showAlert({
-          title: 'Image Removed',
-          message: 'The event image has been removed. You can add a new one anytime.',
-          type: 'info',
-          buttons: [
-            { text: 'OK', style: 'primary' }
-          ]
-        });
+        hybridSuccess('Image Removed', 'Event image removed successfully.');
       },
       () => {
         console.log('Remove image cancelled');
@@ -521,34 +567,48 @@ export default function NewEventScreen({ navigation }) {
       throw e;
     }
   };
-
   // Format date and time for display
   const formatDateTime = (date) => {
     if (!date) return '';
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    
+    try {
+      // Enhanced formatting for better iOS display
+      if (Platform.OS === 'ios') {
+        return date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short', 
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+      } else {
+        return date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric', 
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      // Fallback formatting
+      return date.toString().substring(0, 21);
+    }
   };
-
   // Enhanced package selection with feedback
   const handlePackageSelection = (pkg) => {
     setSelectedPackage(pkg);
     
     // Show brief info about the selected package
     if (pkg.popular) {
-      showAlert({
-        title: 'Great Choice! ⭐',
-        message: `You've selected our most popular ${pkg.label} package. This gives you plenty of time for photos while being cost-effective at ${pkg.credits} credits.`,
-        type: 'success',
-        buttons: [
-          { text: 'Perfect!', style: 'primary' }
-        ]
-      });
+      hybridSuccess(
+        'Great Choice! ⭐',
+        `You've selected our most popular ${pkg.label} package. This gives you plenty of time for photos while being cost-effective at ${pkg.credits} credits.`
+      );
     }
   };
 
@@ -684,8 +744,7 @@ export default function NewEventScreen({ navigation }) {
                     <View style={styles.popularBadge}>
                       <Text style={styles.popularText}>Popular</Text>
                     </View>
-                  )}
-                  <Text style={styles.packageHours}>{pkg.label}</Text>
+                  )}                  <Text style={styles.packageHours}>{pkg.label}</Text>
                   <Text style={styles.packageCredits}>{pkg.credits} Credits</Text>
                   <View style={styles.packageCheckbox}>
                     {selectedPackage?.hours === pkg.hours && (
@@ -700,13 +759,27 @@ export default function NewEventScreen({ navigation }) {
           {/* Event Start Date */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Event Start Date & Time</Text>
-            <TouchableOpacity onPress={showDatePicker} style={styles.inputContainer}>
-              <Ionicons name="calendar-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
-              <Text style={[styles.input, styles.dateText]}>
-                {eventStartDate ? formatDateTime(eventStartDate) : 'Select start date & time'}
-              </Text>
-              <Ionicons name="chevron-down" size={20} color="#AAAAAA" />
-            </TouchableOpacity>
+            <TouchableOpacity
+            onPress={showDatePicker} 
+            style={[
+              styles.inputContainer,
+              eventStartDate && styles.inputContainerFilled
+            ]}
+          >
+            <Ionicons 
+              name="calendar-outline" 
+              size={20} 
+              color={eventStartDate ? "#FF6F61" : "#AAAAAA"} 
+              style={styles.inputIcon} 
+            />
+            <Text style={eventStartDate ? styles.dateText : styles.placeholderDateText}>
+              {eventStartDate ? formatDateTime(eventStartDate) : 'Select start date & time'}
+            </Text>            <Ionicons 
+              name="chevron-down" 
+              size={20} 
+              color={eventStartDate ? "#FF6F61" : "#AAAAAA"}
+            />
+          </TouchableOpacity>
           </View>
 
           {/* Event End Date (Auto-calculated) */}
@@ -714,13 +787,13 @@ export default function NewEventScreen({ navigation }) {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Event End Date & Time</Text>
               <View style={[styles.inputContainer, styles.disabledInput]}>
-                <Ionicons name="calendar-outline" size={20} color="#CCCCCC" style={styles.inputIcon} />
-                <Text style={[styles.input, styles.dateText, styles.disabledText]}>
-                  {formatDateTime(eventEndDate)}
-                </Text>
-                <Ionicons name="lock-closed" size={16} color="#CCCCCC" />
-              </View>
-              <Text style={styles.autoCalculatedText}>
+              <Ionicons name="calendar-outline" size={20} color="#CCCCCC" style={styles.inputIcon} />
+              <Text style={[styles.dateText, styles.disabledText]}>
+                {formatDateTime(eventEndDate)}
+              </Text>
+              <Ionicons name="lock-closed" size={16} color="#CCCCCC" />
+            </View>
+            <Text style={styles.autoCalculatedText}>
                 Automatically calculated based on selected duration
               </Text>
             </View>
@@ -879,10 +952,9 @@ export default function NewEventScreen({ navigation }) {
                 </>
               )}
             </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
+          </TouchableOpacity>        </Animated.View>
       </ScrollView>
-
+      
       {/* Date Picker Modal */}
       <DateTimePickerModal
         isVisible={isDatePickerVisible}
@@ -892,6 +964,17 @@ export default function NewEventScreen({ navigation }) {
         minimumDate={new Date()}
         date={eventStartDate || new Date()}
         minuteInterval={60} // Only allow hour intervals
+        // iOS specific enhancements
+        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+        themeVariant="light"
+        accentColor="#FF6F61"
+        buttonTextColorIOS="#FF6F61"
+        // Additional iOS styling
+        pickerContainerStyleIOS={{
+          backgroundColor: '#FFFFFF',
+        }}
+        confirmTextIOS="Select"
+        cancelTextIOS="Cancel"
       />
     </View>
   );
@@ -970,8 +1053,7 @@ const styles = StyleSheet.create({
     color: '#333333',
     marginBottom: 8,
     marginLeft: 4,
-  },
-  inputContainer: {
+  },  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -980,15 +1062,24 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#EEEEEE',
     minHeight: 50,
-  },
-  disabledInput: {
+    // Enhanced iOS visibility
+    shadowColor: Platform.OS === 'ios' ? '#000' : 'transparent',
+    shadowOffset: Platform.OS === 'ios' ? { width: 0, height: 1 } : { width: 0, height: 0 },
+    shadowOpacity: Platform.OS === 'ios' ? 0.05 : 0,
+    shadowRadius: Platform.OS === 'ios' ? 2 : 0,
+    elevation: Platform.OS === 'android' ? 1 : 0,
+  },  disabledInput: {
     backgroundColor: '#F9F9F9',
     borderColor: '#EEEEEE',
+    opacity: Platform.OS === 'ios' ? 0.8 : 1,
+  },
+  inputContainerFilled: {
+    borderColor: '#FFE4E1',
+    backgroundColor: '#FFFBFA',
   },
   inputIcon: {
     marginRight: 12,
-  },
-  input: {
+  },  input: {
     flex: 1,
     fontSize: 16,
     color: '#333333',
@@ -996,9 +1087,19 @@ const styles = StyleSheet.create({
   },
   disabledText: {
     color: '#AAAAAA',
-  },
-  dateText: {
+  },  dateText: {
     paddingVertical: 14,
+    color: '#1A1A1A', // Even darker color for maximum iOS visibility
+    fontSize: 16,
+    fontWeight: Platform.OS === 'ios' ? '600' : 'normal', // Bolder on iOS for better readability
+    flex: 1, // Ensure text takes full available space
+  },
+  placeholderDateText: {
+    paddingVertical: 14,
+    color: '#8A8A8A', // Slightly darker placeholder for better contrast
+    fontSize: 16,
+    fontStyle: 'italic',
+    flex: 1, // Ensure text takes full available space
   },
   locationHelpText: {
     fontSize: 12,

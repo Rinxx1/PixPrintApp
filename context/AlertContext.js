@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
 import useCustomAlert from '../hooks/useCustomAlert';
 
 const AlertContext = createContext();
@@ -6,8 +6,19 @@ const AlertContext = createContext();
 export const AlertProvider = ({ children }) => {
   const alertMethods = useCustomAlert();
 
+  // Memoize the context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => alertMethods, [
+    alertMethods.showAlert,
+    alertMethods.showSuccess,
+    alertMethods.showError,
+    alertMethods.showConfirm,
+    alertMethods.showWarning,
+    alertMethods.hideAlert,
+    alertMethods.isVisible,
+  ]);
+
   return (
-    <AlertContext.Provider value={alertMethods}>
+    <AlertContext.Provider value={contextValue}>
       {children}
       <alertMethods.AlertComponent />
     </AlertContext.Provider>

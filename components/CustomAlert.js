@@ -1,4 +1,5 @@
-import React from 'react';
+// Simple iOS-compatible CustomAlert component
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   Modal,
   View,
@@ -8,22 +9,49 @@ import {
   Dimensions,
   StyleSheet,
   Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 export default function CustomAlert({
   visible,
   title,
   message,
-  type = 'info', // 'success', 'error', 'warning', 'info', 'confirm'
+  type = 'info',
   buttons = [],
   onClose,
-  animationValue = new Animated.Value(0),
 }) {
+  // For iOS debugging - let's temporarily fall back to native alerts
+  if (Platform.OS === 'ios') {
+    useEffect(() => {
+      if (visible && title && message) {
+        if (buttons.length === 0) {
+          Alert.alert(title, message, [{ text: 'OK', onPress: onClose }]);
+        } else if (buttons.length === 2) {
+          Alert.alert(
+            title,
+            message,
+            [
+              { text: buttons[0].text, style: 'cancel', onPress: () => { buttons[0].onPress?.(); onClose?.(); } },
+              { text: buttons[1].text, style: 'default', onPress: () => { buttons[1].onPress?.(); onClose?.(); } },
+            ]
+          );
+        } else {
+          Alert.alert(title, message, [{ text: 'OK', onPress: onClose }]);
+        }
+      }
+    }, [visible, title, message, buttons, onClose]);
+    
+    return null; // Don't render custom alert on iOS for now
+  }
+
+  // Android - use custom alert
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const [isModalVisible, setIsModalVisible] = useState(false);
   
   const getAlertConfig = () => {
     switch (type) {
@@ -72,187 +100,219 @@ export default function CustomAlert({
 
   const config = getAlertConfig();
 
-  React.useEffect(() => {
+  // Animation handling
+  useEffect(() => {
     if (visible) {
-      Animated.spring(animationValue, {
-        toValue: 1,
-        tension: 80,
-        friction: 8,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(animationValue, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-      }).start();
+      setIsModalVisible(true);
+      scaleAnim.setValue(0.8);
+      opacityAnim.setValue(0);
+      
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 120,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else if (isModalVisible) {
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 0.8,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setIsModalVisible(false);
+      });
     }
   }, [visible]);
 
-  const handleBackdropPress = () => {
-    if (buttons.length === 0) {
-      onClose && onClose();
+  const handleClose = useCallback(() => {
+    if (onClose) {
+      onClose();
     }
-  };
+  }, [onClose]);
+
+  const handleBackdropPress = useCallback(() => {
+    if (buttons.length === 0) {
+      handleClose();
+    }
+  }, [buttons.length, handleClose]);
+
+  const handleButtonPress = useCallback((button) => {
+    return () => {
+      try {
+        if (button.onPress) {
+          button.onPress();
+        }
+      } catch (error) {
+        console.warn('Error in button press handler:', error);
+      } finally {
+        handleClose();
+      }
+    };
+  }, [handleClose]);
+
+  if (!isModalVisible) {
+    return null;
+  }
 
   return (
     <Modal
-      visible={visible}
+      visible={isModalVisible}
       transparent
       animationType="none"
-      onRequestClose={onClose}
-      statusBarTranslucent
+      onRequestClose={handleClose}
     >
       <TouchableOpacity 
-        style={styles.overlay} 
+        style={styles.backdrop}
         activeOpacity={1}
         onPress={handleBackdropPress}
       >
-        {Platform.OS === 'ios' ? (
-          <BlurView intensity={20} style={StyleSheet.absoluteFill} />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 0, 0, 0.7)' }]} />
-        )}
-        
-        <TouchableOpacity 
-          activeOpacity={1} 
-          onPress={(e) => e.stopPropagation()}
-          style={styles.alertWrapper}
-        >
-          <Animated.View
-            style={[
-              styles.alertContainer,
-              {
-                transform: [
-                  {
-                    scale: animationValue.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.8, 1],
-                    }),
-                  },
-                  {
-                    translateY: animationValue.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [100, 0],
-                    }),
-                  },
-                ],
-                opacity: animationValue,
-              },
-            ]}
-          >
-            <LinearGradient
-              colors={config.gradientColors}
-              style={[styles.alertContent, { borderColor: config.borderColor }]}
-            >
-              {/* Background Pattern */}
-              <View style={styles.backgroundPattern}>
-                <View style={[styles.patternCircle, styles.patternCircle1]} />
-                <View style={[styles.patternCircle, styles.patternCircle2]} />
-                <View style={[styles.patternCircle, styles.patternCircle3]} />
-              </View>
-
-              {/* Icon Container */}
-              <View style={[styles.iconContainer, { backgroundColor: config.iconBg }]}>
-                <View style={[styles.iconInner, { backgroundColor: config.iconColor + '20' }]}>
-                  <Ionicons name={config.icon} size={36} color={config.iconColor} />
-                </View>
-              </View>
-
-              {/* Content */}
-              <View style={styles.contentContainer}>
-                <Text style={styles.alertTitle}>{title}</Text>
-                <Text style={styles.alertMessage}>{message}</Text>
-              </View>
-
-              {/* Buttons */}
-              {buttons.length > 0 ? (
-                <View style={styles.buttonContainer}>
-                  {buttons.map((button, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.button,
-                        button.style === 'destructive' && styles.destructiveButton,
-                        button.style === 'cancel' && styles.cancelButton,
-                        button.style === 'default' && styles.defaultButton,
-                        button.style === 'primary' && styles.primaryButton,
-                        buttons.length === 1 && styles.singleButton,
-                        buttons.length === 2 && index === 0 && styles.leftButton,
-                        buttons.length === 2 && index === 1 && styles.rightButton,
-                      ]}
-                      onPress={() => {
-                        button.onPress && button.onPress();
-                        onClose && onClose();
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      {button.style === 'destructive' ? (
-                        <LinearGradient
-                          colors={['#FF5252', '#E53935']}
-                          style={styles.buttonGradient}
-                        >
-                          <Text style={styles.destructiveButtonText}>{button.text}</Text>
-                        </LinearGradient>
-                      ) : button.style === 'primary' ? (
-                        <LinearGradient
-                          colors={['#FF8D76', '#FF6F61']}
-                          style={styles.buttonGradient}
-                        >
-                          <Text style={styles.primaryButtonText}>{button.text}</Text>
-                        </LinearGradient>
-                      ) : button.style === 'default' ? (
-                        <LinearGradient
-                          colors={['#4CAF50', '#43A047']}
-                          style={styles.buttonGradient}
-                        >
-                          <Text style={styles.defaultButtonText}>{button.text}</Text>
-                        </LinearGradient>
-                      ) : (
-                        <View style={styles.cancelButtonContent}>
-                          <Text style={styles.cancelButtonText}>{button.text}</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.okButton}
-                  onPress={onClose}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.okButtonText}>OK</Text>
-                </TouchableOpacity>
-              )}
-            </LinearGradient>
-          </Animated.View>
-        </TouchableOpacity>
+        <Animated.View 
+          style={[
+            styles.backdropOverlay,
+            { opacity: opacityAnim }
+          ]}
+        />
       </TouchableOpacity>
+      
+      <View style={styles.alertWrapper}>
+        <Animated.View
+          style={[
+            styles.alertContainer,
+            {
+              transform: [{ scale: scaleAnim }],
+              opacity: opacityAnim,
+            },
+          ]}
+        >
+          <LinearGradient
+            colors={config.gradientColors}
+            style={[styles.alertContent, { borderColor: config.borderColor }]}
+          >
+            <View style={styles.backgroundPattern}>
+              <View style={[styles.patternCircle, styles.patternCircle1]} />
+              <View style={[styles.patternCircle, styles.patternCircle2]} />
+              <View style={[styles.patternCircle, styles.patternCircle3]} />
+            </View>
+
+            <View style={[styles.iconContainer, { backgroundColor: config.iconBg }]}>
+              <View style={[styles.iconInner, { backgroundColor: config.iconColor + '20' }]}>
+                <Ionicons name={config.icon} size={36} color={config.iconColor} />
+              </View>
+            </View>
+
+            <View style={styles.contentContainer}>
+              <Text style={styles.alertTitle} numberOfLines={2}>
+                {title}
+              </Text>
+              <Text style={styles.alertMessage} numberOfLines={4}>
+                {message}
+              </Text>
+            </View>
+
+            {buttons.length > 0 ? (
+              <View style={[
+                styles.buttonContainer,
+                buttons.length === 1 && styles.singleButtonContainer,
+              ]}>
+                {buttons.map((button, index) => (
+                  <TouchableOpacity
+                    key={`button-${index}`}
+                    style={[
+                      styles.button,
+                      button.style === 'destructive' && styles.destructiveButton,
+                      button.style === 'cancel' && styles.cancelButton,
+                      button.style === 'default' && styles.defaultButton,
+                      button.style === 'primary' && styles.primaryButton,
+                    ]}
+                    onPress={handleButtonPress(button)}
+                    activeOpacity={0.8}
+                  >
+                    {button.style === 'destructive' ? (
+                      <LinearGradient
+                        colors={['#FF5252', '#E53935']}
+                        style={styles.buttonGradient}
+                      >
+                        <Text style={styles.destructiveButtonText}>{button.text}</Text>
+                      </LinearGradient>
+                    ) : button.style === 'primary' ? (
+                      <LinearGradient
+                        colors={['#FF8D76', '#FF6F61']}
+                        style={styles.buttonGradient}
+                      >
+                        <Text style={styles.primaryButtonText}>{button.text}</Text>
+                      </LinearGradient>
+                    ) : button.style === 'default' ? (
+                      <LinearGradient
+                        colors={['#4CAF50', '#43A047']}
+                        style={styles.buttonGradient}
+                      >
+                        <Text style={styles.defaultButtonText}>{button.text}</Text>
+                      </LinearGradient>
+                    ) : (
+                      <View style={styles.cancelButtonContent}>
+                        <Text style={styles.cancelButtonText}>{button.text}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.okButton}
+                onPress={handleClose}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.okButtonText}>OK</Text>
+              </TouchableOpacity>
+            )}
+          </LinearGradient>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  backdropOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  alertWrapper: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  alertWrapper: {
-    width: width * 0.9,
-    maxWidth: 380,
     paddingHorizontal: 20,
   },
   alertContainer: {
     width: '100%',
+    maxWidth: 380,
   },
   alertContent: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 28,
     padding: 28,
     alignItems: 'center',
-    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 15 },
     shadowOpacity: 0.25,
@@ -318,6 +378,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
     letterSpacing: 0.5,
+    lineHeight: 28,
   },
   alertMessage: {
     fontSize: 16,
@@ -332,19 +393,14 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 12,
   },
+  singleButtonContainer: {
+    justifyContent: 'center',
+  },
   button: {
     flex: 1,
     borderRadius: 24,
     overflow: 'hidden',
-  },
-  singleButton: {
-    flex: 1,
-  },
-  leftButton: {
-    marginRight: 6,
-  },
-  rightButton: {
-    marginLeft: 6,
+    minHeight: 50,
   },
   buttonGradient: {
     paddingVertical: 16,

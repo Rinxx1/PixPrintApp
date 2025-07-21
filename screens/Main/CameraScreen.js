@@ -28,6 +28,67 @@ import { useAlert } from '../../context/AlertContext'; // Add this import
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.85;
 
+// Platform-specific alert helper
+const useHybridAlert = () => {
+  const { showAlert, showError, showSuccess, showConfirm } = useAlert();
+  
+  const hybridAlert = (title, message, buttons = []) => {
+    if (Platform.OS === 'ios') {
+      // Use native alerts on iOS for reliability
+      Alert.alert(title, message, buttons);
+    } else {
+      // Use custom alerts on Android for better design
+      const alertType = title.toLowerCase().includes('error') || title.toLowerCase().includes('failed') ? 'error' :
+                       title.toLowerCase().includes('success') ? 'success' :
+                       title.toLowerCase().includes('warning') || title.toLowerCase().includes('required') ? 'warning' : 'info';
+      
+      showAlert({
+        title,
+        message,
+        type: alertType,
+        buttons: buttons.map(btn => ({
+          text: btn.text,
+          style: btn.style || 'default',
+          onPress: btn.onPress
+        }))
+      });
+    }
+  };
+
+  const hybridError = (title, message, onRetry, onCancel) => {
+    if (Platform.OS === 'ios') {
+      const buttons = [];
+      if (onRetry) buttons.push({ text: 'Retry', onPress: onRetry });
+      if (onCancel) buttons.push({ text: 'Cancel', style: 'cancel', onPress: onCancel });
+      if (buttons.length === 0) buttons.push({ text: 'OK' });
+      Alert.alert(title, message, buttons);
+    } else {
+      showError(title, message, onRetry, onCancel);
+    }
+  };
+
+  const hybridSuccess = (title, message, onOk) => {
+    if (Platform.OS === 'ios') {
+      Alert.alert(title, message, [{ text: 'OK', onPress: onOk }]);
+    } else {
+      showSuccess(title, message, onOk);
+    }
+  };
+
+  const hybridConfirm = (title, message, onYes, onNo) => {
+    if (Platform.OS === 'ios') {
+      Alert.alert(title, message, [
+        { text: 'Cancel', style: 'cancel', onPress: onNo },
+        { text: 'OK', onPress: onYes }
+      ]);
+    } else {
+      showConfirm(title, message, onYes, onNo);
+    }
+  };
+
+  return { hybridAlert, hybridError, hybridSuccess, hybridConfirm };
+};
+
 export default function CameraScreen({ route, navigation }) {
   // Get eventId and guest info from route params
   const { eventId, username: guestUsername } = route.params || {};
@@ -48,9 +109,8 @@ export default function CameraScreen({ route, navigation }) {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewImageUri, setPreviewImageUri] = useState(null);
   const [previewFilterName, setPreviewFilterName] = useState('None');
-  
-  // Add alert hook
-  const { showAlert, showError, showSuccess, showConfirm } = useAlert();
+    // Add alert hook
+  const { hybridAlert, hybridError, hybridSuccess, hybridConfirm } = useHybridAlert();
   
   // Ref for camera
   const cameraRef = useRef(null);
@@ -174,41 +234,30 @@ export default function CameraScreen({ route, navigation }) {
     if (isTakingPicture || !cameraRef.current) {
       return;
     }
-    
-    // Check authentication - allow guests for event photos
+      // Check authentication - allow guests for event photos
     const user = auth.currentUser;
     if (!eventId && !user) {
-      showAlert({
-        title: 'Authentication Required',
-        message: 'Please log in to take and save photos. You need an account to access camera features.',
-        type: 'warning',
-        buttons: [
+      hybridAlert(
+        'Sign In Required', 
+        'Please sign in to take photos.',
+        [
           { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Sign In', 
-            style: 'primary', 
-            onPress: () => navigation.navigate('SignIn') 
-          }
+          { text: 'Sign In', style: 'default', onPress: () => navigation.navigate('SignIn') }
         ]
-      });
+      );
       return;
     }
     
     // For event photos, allow guests
     if (eventId && !user && !guestUsername) {
-      showAlert({
-        title: 'Guest Access Required',
-        message: 'Please join the event as a guest or sign in to take photos.',
-        type: 'warning',
-        buttons: [
+      hybridAlert(
+        'Guest Access Required',
+        'Join as guest to take photos.',
+        [
           { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Join as Guest', 
-            style: 'primary', 
-            onPress: () => navigation.navigate('ContinueAsGuest') 
-          }
+          { text: 'Join as Guest', style: 'default', onPress: () => navigation.navigate('ContinueAsGuest') }
         ]
-      });
+      );
       return;
     }
     
@@ -271,12 +320,11 @@ export default function CameraScreen({ route, navigation }) {
           useNativeDriver: true,
         }).start();
       }
-      
-    } catch (error) {
+        } catch (error) {
       console.error("Error taking picture:", error);
-      showError(
+      hybridError(
         'Camera Error',
-        'Failed to capture photo. This could be due to camera permissions or hardware issues. Please try again.',
+        'Failed to capture photo. Please try again.',
         () => takePicture(), // Retry function
         () => {} // Cancel function
       );
@@ -300,47 +348,34 @@ export default function CameraScreen({ route, navigation }) {
       
       // Reset upload state
       setIsUploading(false);
-      
-      // Show success message using native alert
-      Alert.alert(
-        'Photo Saved! 📸',
-        `Your ${previewFilterName !== 'None' ? `${previewFilterName} filtered ` : ''}photo has been successfully saved to ${eventId ? 'the event gallery' : 'your personal collection'}.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => handleClosePreview()
-          }
-        ]
+        // Show success message using hybrid alert
+      hybridSuccess(
+        'Photo Saved',
+        `${previewFilterName !== 'None' ? `${previewFilterName} photo` : 'Photo'} saved successfully.`,
+        () => handleClosePreview()
       );
       
     } catch (error) {
       console.error("Error saving photo:", error);
       setIsUploading(false);
       
-      // Show error using native alert
-      Alert.alert(
+      // Show error using hybrid alert
+      hybridError(
         'Save Failed',
-        'Unable to save your photo. This could be due to network issues or storage problems. Please try again.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Retry', onPress: () => handleSavePhoto() }
-        ]
+        'Unable to save photo. Please try again.',
+        () => handleSavePhoto(), // Retry
+        () => {} // Cancel
       );
     }
   };
-
-  // Handle print photo with enhanced dialog using native alert
+  // Handle print photo with enhanced dialog using hybrid alert
   const handlePrintPhoto = () => {
-    Alert.alert(
-      '🖨️ Print Coming Soon!',
-      `Print functionality is currently in development and will be available in the next update!\n\nFor now, your ${previewFilterName !== 'None' ? `${previewFilterName} filtered ` : ''}photo will be saved to the gallery where you can access it anytime.`,
+    hybridAlert(
+      'Print Coming Soon',
+      'Print functionality will be available in the next update. Save photo instead?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Save Photo Instead', 
-          style: 'default',
-          onPress: () => handleSavePhoto()
-        }
+        { text: 'Save Photo', style: 'default', onPress: () => handleSavePhoto() }
       ]
     );
   };
@@ -518,61 +553,44 @@ export default function CameraScreen({ route, navigation }) {
   // Enhanced gallery access function with better error handling
   const handleGalleryAccess = async () => {
     const user = auth.currentUser;
-    
-    // For event photos, allow guests
+      // For event photos, allow guests
     if (eventId && !user && !guestUsername) {
-      showAlert({
-        title: 'Guest Access Required',
-        message: 'Please join the event as a guest to upload photos from your gallery.',
-        type: 'warning',
-        buttons: [
+      hybridAlert(
+        'Guest Access Required',
+        'Join as guest to upload photos.',
+        [
           { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Join as Guest', 
-            style: 'primary', 
-            onPress: () => navigation.navigate('ContinueAsGuest') 
-          }
+          { text: 'Join as Guest', style: 'default', onPress: () => navigation.navigate('ContinueAsGuest') }
         ]
-      });
+      );
       return;
     }
 
     // For personal photos, require authentication
     if (!eventId && !user) {
-      showAlert({
-        title: 'Authentication Required',
-        message: 'Please log in to upload personal photos from your gallery.',
-        type: 'warning',
-        buttons: [
+      hybridAlert(
+        'Sign In Required',
+        'Please sign in to upload photos.',
+        [
           { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Sign In', 
-            style: 'primary', 
-            onPress: () => navigation.navigate('SignIn') 
-          }
+          { text: 'Sign In', style: 'default', onPress: () => navigation.navigate('SignIn') }
         ]
-      });
+      );
       return;
     }
 
     try {
       // Request permission to access media library
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (permissionResult.granted === false) {
-        showAlert({
-          title: 'Permission Required',
-          message: 'PixPrint needs access to your photo library to upload images. Please grant permission in your device settings to continue.',
-          type: 'warning',
-          buttons: [
+        if (permissionResult.granted === false) {
+        hybridAlert(
+          'Photo Access Required',
+          'Grant photo library access to upload images.',
+          [
             { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Open Settings', 
-              style: 'primary', 
-              onPress: () => Linking.openSettings() 
-            }
+            { text: 'Open Settings', style: 'default', onPress: () => Linking.openSettings() }
           ]
-        });
+        );
         return;
       }
 
@@ -603,12 +621,11 @@ export default function CameraScreen({ route, navigation }) {
             () => console.log('Gallery upload cancelled') // Cancel function
           );
         }
-      }
-    } catch (error) {
+      }    } catch (error) {
       console.error('Error accessing gallery:', error);
-      showError(
+      hybridError(
         'Gallery Access Failed',
-        'Unable to access your photo gallery. This could be due to permission issues or device restrictions. Please try again.',
+        'Unable to access photo gallery. Please try again.',
         () => handleGalleryAccess(), // Retry function
         () => {} // Cancel function
       );
@@ -619,21 +636,15 @@ export default function CameraScreen({ route, navigation }) {
   const handleMultipleImageUpload = async (images) => {
     if (!images || images.length === 0) return;
 
-    const user = auth.currentUser;
-    if (!user && !eventId) {
-      showAlert({
-        title: 'Authentication Required',
-        message: 'Please log in to upload photos from your gallery.',
-        type: 'warning',
-        buttons: [
+    const user = auth.currentUser;    if (!user && !eventId) {
+      hybridAlert(
+        'Sign In Required',
+        'Please sign in to upload photos.',
+        [
           { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Sign In', 
-            style: 'primary', 
-            onPress: () => navigation.navigate('SignIn') 
-          }
+          { text: 'Sign In', style: 'default', onPress: () => navigation.navigate('SignIn') }
         ]
-      });
+      );
       return;
     }
 
@@ -643,16 +654,14 @@ export default function CameraScreen({ route, navigation }) {
       let successCount = 0;
       let failCount = 0;
       const totalImages = images.length;
-      
-      // Show initial upload progress
-      showAlert({
-        title: 'Uploading Photos 📤',
-        message: `Starting upload of ${totalImages} photo${totalImages > 1 ? 's' : ''}...\n\nPlease keep the app open while photos are being processed and uploaded.`,
-        type: 'info',
-        buttons: [
-          { text: 'Continue in Background', style: 'primary' }
+        // Show initial upload progress
+      hybridAlert(
+        'Uploading Photos',
+        `Uploading ${totalImages} photo${totalImages > 1 ? 's' : ''}...`,
+        [
+          { text: 'Continue', style: 'default' }
         ]
-      });
+      );
 
       // Process each image
       for (let i = 0; i < images.length; i++) {
@@ -675,13 +684,11 @@ export default function CameraScreen({ route, navigation }) {
         } catch (error) {
           console.error(`Error uploading image ${i + 1}:`, error);
           failCount++;
-        }      }
-
-      // Show detailed final result
+        }      }      // Show detailed final result
       if (successCount > 0 && failCount === 0) {
-        showSuccess(
-          'Upload Complete! 🎉',
-          `Successfully uploaded all ${successCount} photo${successCount > 1 ? 's' : ''} to ${eventId ? 'the event gallery' : 'your personal collection'}!\n`,
+        hybridSuccess(
+          'Upload Complete',
+          `Successfully uploaded ${successCount} photo${successCount > 1 ? 's' : ''}.`,
           () => {
             // Navigate back to the event screen to see uploaded photos
             if (eventId) {
@@ -690,28 +697,26 @@ export default function CameraScreen({ route, navigation }) {
           }
         );
       } else if (successCount > 0 && failCount > 0) {
-        showAlert({
-          title: 'Partial Upload Complete',
-          message: `✅ Successfully uploaded: ${successCount} photo${successCount > 1 ? 's' : ''}\n❌ Failed to upload: ${failCount} photo${failCount > 1 ? 's' : ''}\n\nThe failed uploads might be due to network issues or file format problems. You can try uploading the failed photos again.`,
-          type: 'warning',
-          buttons: [
-            { text: 'OK', style: 'primary' }
+        hybridAlert(
+          'Partial Upload Complete',
+          `${successCount} uploaded, ${failCount} failed. Try again for failed photos.`,
+          [
+            { text: 'OK', style: 'default' }
           ]
-        });
+        );
       } else {
-        showError(
+        hybridError(
           'Upload Failed',
-          'None of the selected photos could be uploaded. This could be due to:\n\n• Network connection issues\n• File format not supported\n• Storage quota exceeded\n• Authentication problems\n\nPlease check your connection and try again.',
+          'Upload failed. Check connection and try again.',
           () => handleGalleryAccess(), // Retry with new selection
           () => {} // Cancel function
         );
       }
 
     } catch (error) {
-      console.error('Error in multiple upload:', error);
-      showError(
+      console.error('Error in multiple upload:', error);      hybridError(
         'Upload Process Failed',
-        'There was an unexpected error during the upload process. Please check your internet connection and try again.',
+        'Upload failed. Check connection and try again.',
         () => handleMultipleImageUpload(images), // Retry with same images
         () => {} // Cancel function
       );
