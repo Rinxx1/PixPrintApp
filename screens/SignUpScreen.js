@@ -319,12 +319,19 @@ export default function SignUpScreen({ route, navigation }) {
       showSuccess(
         guestUsername ? 'Account Converted Successfully! 🎉' : 'Welcome to PixPrint! 🎉',
         guestUsername ? 
-          `Your account is now ready!\n\n✅ ${firstName} ${lastName}\n📧 ${email}\n🎉 Events and photos are saved\n\nYou're signed in—explore your dashboard!`:
+          `Your account is now ready!\n\n✅ ${firstName} ${lastName}\n📧 ${email}\n🎉 Events and photos are saved\n\nYou're signed in—explore your dashboard!` :
+          `Welcome to PixPrint!\n\n✅ ${firstName} ${lastName}\n📧 ${email}\n\nYour account is ready—let's start capturing memories!`,
         () => {
-          // Navigate directly to Dashboard since user is already signed in
+          // Navigate directly to Dashboard with flag indicating account was just created
           navigation.reset({
             index: 0,
-            routes: [{ name: 'Tabs' }],
+            routes: [{ 
+              name: 'Tabs',
+              params: { 
+                screen: 'Dashboard',
+                params: { fromAccountCreation: true }
+              }
+            }],
           });
         }
       );

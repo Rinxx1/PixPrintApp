@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext } from 'react';
 import HeaderBar from '../../components/HeaderBar';
 import { 
   View, 
@@ -19,13 +19,14 @@ import { auth, db } from '../../firebase';
 import { collection, query, where, getDocs, doc, getDoc, signOut, addDoc } from 'firebase/firestore';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAlert } from '../../context/AlertContext'; // Add this import
-import { useFocusEffect } from '@react-navigation/native'; // Add this import
+import { useAlert } from '../../context/AlertContext';
+import { useFocusEffect } from '@react-navigation/native';
+import { AuthContext } from '../../context/authContext'; // Add this import
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.85;
 
-export default function DashboardScreen({ navigation }) {
+export default function DashboardScreen({ navigation, route }) {
   const [eventCode, setEventCode] = useState('');
   const [username, setUsername] = useState('');
   const [userProfileUrl, setUserProfileUrl] = useState('');
@@ -35,7 +36,12 @@ export default function DashboardScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
   
-  // Add alert hook
+  // Add context for detecting new account creation
+  const { wasAccountJustCreated, clearAccountCreatedFlag } = useContext(AuthContext);
+  
+  // Add flag to force refresh after conversion
+  const [forceRefresh, setForceRefresh] = useState(false);
+  
   const { showAlert, showError, showSuccess, showConfirm } = useAlert();
   
   // Enhanced but minimal animation values for loading
@@ -58,7 +64,7 @@ export default function DashboardScreen({ navigation }) {
     extrapolate: 'clamp',
   });
 
-  // Fetch user data
+  // Enhanced fetch user data
   const fetchUserData = async () => {
     try {
       const user = auth.currentUser;
@@ -69,11 +75,13 @@ export default function DashboardScreen({ navigation }) {
           const userData = docSnap.data();
           setUsername(userData.user_firstname || 'User');
           setUserProfileUrl(userData.user_profile_url || '');
+          return userData;
         }
       }
     } catch (error) {
       console.error("Error fetching user data:", error);
     }
+    return null;
   };
 
   // Updated fetchCreatedEvents function without attendee count
@@ -149,22 +157,23 @@ export default function DashboardScreen({ navigation }) {
           });
         });
         
-        setCreatedEvents(events);
+        return events; // Make sure to return the events array
       }
+      return []; // Return empty array if no user
     } catch (error) {
       console.error("Error fetching created events:", error);
+      return []; // Return empty array on error
     }
   };
 
   // Updated fetchJoinedEvents function to include converted guest events
-  const fetchJoinedEvents = async () => {
+  const fetchJoinedEvents = async (retryCount = 0) => {
     try {
       const user = auth.currentUser;
       if (user) {
-        const joinedRef = collection(db, 'joined_tbl');
+        console.log(`Fetching joined events for user: ${user.uid} (attempt ${retryCount + 1})`);
         
-        // Query for events where user_id matches current user
-        // This will include both originally joined events and converted guest events
+        const joinedRef = collection(db, 'joined_tbl');
         const q = query(
           joinedRef,
           where('user_id', '==', user.uid),
@@ -172,7 +181,7 @@ export default function DashboardScreen({ navigation }) {
         );
         
         const querySnapshot = await getDocs(q);
-        //console.log(`Found ${querySnapshot.size} joined events for user ${user.uid}`);
+        console.log(`Found ${querySnapshot.size} joined events for user ${user.uid}`);
 
         const eventPromises = [];
         
@@ -180,7 +189,7 @@ export default function DashboardScreen({ navigation }) {
           const joinedData = joinedDoc.data();
           const eventId = joinedData.event_id;
           
-         // console.log(`Processing joined event: ${eventId}, converted: ${joinedData.converted_from_guest}`);
+          console.log(`Processing joined event: ${eventId}, converted: ${joinedData.converted_from_guest}`);
           
           const eventPromise = getDoc(doc(db, 'event_tbl', eventId))
             .then(eventDoc => {
@@ -255,32 +264,84 @@ export default function DashboardScreen({ navigation }) {
         const validEvents = eventResults.filter(event => event !== null);
         
         console.log(`Successfully loaded ${validEvents.length} joined events`);
-        setJoinedEvents(validEvents);
+        return validEvents;
       }
+      return [];
     } catch (error) {
       console.error("Error fetching joined events:", error);
+      
+      // Retry logic for recently converted users
+      if (retryCount < 2 && (wasAccountJustCreated || forceRefresh)) {
+        console.log(`Retrying fetch joined events (attempt ${retryCount + 2})`);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        return fetchJoinedEvents(retryCount + 1);
+      }
+      
+      return [];
     }
   };
 
-  // Combined fetch function for refresh
-  const fetchAllData = async (showLoadingState = false) => {
+  // Enhanced fetch function with better handling for converted users
+  const fetchAllData = async (showLoadingState = false, isNewUser = false) => {
     if (showLoadingState) {
       setLoading(true);
     }
     
     try {
-      await Promise.all([
+      console.log(`Fetching all data - isNewUser: ${isNewUser}, wasAccountJustCreated: ${wasAccountJustCreated}`);
+      
+      // For newly converted users, add a small delay to ensure Firebase sync
+      if (isNewUser || wasAccountJustCreated || forceRefresh) {
+        console.log('Adding delay for newly converted user...');
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      
+      const [userData, newCreatedEvents, newJoinedEvents] = await Promise.all([
         fetchUserData(),
         fetchCreatedEvents(),
         fetchJoinedEvents()
       ]);
+      
+      // Ensure we have arrays even if functions return undefined
+      const safeCreatedEvents = Array.isArray(newCreatedEvents) ? newCreatedEvents : [];
+      const safeJoinedEvents = Array.isArray(newJoinedEvents) ? newJoinedEvents : [];
+      
+      setCreatedEvents(safeCreatedEvents);
+      setJoinedEvents(safeJoinedEvents);
+      
+      console.log(`Data fetched - Created: ${safeCreatedEvents.length}, Joined: ${safeJoinedEvents.length}`);
+      
+      // If this was a converted user and we got joined events, show success message
+      if ((wasAccountJustCreated || forceRefresh) && safeJoinedEvents.length > 0) {
+        console.log('Converted user events loaded successfully');
+        setTimeout(() => {
+          showSuccess(
+            'Events Loaded Successfully! 🎉',
+            `Found ${safeJoinedEvents.length} joined event${safeJoinedEvents.length !== 1 ? 's' : ''}. Your account conversion is complete!`
+          );
+        }, 500);
+      }
+      
+      // Clear flags after successful load
+      if (wasAccountJustCreated) {
+        clearAccountCreatedFlag();
+      }
+      if (forceRefresh) {
+        setForceRefresh(false);
+      }
+      
     } catch (error) {
       console.error("Error in data fetching:", error);
+      
+      // Set empty arrays to prevent undefined errors
+      setCreatedEvents([]);
+      setJoinedEvents([]);
+      
       showError(
         'Data Loading Failed',
         'Unable to load your events. Please check your connection and try again.',
-        () => fetchAllData(true), // Retry function
-        () => {} // Cancel function
+        () => fetchAllData(true, isNewUser),
+        () => {}
       );
     } finally {
       setLoading(false);
@@ -288,18 +349,29 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  // Pull to refresh handler
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchAllData(false);
-  }, []);
-
-  // Auto-refresh when screen comes into focus
+  // Enhanced focus effect with better new user detection
   useFocusEffect(
     useCallback(() => {
-      fetchAllData(false);
-    }, [])
+      console.log('Screen focused - checking for new user status');
+      
+      // Check if this is a newly converted user
+      const isNewUser = wasAccountJustCreated || route?.params?.fromAccountCreation;
+      
+      // Force refresh if coming from account creation
+      if (isNewUser) {
+        setForceRefresh(true);
+      }
+      
+      fetchAllData(false, isNewUser);
+    }, [wasAccountJustCreated, route?.params?.fromAccountCreation])
   );
+
+  // Enhanced pull to refresh
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    console.log('Manual refresh triggered');
+    fetchAllData(false, false);
+  }, []);
 
   // Initial data fetch
   useEffect(() => {
@@ -344,8 +416,9 @@ export default function DashboardScreen({ navigation }) {
       }),
     ]).start();
 
-    // Initial data fetch
-    fetchAllData(true);
+    // Initial data fetch with new user detection
+    const isNewUser = wasAccountJustCreated;
+    fetchAllData(true, isNewUser);
   }, []);
 
   const handleLogout = async () => {
@@ -372,8 +445,8 @@ export default function DashboardScreen({ navigation }) {
           showError(
             'Logout Failed',
             'There was an issue logging out. Please check your connection and try again.',
-            () => handleLogout(), // Retry function
-            () => {} // Cancel function
+            () => handleLogout(),
+            () => {}
           );
         }
       },
@@ -397,11 +470,9 @@ export default function DashboardScreen({ navigation }) {
       return;
     }
 
-    // Show loading state
     setLoading(true);
 
     try {
-      // Check if event exists
       const eventRef = collection(db, 'event_tbl');
       const q = query(eventRef, where('event_code', '==', eventCode.toUpperCase()));
       const querySnapshot = await getDocs(q);
@@ -423,7 +494,6 @@ export default function DashboardScreen({ navigation }) {
       const eventId = eventDoc.id;
       const eventData = eventDoc.data();
 
-      // Check if user already joined this event
       const joinedRef = collection(db, 'joined_tbl');
       const joinedQuery = query(
         joinedRef, 
@@ -453,12 +523,10 @@ export default function DashboardScreen({ navigation }) {
         return;
       }
 
-      // Show join confirmation with event details
       showConfirm(
         'Join Event?',
         `Do you want to join "${eventData.event_name}"?\n\n📅 ${eventData.event_start_date ? new Date(eventData.event_start_date.seconds * 1000).toLocaleDateString() : 'Date TBD'}\n📍 ${eventData.event_location || 'Location TBD'}\n🎫 Code: ${eventCode.toUpperCase()}\n\nYou'll be able to view and share photos with other attendees.`,
         async () => {
-          // User confirmed joining
           try {
             const newEntry = {
               event_id: eventId,
@@ -471,16 +539,12 @@ export default function DashboardScreen({ navigation }) {
 
             await addDoc(joinedRef, newEntry);
             
-            // Show success and navigate
             showSuccess(
               'Successfully Joined! 🎉',
               `Welcome to "${eventData.event_name}"! You can now view photos and share your own memories with other attendees.`,
               () => {
-                // Navigate to the event
                 navigation.navigate('JoinEventTwo', { eventId, eventCode: eventCode.toUpperCase() });
-                // Clear the input
                 setEventCode('');
-                // Refresh the events list
                 fetchAllData(false);
               }
             );
@@ -490,13 +554,12 @@ export default function DashboardScreen({ navigation }) {
             showError(
               'Join Failed',
               'Unable to join the event right now. This could be due to a network issue. Please try again.',
-              () => handleJoinEvent(), // Retry function
-              () => setLoading(false) // Cancel function
+              () => handleJoinEvent(),
+              () => setLoading(false)
             );
           }
         },
         () => {
-          // User cancelled joining
           setLoading(false);
           console.log('Join event cancelled');
         }
@@ -507,8 +570,8 @@ export default function DashboardScreen({ navigation }) {
       showError(
         'Connection Error',
         'Unable to check the event code due to network issues. Please check your internet connection and try again.',
-        () => handleJoinEvent(), // Retry function
-        () => setLoading(false) // Cancel function
+        () => handleJoinEvent(),
+        () => setLoading(false)
       );
     } finally {
       setLoading(false);

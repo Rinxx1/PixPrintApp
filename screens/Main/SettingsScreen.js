@@ -76,29 +76,31 @@ export default function SettingsScreen({ navigation }) {
   const handleLogout = async () => {
     showConfirm(
       'Confirm Logout',
-      'Are you sure you want to log out of your account? You will need to sign in again to access your photos and events.',
+      'Are you sure you want to log out?',
       async () => {
         // User confirmed logout
         try {
           await signOut(auth);
           
-          showSuccess(
-            'Logged Out Successfully',
-            'You have been safely logged out of your account.',
-            () => {
-              // Navigate to SignIn after success message
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'SignIn' }],
-              });
-            }
-          );
+          // Navigate immediately after successful signOut
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'SignIn' }],
+          });
+          
+          // Show success message after navigation
+          setTimeout(() => {
+            showSuccess(
+              'Logged Out',
+              'You have been logged out successfully.'
+            );
+          }, 500);
           
         } catch (error) {
           console.error('Logout error:', error);
           showError(
             'Logout Failed',
-            'There was an issue logging out. Please check your connection and try again.',
+            'Unable to log out. Please try again.',
             () => handleLogout(), // Retry function
             () => {} // Cancel function
           );
