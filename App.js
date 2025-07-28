@@ -8,6 +8,7 @@ import SplashAnimation from './screens/SplashAnimation';
 import MainScreen from './screens/MainScreen';
 import SignInScreen from './screens/SignInScreen';
 import SignUpScreen from './screens/SignUpScreen';
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ContinueAsGuestScreen from './screens/ContinueAsGuestScreen';
 import NewEventScreen from './screens/Main/NewEventScreen';
 import JoinEventScreen from './screens/Main/JoinEventScreen';
@@ -50,6 +51,7 @@ function AppNavigator() {
       <Stack.Screen name="Main" component={MainScreen} />
       <Stack.Screen name="SignIn" component={SignInScreen} />
       <Stack.Screen name="SignUp" component={SignUpScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
       <Stack.Screen name="ContinueAsGuest" component={ContinueAsGuestScreen} />
       <Stack.Screen name="Tabs" component={BottomTabNavigatorWrapper} />
       <Stack.Screen name="NewEvent" component={NewEventScreen} />

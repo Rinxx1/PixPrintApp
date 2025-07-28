@@ -16,25 +16,19 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Logo from '../assets/icon-pix-print.png';
-import { auth } from '../firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { useNavigation } from '@react-navigation/native';
+import { auth, db } from '../firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { useAlert } from '../context/AlertContext';
 
 const { width, height } = Dimensions.get('window');
 
-export default function SignInScreen({ navigation }) {
+export default function ForgotPasswordScreen({ navigation }) {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [secureText, setSecureText] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const nav = useNavigation();
-  
   // Get alert methods from context
-  const { showAlert, showError, showSuccess } = useAlert();
+  const { showAlert, showSuccess, showError } = useAlert();
   
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -55,14 +49,32 @@ export default function SignInScreen({ navigation }) {
       })
     ]).start();
   }, []);
+  const isValidEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
 
-  const handleSignIn = async () => {
-    if (isSubmitting) return; // Prevent multiple submissions
+  // Check if email exists in user_tbl collection
+  const checkIfEmailExistsInUserTable = async (email) => {
+    try {
+      const userRef = collection(db, 'user_tbl');
+      const q = query(userRef, where('user_email', '==', email.toLowerCase().trim()));
+      const querySnapshot = await getDocs(q);
+      return !querySnapshot.empty;
+    } catch (error) {
+      console.error('Error checking email in user_tbl:', error);
+      return false;
+    }
+  };
 
-    if (!email.trim() || !password.trim()) {
+  const handleResetPassword = async () => {
+    if (isSubmitting) return;
+
+    // Basic validation
+    if (!email.trim()) {
       showAlert({
-        title: 'Missing Information',
-        message: 'Please fill in all fields to continue.',
+        title: 'Email Required',
+        message: 'Please enter your email address to receive password reset instructions.',
         type: 'warning',
         buttons: [
           { text: 'OK', style: 'primary' }
@@ -71,74 +83,68 @@ export default function SignInScreen({ navigation }) {
       return;
     }
 
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
+    if (!isValidEmail(email.trim())) {
       showAlert({
         title: 'Invalid Email',
-        message: 'Please enter a valid email address.',
+        message: 'Please enter a valid email address in the correct format (example@domain.com).',
         type: 'error',
         buttons: [
-          { text: 'OK', style: 'primary' }
+          { text: 'Fix Email', style: 'primary' }
         ]
       });
       return;
-    }
-
-    setIsSubmitting(true);
+    }    setIsSubmitting(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      // First check if email exists in user_tbl collection
+      const emailExistsInUserTable = await checkIfEmailExistsInUserTable(email.trim());
       
-      // Show success message and navigate
+      if (!emailExistsInUserTable) {
+        showAlert({
+          title: 'Account Not Found',
+          message: 'No PixPrint account found with this email address. Only registered users with complete profiles can reset their password.',
+          type: 'warning',
+          buttons: [
+            { text: 'Try Different Email', style: 'cancel' },
+            { 
+              text: 'Create Account', 
+              style: 'primary', 
+              onPress: () => navigation.navigate('SignUp')
+            }
+          ]
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // If email exists in user_tbl, proceed with Firebase password reset
+      await sendPasswordResetEmail(auth, email.trim());
+      
       showSuccess(
-        'Welcome Back!',
-        'Successfully signed in to your account.',
+        'Reset Link Sent! 📧',
+        `We've sent password reset instructions to ${email.trim()}.\n\nPlease check your email (including spam folder) and follow the link to reset your password.\n\n💡 The link will expire in 1 hour for security.`,
         () => {
-          // Use navigation.reset to prevent going back to SignIn
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Tabs' }],
-          });
+          // Navigate back to sign in screen
+          navigation.navigate('SignIn');
         }
       );
       
     } catch (error) {
-      // Remove the console.error to prevent showing Firebase errors
-      // console.error('Sign in error:', error);
+      console.error('Password reset error:', error);
       
-      let title = 'Sign In Failed';
-      let errorMessage = 'An error occurred during sign in';
-      
-      switch (error.code) {
+      let title = 'Reset Failed';
+      let errorMessage = 'Unable to send password reset email. Please try again.';
+        switch (error.code) {
         case 'auth/user-not-found':
           title = 'Account Not Found';
-          errorMessage = 'No account found with this email address. Would you like to create a new account?';
+          errorMessage = 'This email is not associated with a Firebase account, even though it exists in our user database. Please contact support for assistance.';
           showAlert({
             title,
             message: errorMessage,
             type: 'warning',
             buttons: [
-              { text: 'Cancel', style: 'cancel' },
-              { 
-                text: 'Sign Up', 
-                style: 'primary', 
-                onPress: () => navigation.navigate('SignUp')
-              }
-            ]
-          });
-          return;
-          
-        case 'auth/wrong-password':
-        case 'auth/invalid-credential':
-          title = 'Incorrect Password';
-          errorMessage = 'The password you entered is incorrect. Please try again or reset your password.';
-          showAlert({
-            title,
-            message: errorMessage,
-            type: 'error',
-            buttons: [
-              { text: 'Try Again', style: 'primary' }
+              { text: 'Contact Support', style: 'primary', onPress: () => handleContactSupport() },
+              { text: 'Try Different Email', style: 'cancel' }
             ]
           });
           return;
@@ -148,38 +154,24 @@ export default function SignInScreen({ navigation }) {
           errorMessage = 'Please enter a valid email address.';
           break;
           
-        case 'auth/user-disabled':
-          title = 'Account Disabled';
-          errorMessage = 'This account has been disabled. Please contact support for assistance.';
-          showAlert({
-            title,
-            message: errorMessage,
-            type: 'error',
-            buttons: [
-              { text: 'OK', style: 'primary' },
-              { text: 'Contact Support', style: 'default', onPress: () => handleContactSupport() }
-            ]
-          });
-          return;
-          
-        case 'auth/too-many-requests':
-          title = 'Too Many Attempts';
-          errorMessage = 'Too many failed sign-in attempts. Please wait a few minutes before trying again.';
-          break;
-          
         case 'auth/network-request-failed':
           title = 'Connection Error';
           errorMessage = 'Please check your internet connection and try again.';
           showError(
             title,
             errorMessage,
-            () => handleSignIn(), // Retry function
+            () => handleResetPassword(), // Retry function
             () => {} // Cancel function
           );
           return;
           
+        case 'auth/too-many-requests':
+          title = 'Too Many Attempts';
+          errorMessage = 'Too many password reset attempts. Please wait a few minutes before trying again.';
+          break;
+          
         default:
-          errorMessage = 'Please check your email and password and try again.';
+          errorMessage = 'An unexpected error occurred. Please try again or contact support.';
       }
       
       showAlert({
@@ -194,9 +186,6 @@ export default function SignInScreen({ navigation }) {
     } finally {
       setIsSubmitting(false);
     }
-  };
-  const handleForgotPassword = () => {
-    navigation.navigate('ForgotPassword');
   };
 
   const handleContactSupport = () => {
@@ -239,10 +228,17 @@ export default function SignInScreen({ navigation }) {
             ]}
           >
             <View style={styles.logoContainer}>
-              <Image source={Logo} style={styles.logo} />
+              <LinearGradient
+                colors={['#FF8D76', '#FF6F61']}
+                style={styles.logoGradient}
+              >
+                <Ionicons name="mail" size={40} color="#FFFFFF" />
+              </LinearGradient>
             </View>
-            <Text style={styles.welcomeTitle}>Welcome Back!</Text>
-            <Text style={styles.welcomeSubtitle}>Sign in to continue capturing memories</Text>
+            <Text style={styles.welcomeTitle}>Forgot Password?</Text>
+            <Text style={styles.welcomeSubtitle}>
+              No worries! Enter your email and we'll send you reset instructions
+            </Text>
           </Animated.View>
 
           {/* Form Section */}
@@ -265,7 +261,7 @@ export default function SignInScreen({ navigation }) {
                 ]}>
                   <Ionicons name="mail-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
                   <TextInput
-                    placeholder="Enter your email"
+                    placeholder="Enter your email address"
                     placeholderTextColor="#AAAAAA"
                     value={email}
                     onChangeText={setEmail}
@@ -273,54 +269,22 @@ export default function SignInScreen({ navigation }) {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     editable={!isSubmitting}
+                    autoFocus={true}
                   />
                 </View>
               </View>
 
-              {/* Password Input */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Password</Text>
-                <View style={[
-                  styles.inputContainer,
-                  !password.trim() && isSubmitting && styles.inputError
-                ]}>
-                  <Ionicons name="lock-closed-outline" size={20} color="#AAAAAA" style={styles.inputIcon} />
-                  <TextInput
-                    placeholder="Enter your password"
-                    placeholderTextColor="#AAAAAA"
-                    value={password}
-                    onChangeText={setPassword}
-                    style={styles.input}
-                    secureTextEntry={secureText}
-                    editable={!isSubmitting}
-                  />
-                  <TouchableOpacity 
-                    onPress={() => setSecureText(!secureText)}
-                    style={styles.eyeIcon}
-                    disabled={isSubmitting}
-                  >
-                    <Ionicons 
-                      name={secureText ? "eye-off-outline" : "eye-outline"} 
-                      size={20} 
-                      color="#AAAAAA" 
-                    />
-                  </TouchableOpacity>
-                </View>
+              {/* Info Box */}              <View style={styles.infoBox}>
+                <Ionicons name="information-circle-outline" size={20} color="#4A90E2" />
+                <Text style={styles.infoText}>
+                  We'll verify your account and send a secure reset link to your email. Only registered PixPrint users can reset their password.
+                </Text>
               </View>
 
-              {/* Forgot Password Link */}
-              <TouchableOpacity 
-                style={styles.forgotPasswordContainer}
-                onPress={handleForgotPassword}
-                disabled={isSubmitting}
-              >
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-              </TouchableOpacity>
-
-              {/* Sign In Button */}
+              {/* Reset Password Button */}
               <TouchableOpacity
-                style={[styles.signInButton, isSubmitting && styles.buttonDisabled]}
-                onPress={handleSignIn}
+                style={[styles.resetButton, isSubmitting && styles.buttonDisabled]}
+                onPress={handleResetPassword}
                 disabled={isSubmitting}
               >
                 <LinearGradient
@@ -332,32 +296,28 @@ export default function SignInScreen({ navigation }) {
                   {isSubmitting ? (
                     <View style={styles.loadingContainer}>
                       <ActivityIndicator size="small" color="#FFFFFF" />
-                      <Text style={styles.loadingText}>Signing In...</Text>
+                      <Text style={styles.loadingText}>Sending...</Text>
                     </View>
                   ) : (
                     <>
-                      <Text style={styles.signInButtonText}>Sign In</Text>
-                      <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+                      <Text style={styles.resetButtonText}>Send Reset Link</Text>
+                      <Ionicons name="paper-plane" size={20} color="#FFFFFF" />
                     </>
                   )}
                 </LinearGradient>
               </TouchableOpacity>
 
-              {/* Alternative Sign In Options */}
-              <View style={styles.dividerContainer}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or continue as</Text>
-                <View style={styles.dividerLine} />
+              {/* Help Section */}
+              <View style={styles.helpSection}>
+                <TouchableOpacity 
+                  style={styles.helpButton}
+                  onPress={handleContactSupport}
+                  disabled={isSubmitting}
+                >
+                  <Ionicons name="help-circle-outline" size={16} color="#666666" />
+                  <Text style={styles.helpText}>Need Help?</Text>
+                </TouchableOpacity>
               </View>
-
-              <TouchableOpacity
-                style={styles.guestButton}
-                onPress={() => navigation.navigate('ContinueAsGuest')}
-                disabled={isSubmitting}
-              >
-                <Ionicons name="person-outline" size={20} color="#FF6F61" />
-                <Text style={styles.guestButtonText}>Continue as Guest</Text>
-              </TouchableOpacity>
             </View>
           </Animated.View>
 
@@ -371,23 +331,23 @@ export default function SignInScreen({ navigation }) {
               }
             ]}
           >
-            <View style={styles.signUpContainer}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
+            <View style={styles.backToSignInContainer}>
+              <Text style={styles.footerText}>Remember your password? </Text>
               <TouchableOpacity 
-                onPress={() => navigation.navigate('SignUp')}
+                onPress={() => navigation.navigate('SignIn')}
                 disabled={isSubmitting}
               >
-                <Text style={styles.signUpText}>Sign Up</Text>
+                <Text style={styles.signInText}>Sign In</Text>
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity 
               style={styles.backButton}
-              onPress={() => navigation.navigate('Main')}
+              onPress={() => navigation.goBack()}
               disabled={isSubmitting}
             >
               <Ionicons name="chevron-back" size={20} color="#777" />
-              <Text style={styles.backText}>Back to Home</Text>
+              <Text style={styles.backText}>Back</Text>
             </TouchableOpacity>
           </Animated.View>
         </LinearGradient>
@@ -445,9 +405,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(255, 111, 97, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
     marginBottom: 24,
     shadowColor: '#FF6F61',
     shadowOffset: { width: 0, height: 8 },
@@ -455,10 +412,12 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
-  logo: {
-    width: 50,
-    height: 50,
-    resizeMode: 'contain',
+  logoGradient: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   welcomeTitle: {
     fontSize: 28,
@@ -472,6 +431,7 @@ const styles = StyleSheet.create({
     color: '#666666',
     textAlign: 'center',
     lineHeight: 22,
+    paddingHorizontal: 20,
   },
   formSection: {
     flex: 1,
@@ -515,21 +475,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333333',
   },
-  eyeIcon: {
-    padding: 4,
-  },
-  forgotPasswordContainer: {
-    alignItems: 'flex-end',
-    marginBottom: 24,
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-    color: '#FF6F61',
-    fontWeight: '500',
-  },
-  signInButton: {
+  infoBox: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(74, 144, 226, 0.1)',
     borderRadius: 12,
+    padding: 16,
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(74, 144, 226, 0.2)',
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#4A90E2',
+    marginLeft: 8,
+    lineHeight: 20,
+  },
+  resetButton: {
+    borderRadius: 12,
+    marginBottom: 20,
     shadowColor: '#FF6F61',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
@@ -546,49 +510,44 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 12,
   },
-  signInButtonText: {
+  resetButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
     marginRight: 8,
   },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#EEEEEE',
-  },
-  dividerText: {
-    fontSize: 14,
-    color: '#888888',
-    marginHorizontal: 16,
-  },
-  guestButton: {
+  loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 111, 97, 0.08)',
-    borderRadius: 12,
-    paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 111, 97, 0.2)',
   },
-  guestButtonText: {
+  loadingText: {
+    color: '#FFFFFF',
     fontSize: 16,
-    color: '#FF6F61',
-    fontWeight: '600',
+    fontWeight: 'bold',
     marginLeft: 8,
+  },
+  helpSection: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  helpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  helpText: {
+    fontSize: 14,
+    color: '#666666',
+    marginLeft: 4,
   },
   footerSection: {
     paddingHorizontal: 24,
     paddingBottom: 40,
     alignItems: 'center',
   },
-  signUpContainer: {
+  backToSignInContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
@@ -598,7 +557,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666666',
   },
-  signUpText: {
+  signInText: {
     fontSize: 16,
     color: '#FF6F61',
     fontWeight: 'bold',
@@ -616,16 +575,5 @@ const styles = StyleSheet.create({
   inputError: {
     borderColor: '#FF5252',
     borderWidth: 2,
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
   },
 });
