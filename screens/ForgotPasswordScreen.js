@@ -274,7 +274,8 @@ export default function ForgotPasswordScreen({ navigation }) {
                 </View>
               </View>
 
-              {/* Info Box */}              <View style={styles.infoBox}>
+              {/* Info Box */}              
+              <View style={styles.infoBox}>
                 <Ionicons name="information-circle-outline" size={20} color="#4A90E2" />
                 <Text style={styles.infoText}>
                   We'll verify your account and send a secure reset link to your email. Only registered PixPrint users can reset their password.

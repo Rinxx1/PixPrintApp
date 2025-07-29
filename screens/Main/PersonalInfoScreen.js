@@ -692,10 +692,10 @@ export default function PersonalInfoScreen({ navigation }) {
               {isLoading ? (
                 <Text style={styles.saveText}>Updating...</Text>
               ) : (
-                <>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />
                   <Text style={styles.saveText}>Save Changes</Text>
-                </>
+                </View>
               )}
             </LinearGradient>
           </TouchableOpacity>
