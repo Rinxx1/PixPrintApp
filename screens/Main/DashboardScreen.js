@@ -1055,13 +1055,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
+    
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingTop: 100,
-    paddingBottom: 30,
+    paddingTop: 30,
+    paddingBottom: 40,
   },
   welcomeHeader: {
     marginHorizontal: 20,

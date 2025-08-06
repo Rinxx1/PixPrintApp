@@ -6,7 +6,7 @@ import {
   TouchableOpacity, 
   StyleSheet, 
   Image, 
-  ScrollView,
+  ScrollView, 
   Animated,
   Dimensions,
   Linking
@@ -485,7 +485,8 @@ export default function PersonalInfoScreen({ navigation }) {
   };
 
   // Enhanced help function
-  const handleHelp = () => {    showAlert({
+  const handleHelp = () => {
+    showAlert({
       title: 'Profile Help 💡',
       message: 'Having trouble with your profile? Here are some tips:\n\n📸 Profile Picture: Tap the camera icon to change\n✍️ Names: Use only letters, spaces, and hyphens\n📧 Email: Must be a valid email format\n💾 Save: Don\'t forget to save your changes!\n\nNeed more help? Contact our support team.',
       type: 'info',
@@ -658,7 +659,8 @@ export default function PersonalInfoScreen({ navigation }) {
                   autoCapitalize="none"
                   maxLength={100}
                 />
-              </View>            </View>
+              </View>
+            </View>
 
             {/* Required fields note */}
             <View style={styles.requiredNote}>

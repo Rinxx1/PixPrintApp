@@ -18,7 +18,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import HeaderBar from '../../components/HeaderBar';
 import JoinEventBottomNavigator from '../../components/JoinEventBottomNavigator';
 import { db, auth } from '../../firebase';
-import { doc, getDoc, collection, query, where, getDocs, updateDoc, onSnapshot, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, onSnapshot, addDoc, deleteDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { storage } from '../../firebase';
 import { useAlert } from '../../context/AlertContext';
 
 const { width, height } = Dimensions.get('window');
@@ -37,6 +39,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const [eventImage, setEventImage] = useState(null); // Add state for event image
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null); 
+  const [selectedPhoto, setSelectedPhoto] = useState(null); // Add this to track the full photo object
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('person');
   const [activeTab, setActiveTab] = useState('gallery');
@@ -721,7 +724,119 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       }
     }, [eventId, selectedCategory])
   );
-  
+
+  // New function to delete a photo
+  const deletePhoto = async (photoId, imageUrl) => {
+    try {
+      // Delete from Firestore
+      const photoRef = doc(db, 'photos_tbl', photoId);
+      await deleteDoc(photoRef);
+
+      // Delete from Firebase Storage if it's a Firebase Storage URL
+      if (imageUrl && imageUrl.includes('firebase')) {
+        try {
+          // Extract the file path from the Firebase Storage URL
+          const urlParts = imageUrl.split('/o/');
+          if (urlParts.length >= 2) {
+            const pathPart = urlParts[1].split('?')[0];
+            const filePath = decodeURIComponent(pathPart);
+            
+            // Create reference to the image and delete it
+            const imageRef = ref(storage, filePath);
+            await deleteObject(imageRef);
+            console.log('Image deleted from storage:', filePath);
+          }
+        } catch (storageError) {
+          console.error('Error deleting image from storage:', storageError);
+          // Don't throw error as Firestore deletion was successful
+        }
+      }
+
+      // Refresh the photos list
+      fetchMyPhotos();
+      
+      return true;
+    } catch (error) {
+      console.error('Error deleting photo:', error);
+      throw error;
+    }
+  };
+
+  // Function to handle photo deletion with confirmation
+  const handleDeletePhoto = (photo) => {
+    showConfirm(
+      'Delete Photo? 🗑️',
+      `Are you sure you want to delete this photo?\n\n📸 Uploaded by: ${photo.username}\n🕒 Uploaded: ${photo.uploadedAt ? new Date(photo.uploadedAt.toDate()).toLocaleDateString() : 'Unknown'}\n\n⚠️ This action cannot be undone.\n🔄 The photo will be permanently removed from the event.`,
+      async () => {
+        setLoading(true);
+        
+        try {
+          await deletePhoto(photo.id, photo.imageUrl);
+          
+          showSuccess(
+            'Photo Deleted Successfully! ✅',
+            'Your photo has been permanently removed from the event gallery.',
+            () => {
+              console.log('Photo deletion completed');
+            }
+          );
+          
+        } catch (error) {
+          console.error('Delete photo error:', error);
+          
+          if (error.code === 'permission-denied') {
+            showError(
+              'Permission Denied',
+              'You don\'t have permission to delete this photo. Only the photo owner can delete their photos.',
+              () => handleDeletePhoto(photo),
+              () => {}
+            );
+          } else if (error.code === 'not-found') {
+            showError(
+              'Photo Not Found',
+              'This photo has already been deleted or doesn\'t exist. The gallery will be refreshed.',
+              () => fetchMyPhotos(),
+              () => {}
+            );
+          } else if (error.message.includes('network')) {
+            showError(
+              'Network Error',
+              'Unable to delete the photo due to network issues. Please check your internet connection and try again.',
+              () => handleDeletePhoto(photo),
+              () => {}
+            );
+          } else {
+            showError(
+              'Delete Failed',
+              'There was an error deleting your photo. Please try again or contact support if the problem persists.',
+              () => handleDeletePhoto(photo),
+              () => {}
+            );
+          }
+        } finally {
+          setLoading(false);
+        }
+      },
+      () => {
+        console.log('Photo deletion cancelled');
+      }
+    );
+  };
+
+  // Function to check if current user can delete a photo
+  const canDeletePhoto = (photo) => {
+    const currentUser = auth.currentUser;
+    
+    if (currentUser) {
+      // Authenticated user - can delete their own photos
+      return photo.userId === currentUser.uid;
+    } else if (guestUsername) {
+      // Guest user - can delete photos they uploaded as guest
+      return photo.isGuest && photo.guestUsername === guestUsername;
+    }
+    
+    return false;
+  };
 
   const handleCategoryChange = (category) => {
     setSelectedCategory(category);
@@ -743,8 +858,9 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   }
 
   // Handle the image click
-  const handleImageClick = (imageUrl) => {
-    setSelectedImage(imageUrl);
+  const handleImageClick = (photo) => {
+    setSelectedImage(photo.imageUrl);
+    setSelectedPhoto(photo); // Store the full photo object
     setIsModalVisible(true);
   };
 
@@ -752,6 +868,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const closeModal = () => {
     setIsModalVisible(false);
     setSelectedImage(null);
+    setSelectedPhoto(null); // Clear the photo object
   };
 
   // Handle tab changes
@@ -786,7 +903,12 @@ export default function JoinEventScreenTwo({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      <HeaderBar navigation={navigation} showBack={true} />
+      <HeaderBar 
+        navigation={navigation} 
+        showBack={false}
+        showDashboard={true}
+        guestUsername={guestUsername}
+      />
 
       <Animated.ScrollView 
         contentContainerStyle={styles.scrollContent}
@@ -1040,11 +1162,13 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                         const currentPhoto = images[photoIndex];
                         if (!currentPhoto) return null;
                         
+                        const showDeleteButton = selectedCategory === 'group' && canDeletePhoto(currentPhoto);
+                        
                         return (
                           <TouchableOpacity
                             key={`image-${currentPhoto.id}`}
                             style={styles.instaEqualImage}
-                            onPress={() => handleImageClick(currentPhoto.imageUrl)}
+                            onPress={() => handleImageClick(currentPhoto)}
                           >
                             <Image 
                               source={{ uri: currentPhoto.imageUrl }} 
@@ -1055,6 +1179,19 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                               <View style={styles.filterBadge}>
                                 <Text style={styles.filterBadgeText}>{currentPhoto.filterName}</Text>
                               </View>
+                            )}
+                            {showDeleteButton && (
+                              <TouchableOpacity
+                                style={styles.deleteButton}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  handleDeletePhoto(currentPhoto);
+                                }}
+                              >
+                                <View style={styles.deleteButtonBackground}>
+                                  <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+                                </View>
+                              </TouchableOpacity>
                             )}
                           </TouchableOpacity>
                         );
@@ -1083,7 +1220,42 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
             <Ionicons name="close" size={24} color="#fff" />
           </TouchableOpacity>
+          
+          {/* Delete button - only show if user can delete this photo */}
+          {selectedPhoto && canDeletePhoto(selectedPhoto) && (
+            <TouchableOpacity 
+              style={styles.modalDeleteButton} 
+              onPress={() => {
+                closeModal();
+                handleDeletePhoto(selectedPhoto);
+              }}
+            >
+              <View style={styles.modalDeleteButtonBackground}>
+                <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
+          )}
+          
           <Image source={{ uri: selectedImage }} style={styles.modalImage} />
+          
+          {/* Photo info overlay */}
+          {selectedPhoto && (
+            <View style={styles.modalInfoOverlay}>
+              <Text style={styles.modalPhotoInfo}>
+                📸 {selectedPhoto.username}
+              </Text>
+              {selectedPhoto.uploadedAt && (
+                <Text style={styles.modalPhotoDate}>
+                  🕒 {new Date(selectedPhoto.uploadedAt.toDate()).toLocaleDateString()}
+                </Text>
+              )}
+              {selectedPhoto.filterName && selectedPhoto.filterName !== 'None' && (
+                <Text style={styles.modalPhotoFilter}>
+                  🎨 {selectedPhoto.filterName}
+                </Text>
+              )}
+            </View>
+          )}
           
           <View style={styles.modalControls}>
             <TouchableOpacity style={styles.modalControlButton}>
@@ -1120,10 +1292,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
-    paddingTop: 104,
   },
   scrollContent: {
-    paddingTop: 10,
+    paddingTop: 30,
   },
   // Cover Image Styles
   coverContainer: {
@@ -1577,5 +1748,71 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  // Delete Button Styles
+  deleteButton: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    zIndex: 10,
+  },
+  deleteButtonBackground: {
+    backgroundColor: 'rgba(255, 59, 48, 0.9)',
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  // Modal Delete Button Styles
+  modalDeleteButton: {
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    zIndex: 15,
+  },
+  modalDeleteButtonBackground: {
+    backgroundColor: 'rgba(255, 59, 48, 0.9)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  // Modal Info Overlay Styles
+  modalInfoOverlay: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  modalPhotoInfo: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  modalPhotoDate: {
+    color: '#CCCCCC',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  modalPhotoFilter: {
+    color: '#FFD700',
+    fontSize: 12,
+    fontStyle: 'italic',
   },
 });

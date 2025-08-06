@@ -506,7 +506,12 @@ export default function JoinEventSettings({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      <HeaderBar navigation={navigation} showBack={false} />
+      <HeaderBar 
+        navigation={navigation} 
+        showBack={false}
+        showDashboard={true}
+        guestUsername={guestUsername}
+      />
       
       {/* Background Elements */}
       <View style={styles.backgroundElements}>
@@ -936,7 +941,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingTop: 104,
+    paddingTop: 20,
     paddingHorizontal: 24,
   },
   header: {
