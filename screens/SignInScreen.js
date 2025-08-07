@@ -90,17 +90,16 @@ export default function SignInScreen({ navigation }) {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       
-      // Show success message and navigate
+      // Navigate immediately after successful authentication
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Tabs' }],
+      });
+      
+      // Show success message without navigation callback
       showSuccess(
         'Welcome Back!',
-        'Successfully signed in to your account.',
-        () => {
-          // Use navigation.reset to prevent going back to SignIn
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Tabs' }],
-          });
-        }
+        'Successfully signed in to your account.'
       );
       
     } catch (error) {

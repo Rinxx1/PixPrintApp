@@ -556,7 +556,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         
         // Set event image - use uploaded image or default
         if (eventData.event_photo_url && eventData.event_photo_url.trim() !== '') {
-          setEventImage({ uri: eventData.event_photo_url });
+          setEventImage({ uri: optimizeImageUrl(eventData.event_photo_url, 'thumbnail') });
         } else {
           setEventImage(require('../../assets/avatar.png'));
         }
@@ -842,51 +842,188 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     setSelectedCategory(category);
   };
 
-  // Determine which set of images to display based on selected category
-  let images = [];
-  let galleryTitle = '';
+  // Add image optimization utilities
+  const optimizeImageUrl = (originalUrl, quality = 'thumbnail') => {
+    if (!originalUrl || typeof originalUrl !== 'string') return originalUrl;
+    
+    // For Firebase Storage URLs, add quality parameters
+    if (originalUrl.includes('firebasestorage.googleapis.com')) {
+      const url = new URL(originalUrl);
+      
+      // Add compression parameters based on quality level
+      switch (quality) {
+        case 'thumbnail':
+          // For grid thumbnails - very fast loading
+          return url.toString() + '&w=200&h=200&fit=crop&auto=compress&q=20';
+        case 'high':
+          return originalUrl; // Return original for high quality modal view
+        default:
+          return originalUrl;
+      }
+    }
+    
+    return originalUrl;
+  };
 
-  if (selectedCategory === 'person') {
-    images = eventPhotos;
-    galleryTitle = 'All Photos';
-  } else if (selectedCategory === 'camera') {
-    images = photographerPhotos; // Use real photographer photos instead of static data
-    galleryTitle = 'Photographer';
-  } else if (selectedCategory === 'group') {
-    images = myPhotos;
-    galleryTitle = 'My Photos';
-  }
+  // Add optimized grid image component
+  const OptimizedGridImage = ({ photo, style, onPress }) => {
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
+    const fadeAnim = useState(new Animated.Value(0))[0];
 
-  // Handle the image click
+    const handleLoadEnd = () => {
+      setLoading(false);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    const handleError = () => {
+      setError(true);
+      setLoading(false);
+    };
+
+    return (
+      <TouchableOpacity style={style} onPress={onPress}>
+        {/* Placeholder while loading */}
+        {loading && (
+          <View style={[style, styles.imagePlaceholder]}>
+            <Ionicons name="image-outline" size={20} color="#DDD" />
+          </View>
+        )}
+        
+        {/* Optimized thumbnail image */}
+        <Animated.View style={[style, { opacity: fadeAnim }]}>
+          <Image
+            source={{ 
+              uri: error ? null : optimizeImageUrl(photo.imageUrl, 'thumbnail'),
+              cache: 'force-cache'
+            }}
+            style={styles.eventImage}
+            onLoadEnd={handleLoadEnd}
+            onError={handleError}
+            resizeMode="cover"
+            // Performance optimizations
+            fadeDuration={0}
+            progressiveRenderingEnabled={true}
+            removeClippedSubviews={true}
+          />
+        </Animated.View>
+        
+        {/* Error fallback */}
+        {error && (
+          <View style={[style, styles.imageError]}>
+            <Ionicons name="image-outline" size={20} color="#999" />
+            <Text style={styles.errorText}>Failed to load</Text>
+          </View>
+        )}
+        
+        {/* Filter badge */}
+        {photo.filterName && photo.filterName !== 'None' && (
+          <View style={styles.filterBadge}>
+            <Text style={styles.filterBadgeText}>{photo.filterName}</Text>
+          </View>
+        )}
+        
+        {/* Delete button for user's own photos */}
+        {selectedCategory === 'group' && canDeletePhoto(photo) && (
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDeletePhoto(photo);
+            }}
+          >
+            <View style={styles.deleteButtonBackground}>
+              <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  // Add high-quality modal image component
+  const HighQualityModalImage = ({ imageUrl, style }) => {
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
+    const fadeAnim = useState(new Animated.Value(0))[0];
+
+    const handleLoadEnd = () => {
+      setLoading(false);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    const handleError = () => {
+      setError(true);
+      setLoading(false);
+    };
+
+    return (
+      <View style={style}>
+        {/* Simple loading indicator */}
+        {loading && (
+          <View style={[style, styles.modalImageLoading]}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+          </View>
+        )}
+        
+        {/* High-quality image */}
+        <Animated.View style={[style, { opacity: fadeAnim }]}>
+          <Image
+            source={{ 
+              uri: error ? null : optimizeImageUrl(imageUrl, 'high'), // Original quality
+              cache: 'web'
+            }}
+            style={style}
+            onLoadEnd={handleLoadEnd}
+            onError={handleError}
+            resizeMode="contain"
+            progressiveRenderingEnabled={true}
+          />
+        </Animated.View>
+        
+        {/* Error fallback for modal */}
+        {error && (
+          <View style={[style, styles.modalImageError]}>
+            <Ionicons name="alert-circle-outline" size={48} color="#FFFFFF" />
+            <Text style={styles.modalErrorText}>Unable to load image</Text>
+            <Text style={styles.modalErrorSubtext}>Network error or file corrupted</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  // Add these computed values before the render section
+  const galleryTitle = selectedCategory === 'person' ? 'All Photos' : 
+                      selectedCategory === 'group' ? 'My Photos' : 
+                      'Photographer Photos';
+
+  const images = selectedCategory === 'person' ? eventPhotos : 
+                selectedCategory === 'group' ? myPhotos : 
+                photographerPhotos;
+
   const handleImageClick = (photo) => {
     setSelectedImage(photo.imageUrl);
-    setSelectedPhoto(photo); // Store the full photo object
+    setSelectedPhoto(photo);
     setIsModalVisible(true);
   };
 
-  // Close the modal
   const closeModal = () => {
     setIsModalVisible(false);
     setSelectedImage(null);
-    setSelectedPhoto(null); // Clear the photo object
+    setSelectedPhoto(null);
   };
 
-  // Handle tab changes
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    
-    // Pass guest info when navigating
-    if (tab === 'camera') {
-      navigation.navigate('Camera', { 
-        eventId, 
-        username: guestUsername 
-      });
-    } else if (tab === 'settings') {
-      navigation.navigate('JoinEventSettings', { 
-        eventId, 
-        username: guestUsername 
-      });
-    }
   };
 
   // Get current event status
@@ -1146,7 +1283,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           </View>
         )}
 
-        {/* Image Gallery Grid - Instagram Style */}
+        {/* Image Gallery Grid - Instagram Style with Optimized Images */}
         {images.length > 0 && (
           <View style={styles.instaGrid}>
             {(selectedCategory === 'person' || selectedCategory === 'group' || selectedCategory === 'camera') ? (
@@ -1162,38 +1299,13 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                         const currentPhoto = images[photoIndex];
                         if (!currentPhoto) return null;
                         
-                        const showDeleteButton = selectedCategory === 'group' && canDeletePhoto(currentPhoto);
-                        
                         return (
-                          <TouchableOpacity
+                          <OptimizedGridImage
                             key={`image-${currentPhoto.id}`}
+                            photo={currentPhoto}
                             style={styles.instaEqualImage}
                             onPress={() => handleImageClick(currentPhoto)}
-                          >
-                            <Image 
-                              source={{ uri: currentPhoto.imageUrl }} 
-                              style={styles.eventImage} 
-                              resizeMode="cover"
-                            />
-                            {currentPhoto.filterName && currentPhoto.filterName !== 'None' && (
-                              <View style={styles.filterBadge}>
-                                <Text style={styles.filterBadgeText}>{currentPhoto.filterName}</Text>
-                              </View>
-                            )}
-                            {showDeleteButton && (
-                              <TouchableOpacity
-                                style={styles.deleteButton}
-                                onPress={(e) => {
-                                  e.stopPropagation();
-                                  handleDeletePhoto(currentPhoto);
-                                }}
-                              >
-                                <View style={styles.deleteButtonBackground}>
-                                  <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
-                                </View>
-                              </TouchableOpacity>
-                            )}
-                          </TouchableOpacity>
+                          />
                         );
                       })}
                     </View>
@@ -1221,22 +1333,13 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             <Ionicons name="close" size={24} color="#fff" />
           </TouchableOpacity>
           
-          {/* Delete button - only show if user can delete this photo */}
-          {selectedPhoto && canDeletePhoto(selectedPhoto) && (
-            <TouchableOpacity 
-              style={styles.modalDeleteButton} 
-              onPress={() => {
-                closeModal();
-                handleDeletePhoto(selectedPhoto);
-              }}
-            >
-              <View style={styles.modalDeleteButtonBackground}>
-                <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
-              </View>
-            </TouchableOpacity>
+          {/* High-quality modal image */}
+          {selectedImage && (
+            <HighQualityModalImage
+              imageUrl={selectedImage}
+              style={styles.modalImage}
+            />
           )}
-          
-          <Image source={{ uri: selectedImage }} style={styles.modalImage} />
           
           {/* Photo info overlay */}
           {selectedPhoto && (
@@ -1254,6 +1357,9 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                   🎨 {selectedPhoto.filterName}
                 </Text>
               )}
+              <Text style={styles.modalQualityText}>
+                High Quality • Original Resolution
+              </Text>
             </View>
           )}
           
@@ -1271,6 +1377,19 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             <TouchableOpacity style={styles.modalControlButton}>
               <Ionicons name="download-outline" size={24} color="#fff" />
             </TouchableOpacity>
+            
+            {/* Delete button - only show if user can delete this photo and place with other controls */}
+            {selectedPhoto && canDeletePhoto(selectedPhoto) && (
+              <TouchableOpacity 
+                style={[styles.modalControlButton, styles.modalDeleteButton]}
+                onPress={() => {
+                  closeModal();
+                  handleDeletePhoto(selectedPhoto);
+                }}
+              >
+                <Ionicons name="trash-outline" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </Modal>
@@ -1736,83 +1855,52 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '500',
   },
-  // Create Account Button Styles
-  createAccountButton: {
-    backgroundColor: '#4CAF50',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 25,
-    marginTop: 16,
-  },
-  createAccountButtonText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  // Delete Button Styles
-  deleteButton: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    zIndex: 10,
-  },
-  deleteButtonBackground: {
-    backgroundColor: 'rgba(255, 59, 48, 0.9)',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
+  
+  // Modal image loading styles
+  modalImageLoading: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  // Modal Delete Button Styles
-  modalDeleteButton: {
     position: 'absolute',
-    top: 40,
-    left: 20,
-    zIndex: 15,
-  },
-  modalDeleteButtonBackground: {
-    backgroundColor: 'rgba(255, 59, 48, 0.9)',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  // Modal Info Overlay Styles
-  modalInfoOverlay: {
-    position: 'absolute',
-    bottom: 100,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     borderRadius: 12,
-    padding: 12,
   },
-  modalPhotoInfo: {
+  modalImageError: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 12,
+  },
+  modalErrorText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    marginBottom: 4,
+    marginTop: 16,
+    textAlign: 'center',
   },
-  modalPhotoDate: {
+  modalErrorSubtext: {
     color: '#CCCCCC',
     fontSize: 12,
-    marginBottom: 2,
+    marginTop: 8,
+    textAlign: 'center',
   },
-  modalPhotoFilter: {
-    color: '#FFD700',
-    fontSize: 12,
+  modalQualityText: {
+    color: '#4CAF50',
+    fontSize: 11,
+    marginTop: 4,
     fontStyle: 'italic',
+  },
+
+  // Modal Delete Button Styles - Reverted to align with other controls
+  modalDeleteButton: {
+    backgroundColor: 'rgba(255, 59, 48, 0.8)',
   },
 });

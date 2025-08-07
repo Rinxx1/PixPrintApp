@@ -387,13 +387,154 @@ export default function GalleryScreen({ navigation }) {
     setSelectedPhotos(new Set());
   };
 
+  // Add image optimization utilities
+  const optimizeImageUrl = (originalUrl, quality = 'thumbnail') => {
+    if (!originalUrl || typeof originalUrl !== 'string') return originalUrl;
+    
+    // For Firebase Storage URLs, add quality parameters
+    if (originalUrl.includes('firebasestorage.googleapis.com')) {
+      const url = new URL(originalUrl);
+      
+      // Add compression parameters based on quality level
+      switch (quality) {
+        case 'thumbnail':
+          // For grid thumbnails - very fast loading
+          return url.toString() + '&w=200&h=200&fit=crop&auto=compress&q=20';
+        case 'medium':
+          // For larger previews - balanced quality
+          return url.toString() + '&w=400&h=400&fit=crop&auto=compress&q=70';
+        case 'high':
+          return originalUrl; // Return original for high quality modal view
+        default:
+          return originalUrl;
+      }
+    }
+    
+    return originalUrl;
+  };
+
+  // Add progressive image loading component for grid items
+  const OptimizedGridImage = ({ imageUrl, style, onPress }) => {
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
+    const fadeAnim = useState(new Animated.Value(0))[0];
+
+    const handleLoadEnd = () => {
+      setLoading(false);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    const handleError = () => {
+      setError(true);
+      setLoading(false);
+    };
+
+    return (
+      <TouchableOpacity style={style} onPress={onPress}>
+        {/* Placeholder while loading */}
+        {loading && (
+          <View style={[style, styles.imagePlaceholder]}>
+            <Ionicons name="image-outline" size={20} color="#DDD" />
+          </View>
+        )}
+        
+        {/* Optimized thumbnail image */}
+        <Animated.View style={[style, { opacity: fadeAnim }]}>
+          <Image
+            source={{ 
+              uri: error ? null : optimizeImageUrl(imageUrl, 'thumbnail'),
+              cache: 'force-cache'
+            }}
+            style={style}
+            onLoadEnd={handleLoadEnd}
+            onError={handleError}
+            resizeMode="cover"
+            // Performance optimizations
+            fadeDuration={0}
+            progressiveRenderingEnabled={true}
+            removeClippedSubviews={true}
+          />
+        </Animated.View>
+        
+        {/* Error fallback */}
+        {error && (
+          <View style={[style, styles.imageError]}>
+            <Ionicons name="image-outline" size={20} color="#999" />
+            <Text style={styles.errorText}>Failed to load</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  // Simplified modal image component without high-quality loading
+  const HighQualityModalImage = ({ imageUrl, style }) => {
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
+    const fadeAnim = useState(new Animated.Value(0))[0];
+
+    const handleLoadEnd = () => {
+      setLoading(false);
+      // Fade in image
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    const handleError = () => {
+      setError(true);
+      setLoading(false);
+    };
+
+    return (
+      <View style={style}>
+        {/* Simple loading indicator */}
+        {loading && (
+          <View style={[style, styles.modalImageLoading]}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+          </View>
+        )}
+        
+        {/* High-quality image */}
+        <Animated.View style={[style, { opacity: fadeAnim }]}>
+          <Image
+            source={{ 
+              uri: error ? null : optimizeImageUrl(imageUrl, 'high'), // Original quality
+              cache: 'web'
+            }}
+            style={style}
+            onLoadEnd={handleLoadEnd}
+            onError={handleError}
+            resizeMode="contain"
+            progressiveRenderingEnabled={true}
+          />
+        </Animated.View>
+        
+        {/* Error fallback for modal */}
+        {error && (
+          <View style={[style, styles.modalImageError]}>
+            <Ionicons name="alert-circle-outline" size={48} color="#FFFFFF" />
+            <Text style={styles.modalErrorText}>Unable to load image</Text>
+            <Text style={styles.modalErrorSubtext}>Network error or file corrupted</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderGridItem = ({ item, index }) => {
     const imageSize = getImageSize();
     const isLarge = viewMode === 'list' && index % 5 === 0;
     const isSelected = selectedPhotos.has(item.id);
     
     return (
-      <TouchableOpacity 
+      <View
         style={[
           styles.imageWrapper,
           {
@@ -403,15 +544,26 @@ export default function GalleryScreen({ navigation }) {
           },
           isSelected && styles.selectedImageWrapper
         ]}
-        onPress={() => openImageModal(item, index)}
-        onLongPress={() => {
-          if (!selectionMode) {
-            setSelectionMode(true);
-            togglePhotoSelection(item.id);
-          }
-        }}
       >
-        <Image source={{ uri: item.imageUrl }} style={styles.image} />
+        {/* Use optimized grid image component */}
+        <OptimizedGridImage
+          imageUrl={item.imageUrl}
+          style={styles.image}
+          onPress={() => openImageModal(item, index)}
+        />
+        
+        {/* Long press handler overlay */}
+        <TouchableOpacity
+          style={styles.touchOverlay}
+          onPress={() => openImageModal(item, index)}
+          onLongPress={() => {
+            if (!selectionMode) {
+              setSelectionMode(true);
+              togglePhotoSelection(item.id);
+            }
+          }}
+          activeOpacity={1}
+        />
         
         {/* Selection overlay */}
         {selectionMode && (
@@ -463,7 +615,7 @@ export default function GalleryScreen({ navigation }) {
             </View>
           </LinearGradient>
         )}
-      </TouchableOpacity>
+      </View>
     );
   };
 
@@ -707,7 +859,7 @@ export default function GalleryScreen({ navigation }) {
         )}
       </ScrollView>
 
-      {/* Image Modal */}
+      {/* Enhanced Image Modal with High Quality Loading */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -720,7 +872,11 @@ export default function GalleryScreen({ navigation }) {
             <View style={styles.modalContent}>
               {selectedImage && (
                 <>
-                  <Image source={{ uri: selectedImage.photo.imageUrl }} style={styles.modalImage} />
+                  {/* High-quality modal image */}
+                  <HighQualityModalImage
+                    imageUrl={selectedImage.photo.imageUrl}
+                    style={styles.modalImage}
+                  />
                   
                   {/* Photo info */}
                   <View style={styles.modalInfo}>
@@ -1210,5 +1366,80 @@ const styles = StyleSheet.create({
   },
   modalDeleteButton: {
     backgroundColor: 'rgba(255, 59, 48, 0.8)',
+  },
+  
+  // Optimized image styles
+  imagePlaceholder: {
+    backgroundColor: '#F8F9FA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
+  },
+  imageError: {
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
+  },
+  errorText: {
+    fontSize: 10,
+    color: '#999',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  touchOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
+  },
+  
+  // Modal image loading styles - simplified
+  modalImageLoading: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 12,
+  },
+  modalImageError: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 12,
+  },
+  modalErrorText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  modalErrorSubtext: {
+    color: '#CCCCCC',
+    fontSize: 12,
+    marginTop: 8,
+    textAlign: 'center',
   },
 });

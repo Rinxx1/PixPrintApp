@@ -84,7 +84,113 @@ export default function DashboardScreen({ navigation, route }) {
     return null;
   };
 
-  // Updated fetchCreatedEvents function without attendee count
+  // Updated image optimization utilities for all image types
+  const optimizeImageUrl = (originalUrl, quality = 'low') => {
+    if (!originalUrl || typeof originalUrl !== 'string') return originalUrl;
+    
+    // For Firebase Storage URLs, add quality parameters
+    if (originalUrl.includes('firebasestorage.googleapis.com')) {
+      const url = new URL(originalUrl);
+      
+      // Add compression parameters based on quality level
+      switch (quality) {
+        case 'low':
+          // For very fast loading - dashboard optimized
+          return url.toString() + '&w=150&h=150&fit=crop&auto=compress&q=20';
+        case 'profile':
+          // For profile images - small and fast
+          return url.toString() + '&w=100&h=100&fit=crop&auto=compress&q=40';
+        case 'event_thumb':
+          // For event thumbnails in cards
+          return url.toString() + '&w=200&h=150&fit=crop&auto=compress&q=35';
+        case 'medium':
+          url.searchParams.set('alt', 'media');
+          url.searchParams.set('token', url.searchParams.get('token') || '');
+          // For balanced loading - medium quality
+          return url.toString() + '&w=300&h=300&fit=crop&auto=compress&q=60';
+        case 'high':
+          return originalUrl; // Return original for high quality
+        default:
+          return originalUrl;
+      }
+    }
+    
+    return originalUrl;
+  };
+
+  // Updated helper function to get optimized profile image source
+  const getProfileImageSource = () => {
+    if (userProfileUrl && userProfileUrl.trim() !== '') {
+      return { 
+        uri: optimizeImageUrl(userProfileUrl, 'low'),
+        cache: 'force-cache'
+      };
+    }
+    return require('../../assets/avatar.png');
+  };
+
+  // Updated function to get optimized event image source
+  const getEventImageSource = (event) => {
+    if (event.image && event.image.uri) {
+      return {
+        uri: optimizeImageUrl(event.image.uri, 'low'), // Use event_thumb quality
+        cache: 'force-cache' // Enable caching
+      };
+    }
+    return require('../../assets/event-wedding.png');
+  };
+
+  // Add progressive image loading component
+  const ProgressiveImage = ({ source, style, fallbackSource, onLoadEnd }) => {
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
+    const fadeAnim = useState(new Animated.Value(0))[0];
+
+    const handleLoadEnd = () => {
+      setLoading(false);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+      if (onLoadEnd) onLoadEnd();
+    };
+
+    const handleError = () => {
+      setError(true);
+      setLoading(false);
+      if (onLoadEnd) onLoadEnd();
+    };
+
+    return (
+      <View style={style}>
+        {/* Placeholder while loading */}
+        {loading && (
+          <View style={[style, styles.imagePlaceholder]}>
+            <Ionicons name="image-outline" size={24} color="#DDD" />
+          </View>
+        )}
+        
+        {/* Actual image */}
+        <Animated.View style={[style, { opacity: fadeAnim }]}>
+          <Image
+            source={error ? fallbackSource : source}
+            style={style}
+            onLoadEnd={handleLoadEnd}
+            onError={handleError}
+            resizeMode="cover"
+            // Add performance optimizations
+            fadeDuration={200}
+            progressiveRenderingEnabled={true}
+            // Reduce memory usage
+            removeClippedSubviews={true}
+          />
+        </Animated.View>
+      </View>
+    );
+  };
+
+  // Enhanced fetch function with image optimization
   const fetchCreatedEvents = async () => {
     try {
       const user = auth.currentUser;
@@ -151,18 +257,25 @@ export default function DashboardScreen({ navigation, route }) {
             dateRange: dateRangeText,
             code: data.event_code,
             description: data.event_description || 'No description available',
+            // Optimize image handling
             image: data.event_photo_url && data.event_photo_url.trim() !== '' 
-              ? { uri: data.event_photo_url } 
+              ? { 
+                  uri: data.event_photo_url,
+                  originalUri: data.event_photo_url // Keep original for high-res viewing
+                } 
               : require('../../assets/event-wedding.png'),
+            // Add loading optimization flags
+            imageLoaded: false,
+            imageError: false,
           });
         });
         
-        return events; // Make sure to return the events array
+        return events;
       }
-      return []; // Return empty array if no user
+      return [];
     } catch (error) {
       console.error("Error fetching created events:", error);
-      return []; // Return empty array on error
+      return [];
     }
   };
 
@@ -171,7 +284,7 @@ export default function DashboardScreen({ navigation, route }) {
     try {
       const user = auth.currentUser;
       if (user) {
-        console.log(`Fetching joined events for user: ${user.uid} (attempt ${retryCount + 1})`);
+        //console.log(`Fetching joined events for user: ${user.uid} (attempt ${retryCount + 1})`);
         
         const joinedRef = collection(db, 'joined_tbl');
         const q = query(
@@ -181,7 +294,7 @@ export default function DashboardScreen({ navigation, route }) {
         );
         
         const querySnapshot = await getDocs(q);
-        console.log(`Found ${querySnapshot.size} joined events for user ${user.uid}`);
+        //console.log(`Found ${querySnapshot.size} joined events for user ${user.uid}`);
 
         const eventPromises = [];
         
@@ -242,12 +355,19 @@ export default function DashboardScreen({ navigation, route }) {
                   dateRange: dateRangeText,
                   code: eventData.event_code,
                   description: eventData.event_description || 'No description available',
+                  // Optimize image handling
                   image: eventData.event_photo_url && eventData.event_photo_url.trim() !== '' 
-                    ? { uri: eventData.event_photo_url } 
+                    ? { 
+                        uri: eventData.event_photo_url,
+                        originalUri: eventData.event_photo_url
+                      } 
                     : require('../../assets/event-wedding.png'),
                   joinedId: joinedDoc.id,
                   // Mark if this was converted from guest
-                  wasGuest: joinedData.converted_from_guest || false
+                  wasGuest: joinedData.converted_from_guest || false,
+                  // Add loading optimization flags
+                  imageLoaded: false,
+                  imageError: false,
                 };
               }
               return null;
@@ -263,7 +383,7 @@ export default function DashboardScreen({ navigation, route }) {
         const eventResults = await Promise.all(eventPromises);
         const validEvents = eventResults.filter(event => event !== null);
         
-        console.log(`Successfully loaded ${validEvents.length} joined events`);
+        //console.log(`Successfully loaded ${validEvents.length} joined events`);
         return validEvents;
       }
       return [];
@@ -288,7 +408,7 @@ export default function DashboardScreen({ navigation, route }) {
     }
     
     try {
-      console.log(`Fetching all data - isNewUser: ${isNewUser}, wasAccountJustCreated: ${wasAccountJustCreated}`);
+      //console.log(`Fetching all data - isNewUser: ${isNewUser}, wasAccountJustCreated: ${wasAccountJustCreated}`);
       
       // For newly converted users, add a small delay to ensure Firebase sync
       if (isNewUser || wasAccountJustCreated || forceRefresh) {
@@ -309,7 +429,7 @@ export default function DashboardScreen({ navigation, route }) {
       setCreatedEvents(safeCreatedEvents);
       setJoinedEvents(safeJoinedEvents);
       
-      console.log(`Data fetched - Created: ${safeCreatedEvents.length}, Joined: ${safeJoinedEvents.length}`);
+      //console.log(`Data fetched - Created: ${safeCreatedEvents.length}, Joined: ${safeJoinedEvents.length}`);
       
       // If this was a converted user and we got joined events, show success message
       if ((wasAccountJustCreated || forceRefresh) && safeJoinedEvents.length > 0) {
@@ -696,14 +816,6 @@ export default function DashboardScreen({ navigation, route }) {
     );
   }
 
-  // Helper function to get profile image source
-  const getProfileImageSource = () => {
-    if (userProfileUrl && userProfileUrl.trim() !== '') {
-      return { uri: userProfileUrl };
-    }
-    return require('../../assets/avatar.png');
-  };
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8F9FA" />
@@ -752,9 +864,10 @@ export default function DashboardScreen({ navigation, route }) {
                 <Text style={styles.welcomeSubtext}>Ready to capture more memories?</Text>
               </View>
               <View style={styles.avatarContainer}>
-                <Image 
-                  source={getProfileImageSource()} 
-                  style={styles.avatarLarge} 
+                <ProgressiveImage
+                  source={getProfileImageSource()}
+                  style={styles.avatarLarge}
+                  fallbackSource={require('../../assets/avatar.png')}
                 />
                 <View style={styles.statusDot}></View>
               </View>
@@ -876,7 +989,7 @@ export default function DashboardScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
 
-        {/* Events List */}
+        {/* Events List with optimized images */}
         <View style={styles.eventsContainer}>
           {getDisplayedEvents().length === 0 ? (
             <View style={styles.noEventsContainer}>
@@ -906,11 +1019,18 @@ export default function DashboardScreen({ navigation, route }) {
                 style={styles.eventCard}
                 onPress={() => navigation.navigate('JoinEventTwo', { eventId: event.id })}
               >
-                <ImageBackground 
-                  source={event.image} 
-                  style={styles.eventImageBackground}
-                  imageStyle={styles.eventImageStyle}
-                >
+                {/* Optimized image background with event_thumb quality */}
+                <View style={styles.eventImageContainer}>
+                  <ProgressiveImage
+                    source={getEventImageSource(event)}
+                    style={styles.eventImageBackground}
+                    fallbackSource={require('../../assets/event-wedding.png')}
+                    onLoadEnd={() => {
+                      // Mark this specific event image as loaded for potential state updates
+                      console.log(`Event image loaded for: ${event.name}`);
+                    }}
+                  />
+                  
                   <LinearGradient
                     colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.7)']}
                     style={styles.eventGradient}
@@ -921,7 +1041,7 @@ export default function DashboardScreen({ navigation, route }) {
                       </Text>
                     </View>
                   </LinearGradient>
-                </ImageBackground>
+                </View>
                 
                 <View style={styles.eventContent}>
                   <View style={styles.eventHeader}>
@@ -1108,8 +1228,8 @@ const styles = StyleSheet.create({
   avatarLarge: {
     width: 60,
     height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
+    borderRadius: 50,
+    borderWidth: 1,
     borderColor: 'white',
   },
   statusDot: {
@@ -1277,18 +1397,40 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
-  eventImageBackground: {
+  eventImageContainer: {
     height: 140,
+    backgroundColor: '#F8F9FA', // Placeholder background
+    position: 'relative',
   },
-  eventImageStyle: {
+  eventImageBackground: {
+    width: '100%',
+    height: '100%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  imagePlaceholder: {
+    backgroundColor: '#F8F9FA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
   eventGradient: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'flex-start',
     alignItems: 'flex-start',
     padding: 12,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   eventTypeTag: {
     backgroundColor: 'rgba(255, 255, 255, 0.85)',

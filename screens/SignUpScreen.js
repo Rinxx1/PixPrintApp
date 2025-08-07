@@ -315,25 +315,24 @@ export default function SignUpScreen({ route, navigation }) {
       // Mark that account was just created (instead of signing out)
       markAccountCreated();
 
-      // Show success message and navigate directly to Dashboard
+      // Navigate directly to Dashboard first (before showing alert)
+      navigation.reset({
+        index: 0,
+        routes: [{ 
+          name: 'Tabs',
+          params: { 
+            screen: 'Dashboard',
+            params: { fromAccountCreation: true }
+          }
+        }],
+      });
+
+      // Show success message without navigation callback
       showSuccess(
         guestUsername ? 'Account Converted Successfully! 🎉' : 'Welcome to PixPrint! 🎉',
         guestUsername ? 
           `Your account is now ready!\n\n✅ ${firstName} ${lastName}\n📧 ${email}\n🎉 Events and photos are saved\n\nYou're signed in—explore your dashboard!` :
-          `Welcome to PixPrint!\n\n✅ ${firstName} ${lastName}\n📧 ${email}\n\nYour account is ready—let's start capturing memories!`,
-        () => {
-          // Navigate directly to Dashboard with flag indicating account was just created
-          navigation.reset({
-            index: 0,
-            routes: [{ 
-              name: 'Tabs',
-              params: { 
-                screen: 'Dashboard',
-                params: { fromAccountCreation: true }
-              }
-            }],
-          });
-        }
+          `Welcome to PixPrint!\n\n✅ ${firstName} ${lastName}\n📧 ${email}\n\nYour account is ready—let's start capturing memories!`
       );
 
     } catch (error) {
