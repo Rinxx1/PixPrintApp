@@ -22,6 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAlert } from '../../context/AlertContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../../context/authContext'; // Add this import
+import { optimizeImageUrl, ImageQuality, ImagePresets } from '../../utils/imageOptimization';
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.85;
@@ -83,47 +84,74 @@ export default function DashboardScreen({ navigation, route }) {
     }
     return null;
   };
+const OptimizedImage = ({ source, style, fallbackSource, cacheKey }) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const fadeAnim = useState(new Animated.Value(0))[0];
 
-  // Updated image optimization utilities for all image types
-  const optimizeImageUrl = (originalUrl, quality = 'low') => {
-    if (!originalUrl || typeof originalUrl !== 'string') return originalUrl;
-    
-    // For Firebase Storage URLs, add quality parameters
-    if (originalUrl.includes('firebasestorage.googleapis.com')) {
-      const url = new URL(originalUrl);
-      
-      // Add compression parameters based on quality level
-      switch (quality) {
-        case 'low':
-          // For very fast loading - dashboard optimized
-          return url.toString() + '&w=150&h=150&fit=crop&auto=compress&q=20';
-        case 'profile':
-          // For profile images - small and fast
-          return url.toString() + '&w=100&h=100&fit=crop&auto=compress&q=40';
-        case 'event_thumb':
-          // For event thumbnails in cards
-          return url.toString() + '&w=200&h=150&fit=crop&auto=compress&q=35';
-        case 'medium':
-          url.searchParams.set('alt', 'media');
-          url.searchParams.set('token', url.searchParams.get('token') || '');
-          // For balanced loading - medium quality
-          return url.toString() + '&w=300&h=300&fit=crop&auto=compress&q=60';
-        case 'high':
-          return originalUrl; // Return original for high quality
-        default:
-          return originalUrl;
-      }
-    }
-    
-    return originalUrl;
+  const handleLoadEnd = () => {
+    setLoading(false);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
   };
+
+  const handleError = () => {
+    setError(true);
+    setLoading(false);
+  };
+
+  // For local assets, just return the image directly
+  if (typeof source === 'number') {
+    return <Image source={source} style={style} />;
+  }
+
+  return (
+    <View style={style}>
+      {loading && (
+        <View style={[style, { backgroundColor: '#F0F0F0', justifyContent: 'center', alignItems: 'center' }]}>
+          <Ionicons name="image-outline" size={16} color="#CCC" />
+        </View>
+      )}
+      
+      <Animated.View style={[style, { opacity: fadeAnim }]}>
+        <Image
+          source={error ? fallbackSource : {
+            ...source,
+            // Add cache key for better identification
+            cache: 'force-cache',
+            headers: {
+              ...source.headers,
+              'Cache-Control': 'max-age=86400',
+              'Pragma': 'cache'
+            }
+          }}
+          style={style}
+          onLoadEnd={handleLoadEnd}
+          onError={handleError}
+          resizeMode="cover"
+          fadeDuration={0}
+          progressiveRenderingEnabled={true}
+          // Enable memory cache
+          removeClippedSubviews={false} // Keep in memory for faster re-renders
+        />
+      </Animated.View>
+    </View>
+  );
+};
 
   // Updated helper function to get optimized profile image source
   const getProfileImageSource = () => {
     if (userProfileUrl && userProfileUrl.trim() !== '') {
       return { 
-        uri: optimizeImageUrl(userProfileUrl, 'low'),
-        cache: 'force-cache'
+        uri: optimizeImageUrl(userProfileUrl, 'thumbnail'),
+        cache: 'force-cache',
+        headers: {
+        'Cache-Control': 'max-age=86400', // Cache for 24 hours
+        'Pragma': 'cache'
+      }
       };
     }
     return require('../../assets/avatar.png');
@@ -133,61 +161,15 @@ export default function DashboardScreen({ navigation, route }) {
   const getEventImageSource = (event) => {
     if (event.image && event.image.uri) {
       return {
-        uri: optimizeImageUrl(event.image.uri, 'low'), // Use event_thumb quality
-        cache: 'force-cache' // Enable caching
+        uri: optimizeImageUrl(event.image.uri, 'thumbnail'), // Use event_thumb quality
+        cache: 'force-cache', // Enable caching
+        headers: {
+          'Cache-Control': 'max-age=86400', // Cache for 24 hours
+          'Pragma': 'cache'
+        }
       };
     }
     return require('../../assets/event-wedding.png');
-  };
-
-  // Add progressive image loading component
-  const ProgressiveImage = ({ source, style, fallbackSource, onLoadEnd }) => {
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
-    const fadeAnim = useState(new Animated.Value(0))[0];
-
-    const handleLoadEnd = () => {
-      setLoading(false);
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-      if (onLoadEnd) onLoadEnd();
-    };
-
-    const handleError = () => {
-      setError(true);
-      setLoading(false);
-      if (onLoadEnd) onLoadEnd();
-    };
-
-    return (
-      <View style={style}>
-        {/* Placeholder while loading */}
-        {loading && (
-          <View style={[style, styles.imagePlaceholder]}>
-            <Ionicons name="image-outline" size={24} color="#DDD" />
-          </View>
-        )}
-        
-        {/* Actual image */}
-        <Animated.View style={[style, { opacity: fadeAnim }]}>
-          <Image
-            source={error ? fallbackSource : source}
-            style={style}
-            onLoadEnd={handleLoadEnd}
-            onError={handleError}
-            resizeMode="cover"
-            // Add performance optimizations
-            fadeDuration={200}
-            progressiveRenderingEnabled={true}
-            // Reduce memory usage
-            removeClippedSubviews={true}
-          />
-        </Animated.View>
-      </View>
-    );
   };
 
   // Enhanced fetch function with image optimization
@@ -864,7 +846,7 @@ export default function DashboardScreen({ navigation, route }) {
                 <Text style={styles.welcomeSubtext}>Ready to capture more memories?</Text>
               </View>
               <View style={styles.avatarContainer}>
-                <ProgressiveImage
+                <OptimizedImage
                   source={getProfileImageSource()}
                   style={styles.avatarLarge}
                   fallbackSource={require('../../assets/avatar.png')}
@@ -1021,7 +1003,7 @@ export default function DashboardScreen({ navigation, route }) {
               >
                 {/* Optimized image background with event_thumb quality */}
                 <View style={styles.eventImageContainer}>
-                  <ProgressiveImage
+                  <OptimizedImage
                     source={getEventImageSource(event)}
                     style={styles.eventImageBackground}
                     fallbackSource={require('../../assets/event-wedding.png')}

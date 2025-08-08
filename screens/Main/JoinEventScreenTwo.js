@@ -22,6 +22,7 @@ import { doc, getDoc, collection, query, where, getDocs, updateDoc, onSnapshot, 
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../../firebase';
 import { useAlert } from '../../context/AlertContext';
+import { optimizeImageUrl, ImagePresets } from '../../utils/imageOptimization';
 
 const { width, height } = Dimensions.get('window');
 
@@ -556,7 +557,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         
         // Set event image - use uploaded image or default
         if (eventData.event_photo_url && eventData.event_photo_url.trim() !== '') {
-          setEventImage({ uri: optimizeImageUrl(eventData.event_photo_url, 'thumbnail') });
+          setEventImage({ uri: optimizeImageUrl(eventData.event_photo_url, 'thumbnail'), cache: 'force-cache' });
         } else {
           setEventImage(require('../../assets/avatar.png'));
         }
@@ -840,29 +841,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
 
   const handleCategoryChange = (category) => {
     setSelectedCategory(category);
-  };
-
-  // Add image optimization utilities
-  const optimizeImageUrl = (originalUrl, quality = 'thumbnail') => {
-    if (!originalUrl || typeof originalUrl !== 'string') return originalUrl;
-    
-    // For Firebase Storage URLs, add quality parameters
-    if (originalUrl.includes('firebasestorage.googleapis.com')) {
-      const url = new URL(originalUrl);
-      
-      // Add compression parameters based on quality level
-      switch (quality) {
-        case 'thumbnail':
-          // For grid thumbnails - very fast loading
-          return url.toString() + '&w=200&h=200&fit=crop&auto=compress&q=20';
-        case 'high':
-          return originalUrl; // Return original for high quality modal view
-        default:
-          return originalUrl;
-      }
-    }
-    
-    return originalUrl;
   };
 
   // Add optimized grid image component

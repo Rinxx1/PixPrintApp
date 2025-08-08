@@ -22,6 +22,7 @@ import { db, auth, storage } from '../../firebase';
 import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { useAlert } from '../../context/AlertContext';
+import { optimizeImageUrl, ImagePresets } from '../../utils/imageOptimization';
 
 const screenWidth = Dimensions.get('window').width;
 const screenHeight = Dimensions.get('window').height;
@@ -385,32 +386,6 @@ export default function GalleryScreen({ navigation }) {
   // Deselect all photos
   const deselectAllPhotos = () => {
     setSelectedPhotos(new Set());
-  };
-
-  // Add image optimization utilities
-  const optimizeImageUrl = (originalUrl, quality = 'thumbnail') => {
-    if (!originalUrl || typeof originalUrl !== 'string') return originalUrl;
-    
-    // For Firebase Storage URLs, add quality parameters
-    if (originalUrl.includes('firebasestorage.googleapis.com')) {
-      const url = new URL(originalUrl);
-      
-      // Add compression parameters based on quality level
-      switch (quality) {
-        case 'thumbnail':
-          // For grid thumbnails - very fast loading
-          return url.toString() + '&w=200&h=200&fit=crop&auto=compress&q=20';
-        case 'medium':
-          // For larger previews - balanced quality
-          return url.toString() + '&w=400&h=400&fit=crop&auto=compress&q=70';
-        case 'high':
-          return originalUrl; // Return original for high quality modal view
-        default:
-          return originalUrl;
-      }
-    }
-    
-    return originalUrl;
   };
 
   // Add progressive image loading component for grid items
