@@ -21,6 +21,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { storage } from '../../firebase'; // Add this import
 import HeaderBar from '../../components/HeaderBar';
 import { useAlert } from '../../context/AlertContext'; // Add this import
+import CachedImage from '../../components/CachedImage';
 
 const { width } = Dimensions.get('window');
 
@@ -509,7 +510,7 @@ export default function PersonalInfoScreen({ navigation }) {
     });
   };
 
-  // Helper function to get profile image source
+  // Enhanced helper function to get profile image source
   const getProfileImageSource = () => {
     // First check if we have a profileImage in state
     if (profileImage && profileImage.trim() !== '') {
@@ -565,9 +566,10 @@ export default function PersonalInfoScreen({ navigation }) {
           ]}
         >
           <View style={styles.avatarContainer}>
-            <Image
+            <CachedImage
               source={getProfileImageSource()}
               style={styles.avatar}
+              fallbackSource={require('../../assets/avatar.png')}
               resizeMode="cover"
             />
             <TouchableOpacity 

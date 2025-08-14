@@ -1021,7 +1021,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      <HeaderBar navigation={navigation} showBack={false} showDashboard={true}/>
+      <HeaderBar navigation={navigation} showBack={true} />
 
       <Animated.ScrollView 
         contentContainerStyle={styles.scrollContent}

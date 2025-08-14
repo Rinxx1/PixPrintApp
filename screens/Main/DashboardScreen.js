@@ -21,11 +21,33 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAlert } from '../../context/AlertContext';
 import { useFocusEffect } from '@react-navigation/native';
-import { AuthContext } from '../../context/authContext'; // Add this import
-import { optimizeImageUrl, ImageQuality, ImagePresets } from '../../utils/imageOptimization';
+import { AuthContext } from '../../context/authContext';
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.85;
+
+// Simple cached image component for better performance
+const CachedEventImage = ({ source, style, fallbackSource, ...props }) => {
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
+  const imageSource = error ? fallbackSource : source;
+  
+  return (
+    <Image
+      {...props}
+      source={imageSource}
+      style={style}
+      onLoad={() => setLoading(false)}
+      onError={() => {
+        console.log('Image load error, using fallback');
+        setError(true);
+        setLoading(false);
+      }}
+      onLoadEnd={() => setLoading(false)}
+    />
+  );
+};
 
 export default function DashboardScreen({ navigation, route }) {
   const [eventCode, setEventCode] = useState('');
@@ -84,95 +106,32 @@ export default function DashboardScreen({ navigation, route }) {
     }
     return null;
   };
-const OptimizedImage = ({ source, style, fallbackSource, cacheKey }) => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const fadeAnim = useState(new Animated.Value(0))[0];
 
-  const handleLoadEnd = () => {
-    setLoading(false);
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handleError = () => {
-    setError(true);
-    setLoading(false);
-  };
-
-  // For local assets, just return the image directly
-  if (typeof source === 'number') {
-    return <Image source={source} style={style} />;
-  }
-
-  return (
-    <View style={style}>
-      {loading && (
-        <View style={[style, { backgroundColor: '#F0F0F0', justifyContent: 'center', alignItems: 'center' }]}>
-          <Ionicons name="image-outline" size={16} color="#CCC" />
-        </View>
-      )}
-      
-      <Animated.View style={[style, { opacity: fadeAnim }]}>
-        <Image
-          source={error ? fallbackSource : {
-            ...source,
-            // Add cache key for better identification
-            cache: 'force-cache',
-            headers: {
-              ...source.headers,
-              'Cache-Control': 'max-age=86400',
-              'Pragma': 'cache'
-            }
-          }}
-          style={style}
-          onLoadEnd={handleLoadEnd}
-          onError={handleError}
-          resizeMode="cover"
-          fadeDuration={0}
-          progressiveRenderingEnabled={true}
-          // Enable memory cache
-          removeClippedSubviews={false} // Keep in memory for faster re-renders
-        />
-      </Animated.View>
-    </View>
-  );
-};
-
-  // Updated helper function to get optimized profile image source
+  // Simplified helper function to get profile image source
   const getProfileImageSource = () => {
     if (userProfileUrl && userProfileUrl.trim() !== '') {
-      return { 
-        uri: optimizeImageUrl(userProfileUrl, 'thumbnail'),
-        cache: 'force-cache',
-        headers: {
-        'Cache-Control': 'max-age=86400', // Cache for 24 hours
-        'Pragma': 'cache'
-      }
-      };
+      return { uri: userProfileUrl };
     }
     return require('../../assets/avatar.png');
   };
 
-  // Updated function to get optimized event image source
+  // Simplified function to get event image source
   const getEventImageSource = (event) => {
-    if (event.image && event.image.uri) {
-      return {
-        uri: optimizeImageUrl(event.image.uri, 'thumbnail'), // Use event_thumb quality
-        cache: 'force-cache', // Enable caching
-        headers: {
-          'Cache-Control': 'max-age=86400', // Cache for 24 hours
-          'Pragma': 'cache'
-        }
-      };
+    // Check if event has an image with URI
+    if (event.image && typeof event.image === 'object' && event.image.uri) {
+      return { uri: event.image.uri };
     }
+    
+    // Check if event.image is a direct URI string
+    if (event.image && typeof event.image === 'string') {
+      return { uri: event.image };
+    }
+    
+    // Use default fallback
     return require('../../assets/event-wedding.png');
   };
 
-  // Enhanced fetch function with image optimization
+  // Enhanced fetch function with better image handling
   const fetchCreatedEvents = async () => {
     try {
       const user = auth.currentUser;
@@ -239,16 +198,10 @@ const OptimizedImage = ({ source, style, fallbackSource, cacheKey }) => {
             dateRange: dateRangeText,
             code: data.event_code,
             description: data.event_description || 'No description available',
-            // Optimize image handling
+            // Simplified image handling
             image: data.event_photo_url && data.event_photo_url.trim() !== '' 
-              ? { 
-                  uri: data.event_photo_url,
-                  originalUri: data.event_photo_url // Keep original for high-res viewing
-                } 
+              ? { uri: data.event_photo_url } 
               : require('../../assets/event-wedding.png'),
-            // Add loading optimization flags
-            imageLoaded: false,
-            imageError: false,
           });
         });
         
@@ -261,7 +214,7 @@ const OptimizedImage = ({ source, style, fallbackSource, cacheKey }) => {
     }
   };
 
-  // Updated fetchJoinedEvents function to include converted guest events
+  // Updated fetchJoinedEvents function with simplified image handling
   const fetchJoinedEvents = async (retryCount = 0) => {
     try {
       const user = auth.currentUser;
@@ -337,19 +290,13 @@ const OptimizedImage = ({ source, style, fallbackSource, cacheKey }) => {
                   dateRange: dateRangeText,
                   code: eventData.event_code,
                   description: eventData.event_description || 'No description available',
-                  // Optimize image handling
+                  // Simplified image handling
                   image: eventData.event_photo_url && eventData.event_photo_url.trim() !== '' 
-                    ? { 
-                        uri: eventData.event_photo_url,
-                        originalUri: eventData.event_photo_url
-                      } 
+                    ? { uri: eventData.event_photo_url } 
                     : require('../../assets/event-wedding.png'),
                   joinedId: joinedDoc.id,
                   // Mark if this was converted from guest
                   wasGuest: joinedData.converted_from_guest || false,
-                  // Add loading optimization flags
-                  imageLoaded: false,
-                  imageError: false,
                 };
               }
               return null;
@@ -846,10 +793,11 @@ const OptimizedImage = ({ source, style, fallbackSource, cacheKey }) => {
                 <Text style={styles.welcomeSubtext}>Ready to capture more memories?</Text>
               </View>
               <View style={styles.avatarContainer}>
-                <OptimizedImage
+                <CachedEventImage
                   source={getProfileImageSource()}
                   style={styles.avatarLarge}
                   fallbackSource={require('../../assets/avatar.png')}
+                  resizeMode="cover"
                 />
                 <View style={styles.statusDot}></View>
               </View>
@@ -971,7 +919,7 @@ const OptimizedImage = ({ source, style, fallbackSource, cacheKey }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Events List with optimized images */}
+        {/* Events List with fixed images */}
         <View style={styles.eventsContainer}>
           {getDisplayedEvents().length === 0 ? (
             <View style={styles.noEventsContainer}>
@@ -1001,14 +949,14 @@ const OptimizedImage = ({ source, style, fallbackSource, cacheKey }) => {
                 style={styles.eventCard}
                 onPress={() => navigation.navigate('JoinEventTwo', { eventId: event.id })}
               >
-                {/* Optimized image background with event_thumb quality */}
+                {/* Fixed image background */}
                 <View style={styles.eventImageContainer}>
-                  <OptimizedImage
+                  <CachedEventImage
                     source={getEventImageSource(event)}
                     style={styles.eventImageBackground}
                     fallbackSource={require('../../assets/event-wedding.png')}
+                    resizeMode="cover"
                     onLoadEnd={() => {
-                      // Mark this specific event image as loaded for potential state updates
                       console.log(`Event image loaded for: ${event.name}`);
                     }}
                   />
@@ -1536,6 +1484,57 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  // Floating Button
+  floatingButton: {
+    position: 'absolute',
+    bottom: 30,
+    right: 30,
+    backgroundColor: '#FF6F61',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#FF6F61',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  // Add these styles to the StyleSheet
+  eventDateDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 20,
+  },
+  calendarIcon: {
+    marginRight: 6,
+    color: '#FF6F61',
+  },
+  dateContainer: {
+    flexDirection: 'column',
+  },
+  dateText: {
+    fontSize: 13,
+    color: '#666',
+  },
+  dateSubtext: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 2,
+  },
+  durationBadge: {
+    backgroundColor: 'rgba(255, 111, 97, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginTop: 2,
+  },
+  durationText: {
+    fontSize: 10,
+    color: '#FF6F61',
+    fontWeight: '500',
   },
   // Floating Button
   floatingButton: {
