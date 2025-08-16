@@ -479,7 +479,7 @@ export default function NewEventScreen({ navigation }) {
       }
       
       const eventRef = collection(db, 'event_tbl');
-      await addDoc(eventRef, {
+      const docRef = await addDoc(eventRef, {
         event_name: eventName,
         event_location: eventLocation,
         event_start_date: eventStartDate,
@@ -493,10 +493,48 @@ export default function NewEventScreen({ navigation }) {
         status: 'active'
       });
       
-      console.log("Event created successfully with image URL:", eventPhotoUrl);
+      // Get the created event ID
+      const eventId = docRef.id;
+      console.log("Event created successfully with ID:", eventId);
+      
+      // Create Frames folder structure for this event
+      console.log("Creating Frames folder structure...");
+      const framesCreated = await createFramesFolderStructure(eventId);
+      
+      if (framesCreated) {
+        console.log("Frames folder structure created successfully");
+      } else {
+        console.log("Warning: Frames folder structure creation failed, but event was created successfully");
+      }
+      
+      console.log("Event creation process completed with image URL:", eventPhotoUrl);
     } catch (e) {
       console.error('Error creating event: ', e);
       throw e;
+    }
+  };
+
+  // New function to create Frames folder structure
+  const createFramesFolderStructure = async (eventId) => {
+    try {
+      console.log(`Creating Frames folder structure for event: ${eventId}`);
+      
+      // Create a placeholder file to establish the folder structure
+      // Firebase Storage doesn't actually create folders, but we can create a path structure
+      const placeholderContent = new Blob(['This folder contains frames for event: ' + eventId], { type: 'text/plain' });
+      
+      // Create reference to the Frames/event_id/placeholder.txt path
+      const framesRef = ref(storage, `Frames/${eventId}/placeholder.txt`);
+      
+      // Upload the placeholder file to create the folder structure
+      await uploadBytes(framesRef, placeholderContent);
+      
+      console.log(`Frames folder structure created successfully for event: ${eventId}`);
+      return true;
+    } catch (error) {
+      console.error(`Error creating Frames folder structure for event ${eventId}:`, error);
+      // Don't throw error as this is not critical for event creation
+      return false;
     }
   };
 
@@ -955,7 +993,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContainer: {
-    paddingTop: 120,
+    paddingTop: 30,
     paddingHorizontal: 20,
     paddingBottom: 40,
   },
