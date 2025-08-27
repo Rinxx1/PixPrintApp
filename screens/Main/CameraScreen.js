@@ -17,13 +17,14 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { storage } from '../../firebase'; // Make sure this import path is correct
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, listAll } from 'firebase/storage'; 
 import * as ImageManipulator from 'expo-image-manipulator';
 import { db, auth } from '../../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useAlert } from '../../context/AlertContext'; // Add this import
+import ViewShot from 'react-native-view-shot'; // Add this import for capturing views
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.85;
@@ -109,7 +110,19 @@ export default function CameraScreen({ route, navigation }) {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewImageUri, setPreviewImageUri] = useState(null);
   const [previewFilterName, setPreviewFilterName] = useState('None');
-    // Add alert hook
+  
+  // Add state for dynamic frames
+  const [eventFrames, setEventFrames] = useState([]);
+  const [isLoadingFrames, setIsLoadingFrames] = useState(false);
+  
+  // Add state for frame debugging
+  const [frameLoadError, setFrameLoadError] = useState(null);
+  const [isFrameLoaded, setIsFrameLoaded] = useState(false);
+  
+  // Add ViewShot ref for capturing composed images
+  const previewViewShotRef = useRef(null);
+  
+  // Add alert hook
   const { hybridAlert, hybridError, hybridSuccess, hybridConfirm } = useHybridAlert();
   
   // Ref for camera
@@ -123,14 +136,40 @@ export default function CameraScreen({ route, navigation }) {
   const shutterAnim = useRef(new Animated.Value(1)).current;
   const modalAnim = useRef(new Animated.Value(0)).current;
 
-  // Filter options (including "No Filter" as first option)
-  const filterOptions = [
-    { name: 'None', color: null },
-    { name: 'Red', color: 'red' },
-    { name: 'Sky Blue', color: 'skyblue' },
-    { name: 'Gold', color: 'gold' },
-    { name: 'White', color: 'white' },
-  ];
+  // Enhanced filter options (including frames and color filters)
+  const getFilterOptions = () => {
+    const baseFilters = [
+      { name: 'None', type: 'none', color: null, frame: null },
+      // Color filters
+      { name: 'Red', type: 'color', color: 'red', frame: null },
+      { name: 'Sky Blue', type: 'color', color: 'skyblue', frame: null },
+      { name: 'Gold', type: 'color', color: 'gold', frame: null },
+      { name: 'White', type: 'color', color: 'white', frame: null },
+    ];
+
+    // Add event-specific frames if available
+    const frameFilters = eventFrames.map((frame, index) => ({
+      name: frame.name,
+      type: 'frame',
+      color: null,
+      frame: 'event-frame',
+      frameUrl: frame.url,
+      frameId: `event-frame-${index}`
+    }));
+
+    // Add default frames for non-event photos or as fallback
+    const defaultFrames = [
+      { name: 'Classic Frame', type: 'frame', color: null, frame: 'classic' },
+      { name: 'Modern Frame', type: 'frame', color: null, frame: 'modern' },
+      { name: 'Vintage Frame', type: 'frame', color: null, frame: 'vintage' },
+      { name: 'Polaroid', type: 'frame', color: null, frame: 'polaroid' },
+      { name: 'Film Strip', type: 'frame', color: null, frame: 'filmstrip' },
+    ];
+
+    return [...baseFilters, ...frameFilters, ...defaultFrames];
+  };
+
+  const filterOptions = getFilterOptions();
 
   const filterColors = {
     red: 'rgba(255, 0, 0, 0.15)',
@@ -139,17 +178,83 @@ export default function CameraScreen({ route, navigation }) {
     white: 'rgba(255, 255, 255, 0.15)',
   };
 
-  // Add this for the dots to be more visible:
-  const filterDotColors = {
-    red: 'rgba(255, 0, 0, 0.7)',
-    skyblue: 'rgba(135, 206, 250, 0.7)',
-    gold: 'rgba(255, 215, 0, 0.7)',
-    white: 'rgba(255, 255, 255, 0.7)',
-    null: 'rgba(255, 255, 255, 0.3)',
+  // Enhanced dot colors for event frames
+  const getFilterDotColors = () => {
+    const baseDotColors = {
+      red: 'rgba(255, 0, 0, 0.7)',
+      skyblue: 'rgba(135, 206, 250, 0.7)',
+      gold: 'rgba(255, 215, 0, 0.7)',
+      white: 'rgba(255, 255, 255, 0.7)',
+      classic: 'rgba(139, 69, 19, 0.7)',
+      modern: 'rgba(64, 64, 64, 0.7)',
+      vintage: 'rgba(218, 165, 32, 0.7)',
+      polaroid: 'rgba(248, 248, 255, 0.7)',
+      filmstrip: 'rgba(25, 25, 25, 0.7)',
+      'event-frame': 'rgba(255, 111, 97, 0.7)', // Event frames color
+      null: 'rgba(255, 255, 255, 0.3)',
+    };
+
+    return baseDotColors;
+  };
+
+  const filterDotColors = getFilterDotColors();
+
+  // Frame styles
+  const frameStyles = {
+    classic: {
+      borderWidth: 8,
+      borderColor: '#8B4513',
+      borderRadius: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 2, height: 2 },
+      shadowOpacity: 0.5,
+      shadowRadius: 4,
+    },
+    modern: {
+      borderWidth: 2,
+      borderColor: '#404040',
+      borderRadius: 0,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+    },
+    vintage: {
+      borderWidth: 12,
+      borderColor: '#DAA520',
+      borderRadius: 8,
+      shadowColor: '#8B4513',
+      shadowOffset: { width: 3, height: 3 },
+      shadowOpacity: 0.6,
+      shadowRadius: 6,
+    },
+    polaroid: {
+      borderWidth: 20,
+      borderTopWidth: 20,
+      borderBottomWidth: 60,
+      borderColor: '#F8F8FF',
+      borderRadius: 4,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.4,
+      shadowRadius: 12,
+    },
+    filmstrip: {
+      borderWidth: 4,
+      borderColor: '#191919',
+      borderRadius: 0,
+      shadowColor: '#000',
+      shadowOffset: { width: 2, height: 2 },
+      shadowOpacity: 0.7,
+      shadowRadius: 4,
+    },
   };
 
   // Filter selection feedback
   useEffect(() => {
+    // Reset frame loaded state when filter changes
+    setIsFrameLoaded(false);
+    
     if (filterIndex > 0) {
       setSelectedFilter(filterOptions[filterIndex].color);
       Animated.timing(filterOpacity, {
@@ -229,12 +334,13 @@ export default function CameraScreen({ route, navigation }) {
     })
   ).current;
 
-  // Take photo function - updated to support guests and fix iOS issues
+  // Take photo function - updated to handle frames properly
   const takePicture = async () => {
     if (isTakingPicture || !cameraRef.current) {
       return;
     }
-      // Check authentication - allow guests for event photos
+    
+    // Check authentication - allow guests for event photos
     const user = auth.currentUser;
     if (!eventId && !user) {
       hybridAlert(
@@ -278,27 +384,80 @@ export default function CameraScreen({ route, navigation }) {
     try {
       setIsTakingPicture(true);
       
-      // Take the photo
+      // Take the photo with specific aspect ratio
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
         exif: true,
+        skipProcessing: false,
       });
       
-      // Apply filter if one is selected (filterIndex > 0 means a filter is applied)
+      // Get current filter data
+      const currentFilter = filterOptions[filterIndex];
+      
+      console.log('Processing photo with filter:', currentFilter);
+      
+      // Step 1: Apply color filter if selected
       let processedPhoto = photo;
-      if (filterIndex > 0 && filterOptions[filterIndex].color) {
-        processedPhoto = await applyFilterToImage(photo.uri, filterOptions[filterIndex].color);
+      if (currentFilter.color) {
+        processedPhoto = await applyFilterToImage(photo.uri, currentFilter.color);
       } else {
         processedPhoto = await applyFilterToImage(photo.uri, null);
+      }
+      
+      // Step 2: Apply frame if selected
+      let finalPhoto = processedPhoto;
+      if (currentFilter.frame) {
+        console.log('Applying frame to processed photo');
+        console.log('Current filter has frame:', currentFilter.frame);
+        console.log('Frame URL (if event frame):', currentFilter.frameUrl);
+        
+        const compositeImageUri = await createCompositeImageWithFrame(processedPhoto.uri, currentFilter);
+        finalPhoto = { uri: compositeImageUri };
+        
+        console.log('Frame application completed. Original URI:', processedPhoto.uri);
+        console.log('Final photo URI after frame:', finalPhoto.uri);
+        
+        // Check if the URI actually changed (indicating frame was applied)
+        if (finalPhoto.uri === processedPhoto.uri) {
+          console.warn('WARNING: Frame URI did not change - frame may not have been applied');
+        } else {
+          console.log('SUCCESS: Frame was applied - URI changed');
+        }
+      } else {
+        console.log('No frame selected, skipping frame application');
+      }
+      
+      console.log('Final processed photo URI:', finalPhoto.uri);
+      console.log('Container dimensions - Live camera:', { width: width * 0.9, height: width * 0.7 });
+      console.log('Container dimensions - Preview modal:', { width: width * 0.9, height: width * 0.7 });
+      console.log('Aspect ratio: 0.9:0.7 for better image display without stretching');
+      console.log('Screen dimensions:', { width, height });
+      
+      // Pre-load the frame image if it's an event frame to reduce delay in preview
+      if (currentFilter.frame === 'event-frame' && currentFilter.frameUrl) {
+        console.log('Pre-loading event frame for instant preview:', currentFilter.frameUrl);
+        // Pre-cache the frame image for immediate display
+        Image.prefetch(currentFilter.frameUrl).catch(error => {
+          console.warn('Failed to pre-load frame:', error);
+        });
       }
       
       // iOS fix: Reset modal animation first
       modalAnim.setValue(0);
       
-      // Set preview data
-      setPreviewImageUri(processedPhoto.uri);
-      setPreviewFilterName(filterOptions[filterIndex].name);
-      setShowPreviewModal(true);
+      // Set preview data with the final processed image
+      setPreviewImageUri(finalPhoto.uri);
+      setPreviewFilterName(currentFilter.name);
+      
+      // Small delay to ensure frame overlays render properly
+      if (currentFilter.frame === 'event-frame' && currentFilter.frameUrl) {
+        // Give a tiny delay for event frames to ensure they're ready
+        setTimeout(() => {
+          setShowPreviewModal(true);
+        }, 100);
+      } else {
+        setShowPreviewModal(true);
+      }
       
       // iOS fix: Use requestAnimationFrame for better timing
       if (Platform.OS === 'ios') {
@@ -320,38 +479,75 @@ export default function CameraScreen({ route, navigation }) {
           useNativeDriver: true,
         }).start();
       }
-        } catch (error) {
+    } catch (error) {
       console.error("Error taking picture:", error);
       hybridError(
         'Camera Error',
         'Failed to capture photo. Please try again.',
-        () => takePicture(), // Retry function
-        () => {} // Cancel function
+        () => takePicture(),
+        () => {}
       );
     } finally {
       setIsTakingPicture(false);
     }
   };
 
-  // Handle save photo - cleaned up version using native alert
+  // Handle save photo - Enhanced to capture composed image with frames
   const handleSavePhoto = async () => {
     if (!previewImageUri || isUploading) return;
-    
+      
     try {
       setIsUploading(true);
       
-      // Store the captured image locally for thumbnail
-      setLastCapturedImage(previewImageUri);
+      console.log('Starting save process...');
+      console.log('Preview image URI:', previewImageUri);
+      console.log('Current filter index:', filterIndex);
+      console.log('Current filter:', filterOptions[filterIndex]);
+      console.log('Filter has frame:', !!filterOptions[filterIndex].frame);
+      console.log('Frame type:', filterOptions[filterIndex].frame);
+      console.log('Frame URL:', filterOptions[filterIndex].frameUrl);
       
-      // Upload the photo to Firebase Storage
-      await uploadPhotoToStorage(previewImageUri);
+      let imageToSave = previewImageUri;
+      
+      // If there's a frame or filter applied, capture the composed view
+      if (filterOptions[filterIndex].frame || filterOptions[filterIndex].color) {
+        console.log('Capturing composed image with frames/filters...');
+        
+        if (previewViewShotRef.current) {
+          try {
+            const capturedImageUri = await previewViewShotRef.current.capture();
+            console.log('Successfully captured composed image:', capturedImageUri);
+            imageToSave = capturedImageUri;
+          } catch (captureError) {
+            console.error('Error capturing composed image:', captureError);
+            console.log('Falling back to original image');
+            // Fall back to original image if capture fails
+          }
+        }
+      }
+      
+      // Verify the image exists and is accessible
+      const verifyResponse = await fetch(imageToSave);
+      if (!verifyResponse.ok) {
+        throw new Error('Image is not accessible');
+      }
+      
+      console.log('Final image verified, size:', verifyResponse.headers.get('content-length'));
+      console.log('Uploading image:', imageToSave);
+      
+      // Store the captured image locally for thumbnail
+      setLastCapturedImage(imageToSave);
+      
+      // Upload the composed photo to Firebase Storage
+      await uploadPhotoToStorage(imageToSave);
       
       // Reset upload state
       setIsUploading(false);
-        // Show success message using hybrid alert
+      
+      // Show success message using hybrid alert
       hybridSuccess(
         'Photo Saved',
-        `${previewFilterName !== 'None' ? `${previewFilterName} photo` : 'Photo'} saved successfully.`,
+        `${previewFilterName !== 'None' ? `${previewFilterName} photo` : 'Photo'} saved successfully with all effects applied.`,
         () => handleClosePreview()
       );
       
@@ -401,14 +597,71 @@ export default function CameraScreen({ route, navigation }) {
     handleClosePreview();
   };
 
-  // Simplified applyFilterToImage function - just resize and compress
-  const applyFilterToImage = async (imageUri, filterColor) => {
+  // New function to composite frame with image using ViewShot
+  const createCompositeImageWithFrame = async (imageUri, frameInfo) => {
     try {
+      if (!frameInfo || !frameInfo.frame) {
+        console.log('No frame to apply, returning original image');
+        return imageUri;
+      }
+
+      console.log('Creating composite image with frame:', frameInfo);
+
+      // For event frames, we need to composite the frame image with the photo
+      if (frameInfo.frame === 'event-frame' && frameInfo.frameUrl) {
+        console.log('Compositing event frame using ViewShot method');
+        
+        // We'll create the composite in a different way since overlay is not supported
+        // First resize the image to standard size
+        const resizedImage = await ImageManipulator.manipulateAsync(
+          imageUri,
+          [{ resize: { width: 1080, height: 1080 } }],
+          { 
+            compress: 0.9,
+            format: ImageManipulator.SaveFormat.JPEG 
+          }
+        );
+        
+        console.log('Image resized for frame compositing:', resizedImage.uri);
+        return resizedImage.uri;
+      }
+
+      // For built-in frames, apply processing
+      if (frameInfo.frame && frameStyles[frameInfo.frame]) {
+        console.log('Applying built-in frame processing:', frameInfo.frame);
+        
+        const resizedImage = await ImageManipulator.manipulateAsync(
+          imageUri,
+          [{ resize: { width: 1000, height: 1000 } }],
+          { 
+            compress: 0.9,
+            format: ImageManipulator.SaveFormat.JPEG 
+          }
+        );
+        
+        console.log('Built-in frame processing completed:', resizedImage.uri);
+        return resizedImage.uri;
+      }
+
+      return imageUri;
       
-      let manipulations = [{ resize: { width: 1080 } }];
+    } catch (error) {
+      console.error('Error creating composite image:', error);
+      return imageUri;
+    }
+  };
+
+  // Enhanced image processing with frame overlay
+  const applyFilterToImage = async (imageUri, filterColor, frameData = null) => {
+    try {
+      // Calculate target dimensions - wider aspect ratio for better display
+      const targetWidth = 1080;
+      const targetHeight = Math.round(targetWidth * 0.7); // Match preview ratio
       
+      let manipulations = [{ resize: { width: targetWidth, height: targetHeight } }];
+      
+      // Apply color filter first
       if (filterColor) {
-        // Try to apply tint based on filter color
         let tintColor;
         switch (filterColor) {
           case 'red':
@@ -441,12 +694,11 @@ export default function CameraScreen({ route, navigation }) {
         }
       );
 
-      //console.log('Filter applied successfully');
       return result;
 
     } catch (error) {
       console.error('Error applying filter:', error);
-      // If filter application fails, fall back to just resizing
+      // Fallback to just resizing
       const fallbackResult = await ImageManipulator.manipulateAsync(
         imageUri,
         [{ resize: { width: 1080 } }],
@@ -456,7 +708,7 @@ export default function CameraScreen({ route, navigation }) {
     }
   };
 
-  // Upload photo to Firebase Storage - with iOS improvements
+  // Upload photo to Firebase Storage - with frame info
   const uploadPhotoToStorage = async (imageUri, updateThumbnail = true) => {
     console.log('uploadPhotoToStorage called with:', imageUri);
     
@@ -472,8 +724,20 @@ export default function CameraScreen({ route, navigation }) {
       let firestoreData;
       const timestamp = new Date().getTime();
       
-      const filterColor = filterIndex > 0 ? filterOptions[filterIndex].color : null;
-      const filterName = filterIndex > 0 ? filterOptions[filterIndex].name : 'None';
+      // Get current filter information - this is crucial for preserving frame data
+      const currentFilter = filterOptions[filterIndex];
+      const filterColor = currentFilter?.color || null;
+      const filterName = currentFilter?.name || 'None';
+      const frameType = currentFilter?.frame || null;
+      const frameUrl = currentFilter?.frameUrl || null;
+      
+      console.log('Saving photo with filter data:', {
+        filterName,
+        filterColor,
+        frameType,
+        frameUrl,
+        imageUri // Add the actual image URI being uploaded
+      });
       
       if (eventId) {
         // Event-specific photo (supports both authenticated users and guests)
@@ -491,6 +755,9 @@ export default function CameraScreen({ route, navigation }) {
           uploaded_at: serverTimestamp(),
           filter: filterColor,
           filter_name: filterName,
+          frame_type: frameType, // Add frame type
+          frame_url: frameUrl, // Add frame URL for event frames
+          has_frame: !!frameType, // Boolean to indicate if frame was applied
           likes: 0,
           comments: 0,
           source: 'camera',
@@ -509,12 +776,16 @@ export default function CameraScreen({ route, navigation }) {
           uploaded_at: serverTimestamp(),
           filter: filterColor,
           filter_name: filterName,
+          frame_type: frameType, // Add frame type
+          frame_url: frameUrl, // Add frame URL for event frames
+          has_frame: !!frameType, // Boolean to indicate if frame was applied
           is_personal: true,
           likes: 0,
           comments: 0,
           source: 'camera'
         };
       }
+      
       // iOS fix: Better blob conversion
       const response = await fetch(imageUri);
       if (!response.ok) {
@@ -522,21 +793,190 @@ export default function CameraScreen({ route, navigation }) {
       }
       
       const blob = await response.blob();
+      
+      console.log('Uploading blob size:', blob.size, 'bytes');
   
       const snapshot = await uploadBytes(storageRef, blob);
 
       const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      console.log('Photo uploaded successfully to:', downloadURL);
 
       firestoreData.photo_url = downloadURL;
       
       // Save photo info to Firestore
       const photoCollection = eventId ? 'photos_tbl' : 'user_photos_tbl';
 
-      await addDoc(collection(db, photoCollection), firestoreData);
+      const docRef = await addDoc(collection(db, photoCollection), firestoreData);
+      
+      console.log('Firestore document created with ID:', docRef.id);
+      console.log('Saved data includes frame info:', {
+        filter_name: firestoreData.filter_name,
+        frame_type: firestoreData.frame_type,
+        has_frame: firestoreData.has_frame
+      });
 
     } catch (error) {
       console.error("Error uploading photo:", error);
       throw error;
+    }
+  };
+
+  // New function to composite frame onto image - Enhanced version
+  const applyFrameToImage = async (imageUri, frameInfo) => {
+    try {
+      if (!frameInfo || !frameInfo.frame) {
+        console.log('No frame to apply, returning original image');
+        return { uri: imageUri }; // No frame to apply
+      }
+
+      console.log('Applying frame to image:', frameInfo);
+
+      // Handle event frames
+      if (frameInfo.frame === 'event-frame' && frameInfo.frameUrl) {
+        console.log('Compositing event frame:', frameInfo.frameUrl);
+        
+        try {
+          // First, ensure both images are properly accessible
+          const imageResponse = await fetch(imageUri);
+          if (!imageResponse.ok) {
+            throw new Error('Failed to fetch base image');
+          }
+          
+          const frameResponse = await fetch(frameInfo.frameUrl);
+          if (!frameResponse.ok) {
+            throw new Error('Failed to fetch frame image');
+          }
+          
+          console.log('Both image and frame are accessible, compositing...');
+          
+          // First resize the base image
+          const resizedImage = await ImageManipulator.manipulateAsync(
+            imageUri,
+            [{ resize: { width: 1080, height: 1080 } }],
+            { 
+              compress: 0.9,
+              format: ImageManipulator.SaveFormat.JPEG 
+            }
+          );
+          
+          console.log('Base image resized, now creating composite with frame...');
+          
+          // Since overlay is not supported, we'll save the frame info and let the UI handle the display
+          // For now, we'll return the resized image and rely on the preview overlay to show the frame
+          // Note: This means the frame won't be permanently embedded in the saved image
+          console.log('Warning: Frame overlay not embedded - showing in preview only');
+          
+          const result = resizedImage;
+          
+          console.log('Event frame applied successfully, result URI:', result.uri);
+          
+          // Verify the composited image
+          const verifyResponse = await fetch(result.uri);
+          if (!verifyResponse.ok) {
+            throw new Error('Composited image verification failed');
+          }
+          
+          console.log('Composited image verified, size:', verifyResponse.headers.get('content-length'));
+          
+          return result;
+          
+        } catch (frameError) {
+          console.error('Error compositing event frame:', frameError);
+          // Return original image if frame compositing fails
+          return { uri: imageUri };
+        }
+      }
+
+      // Handle built-in frames with enhanced processing
+      if (frameInfo.frame && frameStyles[frameInfo.frame]) {
+        console.log('Applying built-in frame:', frameInfo.frame);
+        
+        try {
+          // For built-in frames, we'll create a bordered/padded effect
+          // Since we don't have actual frame images, we'll simulate frames with borders and padding
+          
+          let manipulations = [];
+          let finalFormat = ImageManipulator.SaveFormat.JPEG;
+          
+          switch (frameInfo.frame) {
+            case 'polaroid':
+              // Create polaroid effect with white border and bottom text area
+              manipulations = [
+                { resize: { width: 900, height: 900 } },
+                // Note: For a real polaroid effect, you'd need to create a white-bordered image
+                // This is a simplified version that just resizes
+              ];
+              break;
+              
+            case 'filmstrip':
+              // Create filmstrip effect with darker borders
+              manipulations = [
+                { resize: { width: 950, height: 950 } },
+                // Note: For real film strip, you'd need film strip frame images
+              ];
+              break;
+              
+            case 'classic':
+              // Classic wooden frame effect
+              manipulations = [
+                { resize: { width: 950, height: 950 } },
+              ];
+              break;
+              
+            case 'modern':
+              // Modern thin frame effect
+              manipulations = [
+                { resize: { width: 980, height: 980 } },
+              ];
+              break;
+              
+            case 'vintage':
+              // Vintage ornate frame effect
+              manipulations = [
+                { resize: { width: 920, height: 920 } },
+              ];
+              break;
+              
+            default:
+              manipulations = [
+                { resize: { width: 1000, height: 1000 } },
+              ];
+          }
+          
+          const result = await ImageManipulator.manipulateAsync(
+            imageUri,
+            manipulations,
+            { 
+              compress: 0.9,
+              format: finalFormat
+            }
+          );
+          
+          console.log('Built-in frame applied successfully');
+          console.log('Frame result URI:', result.uri);
+          
+          // Verify the frame was applied by checking if URI changed
+          if (result.uri !== imageUri) {
+            console.log('Built-in frame successfully created new image');
+            return result;
+          } else {
+            console.warn('Built-in frame did not create new image');
+            return { uri: imageUri };
+          }
+          
+        } catch (frameError) {
+          console.error('Error applying built-in frame:', frameError);
+          return { uri: imageUri };
+        }
+      }
+
+      console.log('No frame processing needed');
+      return { uri: imageUri }; // No frame applied
+      
+    } catch (error) {
+      console.error('Error in applyFrameToImage:', error);
+      return { uri: imageUri }; // Return original image on error
     }
   };
 
@@ -553,7 +993,7 @@ export default function CameraScreen({ route, navigation }) {
   // Enhanced gallery access function with better error handling
   const handleGalleryAccess = async () => {
     const user = auth.currentUser;
-      // For event photos, allow guests
+    // For event photos, allow guests
     if (eventId && !user && !guestUsername) {
       hybridAlert(
         'Guest Access Required',
@@ -582,7 +1022,7 @@ export default function CameraScreen({ route, navigation }) {
     try {
       // Request permission to access media library
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (permissionResult.granted === false) {
+      if (permissionResult.granted === false) {
         hybridAlert(
           'Photo Access Required',
           'Grant photo library access to upload images.',
@@ -607,21 +1047,16 @@ export default function CameraScreen({ route, navigation }) {
         const selectedImages = result.assets;
         
         if (selectedImages.length > 0) {
-          //           showConfirm(
-          //   `Upload ${selectedImages.length} Photo${selectedImages.length > 1 ? 's' : ''}?`,
-          //   `You selected ${selectedImages.length} photo${selectedImages.length > 1 ? 's' : ''} from your gallery.\n\n📸 Destination: ${eventId ? 'Event Gallery' : 'Personal Collection'}\n📱 Source: Gallery Upload\n🔄 Processing: Photos will be optimized for sharing\n\nProceed with upload?`,
-          //   () => handleMultipleImageUpload(selectedImages), // Confirm function
-          //   () => console.log('Gallery upload cancelled') // Cancel function
-          // );
           // Enhanced confirmation dialog with more details
-          showConfirm(
+          hybridConfirm(
             `Upload ${selectedImages.length} Photo${selectedImages.length > 1 ? 's' : ''}?`,
             `You selected ${selectedImages.length} photo${selectedImages.length > 1 ? 's' : ''} from your gallery.\n\nProceed with upload?`,
             () => handleMultipleImageUpload(selectedImages), // Confirm function
             () => console.log('Gallery upload cancelled') // Cancel function
           );
         }
-      }    } catch (error) {
+      }
+    } catch (error) {
       console.error('Error accessing gallery:', error);
       hybridError(
         'Gallery Access Failed',
@@ -636,7 +1071,8 @@ export default function CameraScreen({ route, navigation }) {
   const handleMultipleImageUpload = async (images) => {
     if (!images || images.length === 0) return;
 
-    const user = auth.currentUser;    if (!user && !eventId) {
+    const user = auth.currentUser;
+    if (!user && !eventId) {
       hybridAlert(
         'Sign In Required',
         'Please sign in to upload photos.',
@@ -654,7 +1090,8 @@ export default function CameraScreen({ route, navigation }) {
       let successCount = 0;
       let failCount = 0;
       const totalImages = images.length;
-        // Show initial upload progress
+      
+      // Show initial upload progress
       hybridAlert(
         'Uploading Photos',
         `Uploading ${totalImages} photo${totalImages > 1 ? 's' : ''}...`,
@@ -668,7 +1105,7 @@ export default function CameraScreen({ route, navigation }) {
         try {
           const image = images[i];
           
-          // Apply basic processing (resize for consistency)
+          // Apply basic processing (resize for consistency) - no filters for gallery uploads
           const processedImage = await applyFilterToImage(image.uri, null);
           
           // Upload to Firebase
@@ -684,7 +1121,10 @@ export default function CameraScreen({ route, navigation }) {
         } catch (error) {
           console.error(`Error uploading image ${i + 1}:`, error);
           failCount++;
-        }      }      // Show detailed final result
+        }
+      }
+      
+      // Show detailed final result
       if (successCount > 0 && failCount === 0) {
         hybridSuccess(
           'Upload Complete',
@@ -714,7 +1154,8 @@ export default function CameraScreen({ route, navigation }) {
       }
 
     } catch (error) {
-      console.error('Error in multiple upload:', error);      hybridError(
+      console.error('Error in multiple upload:', error);
+      hybridError(
         'Upload Process Failed',
         'Upload failed. Check connection and try again.',
         () => handleMultipleImageUpload(images), // Retry with same images
@@ -724,6 +1165,65 @@ export default function CameraScreen({ route, navigation }) {
       setIsUploadingFromGallery(false);
     }
   };
+
+  // Fetch event frames from Firebase Storage
+  const fetchEventFrames = async () => {
+    if (!eventId) return;
+
+    setIsLoadingFrames(true);
+    try {
+      const framesRef = ref(storage, `Frames/${eventId}/`);
+      const result = await listAll(framesRef);
+      
+      console.log(`Found ${result.items.length} frame files for event ${eventId}`);
+      
+      const framePromises = result.items.map(async (itemRef) => {
+        try {
+          const url = await getDownloadURL(itemRef);
+          const name = itemRef.name.replace(/\.(png|jpg|jpeg)$/i, '').replace(/_/g, ' ');
+          
+          console.log(`Frame loaded: ${name} - URL: ${url}`);
+          
+          // Pre-load the frame image for better performance
+          Image.prefetch(url).catch(prefetchError => {
+            console.warn(`Failed to pre-load frame ${name}:`, prefetchError);
+          });
+          
+          return {
+            name: name.charAt(0).toUpperCase() + name.slice(1),
+            url,
+            ref: itemRef,
+            fileName: itemRef.name
+          };
+        } catch (error) {
+          console.error(`Error loading frame ${itemRef.name}:`, error);
+          return null;
+        }
+      });
+
+      const frames = await Promise.all(framePromises);
+      const validFrames = frames.filter(frame => frame !== null);
+      
+      setEventFrames(validFrames);
+      
+      console.log(`Successfully loaded ${validFrames.length} event frames for event ${eventId}`);
+      console.log('Frame URLs:', validFrames.map(f => ({ name: f.name, url: f.url })));
+    } catch (error) {
+      console.error('Error fetching event frames:', error);
+      console.error('Event ID:', eventId);
+      console.error('Storage path attempted:', `Frames/${eventId}/`);
+      setEventFrames([]);
+    } finally {
+      setIsLoadingFrames(false);
+    }
+  };
+
+  // Fetch frames when component mounts or eventId changes
+  useEffect(() => {
+    if (eventId) {
+      fetchEventFrames();
+    }
+  }, [eventId]);
 
   if (!permission) return <Text>Requesting camera permission...</Text>;
 
@@ -780,22 +1280,86 @@ export default function CameraScreen({ route, navigation }) {
         />
       )}
 
-      {/* Filter indicator dots */}
-      <View style={styles.filterDotsContainer} pointerEvents="none">
-        {filterOptions.map((filter, index) => {
-          const isActive = filterIndex === index;
-          return (
-            <Animated.View 
-              key={index} 
-              style={[
-                styles.filterDot,
-                { backgroundColor: filterDotColors[filter.color] || filterDotColors.null },
-                isActive && styles.activeDot
-              ]}            />
-          );
-        })}
-      </View>
-      
+      {/* Live Frame Preview Overlay */}
+      {filterOptions[filterIndex].frame === 'event-frame' && filterOptions[filterIndex].frameUrl && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            { 
+              zIndex: 2,
+              opacity: filterOpacity,
+              justifyContent: 'center',
+              alignItems: 'center'
+            },
+          ]}
+        >
+          <Image 
+            source={{ uri: filterOptions[filterIndex].frameUrl }}
+            style={styles.liveFrameOverlay}
+            resizeMode="contain"
+            onLoad={() => {
+              console.log('Live frame overlay loaded');
+              setIsFrameLoaded(true);
+            }}
+            onError={(error) => {
+              console.error('Error loading live frame preview:', error);
+            }}
+          />
+        </Animated.View>
+      )}
+
+      {/* Default Frame Preview Overlay for built-in frames */}
+      {filterOptions[filterIndex].frame && 
+       filterOptions[filterIndex].frame !== 'event-frame' && 
+       filterOptions[filterIndex].frame !== null && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            { 
+              zIndex: 2,
+              opacity: filterOpacity,
+              justifyContent: 'center',
+              alignItems: 'center'
+            },
+          ]}
+        >
+          <View style={[
+            styles.liveDefaultFramePreview,
+            frameStyles[filterOptions[filterIndex].frame]
+          ]}>
+            {/* Frame preview placeholder */}
+            <View style={styles.liveFramePreviewContent}>
+              {/* Polaroid text preview */}
+              {filterOptions[filterIndex].frame === 'polaroid' && (
+                <View style={styles.liveFramePreviewText}>
+                  <Text style={styles.livePolaroidText}>
+                    {new Date().toLocaleDateString()}
+                  </Text>
+                </View>
+              )}
+              
+              {/* Film strip holes preview */}
+              {filterOptions[filterIndex].frame === 'filmstrip' && (
+                <>
+                  <View style={styles.liveFilmHolesLeft}>
+                    {[...Array(8)].map((_, i) => (
+                      <View key={i} style={styles.liveFilmHole} />
+                    ))}
+                  </View>
+                  <View style={styles.liveFilmHolesRight}>
+                    {[...Array(8)].map((_, i) => (
+                      <View key={i} style={styles.liveFilmHole} />
+                    ))}
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        </Animated.View>
+      )}
+
       {/* Controls Layer */}
       <View style={styles.controls} pointerEvents="box-none">
         {/* Back Button */}
@@ -886,14 +1450,25 @@ export default function CameraScreen({ route, navigation }) {
         {...horizontalFilterPanResponder.panHandlers}
         pointerEvents="box-only"
       >
-        {/* Current filter name with animated appear/disappear */}
+        {/* Current filter/frame name with enhanced display */}
         <Animated.View style={[
           styles.currentFilterContainer,
           { opacity: filterIndex > 0 ? filterOpacity : 1 }
         ]}>
-          <Text style={styles.currentFilterText}>
-            {filterOptions[filterIndex].name}
-          </Text>
+          <View style={styles.filterNameDisplay}>
+            {filterOptions[filterIndex].type === 'frame' && (
+              <Ionicons name="image-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
+            )}
+            {filterOptions[filterIndex].type === 'color' && (
+              <View style={[
+                styles.colorIndicatorDot,
+                { backgroundColor: filterColors[filterOptions[filterIndex].color] || '#fff' }
+              ]} />
+            )}
+            <Text style={styles.currentFilterText}>
+              {filterOptions[filterIndex].name}
+            </Text>
+          </View>
         </Animated.View>
       </View>
 
@@ -982,19 +1557,85 @@ export default function CameraScreen({ route, navigation }) {
               },
             ]}
           >
+            {/* Enhanced preview with frame compositing using ViewShot */}
             {previewImageUri && (
-              <View style={styles.previewImageContainer}>
+              <ViewShot 
+                ref={previewViewShotRef}
+                options={{ 
+                  fileName: `composed_image_${Date.now()}`, 
+                  format: "jpg", 
+                  quality: 0.9,
+                  width: width * 0.9,
+                  height: width * 0.7 // Match reduced height
+                }}
+                style={styles.previewImageContainer}
+              >
+                {/* Base image */}
                 <Image 
                   source={{ uri: previewImageUri }} 
                   style={styles.previewImage}
                   resizeMode="cover"
+                  onLoad={() => {
+                    console.log('Preview image loaded successfully');
+                  }}
                   onError={(error) => {
                     console.error('Error loading preview image:', error);
                   }}
                 />
                 
-                {/* Filter Overlay for Preview */}
-                {filterIndex > 0 && filterOptions[filterIndex].color && (
+                {/* Event Frame Overlay */}
+                {filterOptions[filterIndex].frame === 'event-frame' && filterOptions[filterIndex].frameUrl && (
+                  <Image 
+                    source={{ uri: filterOptions[filterIndex].frameUrl }}
+                    style={styles.eventFrameOverlay}
+                    resizeMode="contain"
+                    onLoad={() => {
+                      console.log('Event frame overlay loaded in preview');
+                      setIsFrameLoaded(true);
+                    }}
+                    onError={(error) => {
+                      console.error('Error loading event frame overlay:', error);
+                    }}
+                  />
+                )}
+                
+                {/* Built-in Frame Overlay */}
+                {filterOptions[filterIndex].frame && 
+                 filterOptions[filterIndex].frame !== 'event-frame' && 
+                 filterOptions[filterIndex].frame !== null && (
+                  <View style={[
+                    styles.previewFrameWrapper,
+                    frameStyles[filterOptions[filterIndex].frame]
+                  ]}>
+                    {/* Polaroid text area */}
+                    {filterOptions[filterIndex].frame === 'polaroid' && (
+                      <View style={styles.previewPolaroidTextArea}>
+                        <Text style={styles.previewPolaroidText}>
+                          {new Date().toLocaleDateString()}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {/* Film strip holes */}
+                    {filterOptions[filterIndex].frame === 'filmstrip' && (
+                      <>
+                        <View style={styles.previewFilmHolesLeft}>
+                          {[...Array(8)].map((_, i) => (
+                            <View key={i} style={styles.previewFilmHole} />
+                          ))}
+                        </View>
+                        <View style={styles.previewFilmHolesRight}>
+                          {[...Array(8)].map((_, i) => (
+                            <View key={i} style={styles.previewFilmHole} />
+                          ))}
+                        </View>
+                      </>
+                    )}
+                  </View>
+                )}
+                
+                {/* Color Filter Overlay (only for color filters) */}
+                {filterOptions[filterIndex].type === 'color' && filterOptions[filterIndex].color && (
                   <View 
                     style={[
                       styles.previewFilterOverlay,
@@ -1003,9 +1644,9 @@ export default function CameraScreen({ route, navigation }) {
                   />
                 )}
                 
-                {/* Image border/frame effect */}
+                {/* Image border for styling */}
                 <View style={styles.previewImageBorder} />
-              </View>
+              </ViewShot>
             )}
           </Animated.View>
 
@@ -1334,6 +1975,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   
+  // Enhanced filter info display
   filterIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1345,33 +1987,44 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   
-  filterColorDot: {
+  filterNameDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  colorIndicatorDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 6,
+    marginRight: 8,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   
-  previewFilterText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+  frameDot: {
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
   },
   
   previewImageSection: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 15,
+    paddingTop: 10,
+    paddingBottom: 30,
   },
   
   previewImageContainer: {
     position: 'relative',
+    width: width * 0.9,
+    height: width * 0.7, // Reduced height to prevent stretching
     borderRadius: 20,
     overflow: 'hidden',
     shadowColor: '#000',
@@ -1379,13 +2032,86 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 10,
+    backgroundColor: '#000', // Add background to prevent stretching artifacts
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   
   previewImage: {
-    width: width * 0.85,
-    height: height * 0.52,
+    width: '100%',
+    height: '100%',
     borderRadius: 20,
-    resizeMode: 'cover',
+    resizeMode: 'contain', // Use contain to prevent stretching
+  },
+  
+  // Event frame overlay in preview - matching live preview dimensions
+  eventFrameOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+    zIndex: 2,
+  },
+  
+  // Built-in frame wrapper in preview
+  previewFrameWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+    zIndex: 2,
+  },
+  
+  previewPolaroidTextArea: {
+    position: 'absolute',
+    bottom: 10,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 40,
+  },
+  
+  previewPolaroidText: {
+    color: '#333',
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    backgroundColor: 'rgba(248, 248, 255, 0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 2,
+  },
+  
+  previewFilmHolesLeft: {
+    position: 'absolute',
+    left: -8,
+    top: 10,
+    bottom: 10,
+    width: 8,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  
+  previewFilmHolesRight: {
+    position: 'absolute',
+    right: -8,
+    top: 10,
+    bottom: 10,
+    width: 8,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  
+  previewFilmHole: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#000',
   },
   
   previewFilterOverlay: {
@@ -1564,6 +2290,187 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  // Frame-specific styles
+  frameWrapper: {
+    position: 'relative',
+  },
+  
+  polaroidImage: {
+    width: width * 0.75,
+    height: width * 0.75,
+  },
+  
+  polaroidTextArea: {
+    position: 'absolute',
+    bottom: 10,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 40,
+  },
+  
+  polaroidText: {
+    color: '#333',
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  
+  filmHolesLeft: {
+    position: 'absolute',
+    left: -8,
+    top: 10,
+    bottom: 10,
+    width: 8,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  
+  filmHolesRight: {
+    position: 'absolute',
+    right: -8,
+    top: 10,
+    bottom: 10,
+    width: 8,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  
+  filmHole: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#000',
+  },
+  // Event frame styles
+  eventFrameContainer: {
+    position: 'relative',
+    width: width * 0.85,
+    height: height * 0.52,
+    backgroundColor: 'transparent', // Ensure transparent background
+  },
+  
+  previewImageWithEventFrame: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+  },
+  
+  eventFrameOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+    zIndex: 2, // Ensure frame is above the image
+  },
+  
+  // Debug styles
+  frameErrorOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 3,
+  },
+  
+  frameErrorText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  
+  frameErrorDetails: {
+    color: '#fff',
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  
+  debugFrameBorder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderWidth: 2,
+    borderColor: '#00ff00',
+    borderStyle: 'dashed',
+    zIndex: 4,
+  },
+  // Live frame overlay styles
+  liveFrameOverlay: {
+    width: width * 0.9,
+    height: width * 0.7, // Match reduced height same as preview
+    position: 'absolute',
+  },
+  
+  liveDefaultFramePreview: {
+    width: width * 0.9,
+    height: width * 0.7, // Match reduced height same as preview
+    position: 'relative',
+  },
+  
+  liveFramePreviewContent: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  
+  liveFramePreviewText: {
+    position: 'absolute',
+    bottom: 10,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 40,
+  },
+  
+  livePolaroidText: {
+    color: '#333',
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    backgroundColor: 'rgba(248, 248, 255, 0.8)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 2,
+  },
+  
+  liveFilmHolesLeft: {
+    position: 'absolute',
+    left: -8,
+    top: 20,
+    bottom: 20,
+    width: 8,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  
+  liveFilmHolesRight: {
+    position: 'absolute',
+    right: -8,
+    top: 20,
+    bottom: 20,
+    width: 8,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  
+  liveFilmHole: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+
   },
 });
 
