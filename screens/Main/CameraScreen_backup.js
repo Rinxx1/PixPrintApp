@@ -13,21 +13,7 @@ import {
   Platform,
   StatusBar,
   SafeAreaView,
-  Alert,
-  ScrollView,
 } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { storage } from '../../firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'; 
-import * as ImageManipulator from 'expo-image-manipulator';
-import { db, auth } from '../../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as ImagePicker from 'expo-image-picker';
-import { useAlert } from '../../context/AlertContext';
-import ViewShot from 'react-native-view-shot';
-import { BlurView } from 'expo-blur';
 import { Camera, useCameraDevices, useFrameProcessor } from 'react-native-vision-camera';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { storage } from '../../firebase';
