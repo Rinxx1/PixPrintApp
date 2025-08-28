@@ -846,17 +846,42 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     setSelectedCategory(category);
   };
 
-  // Add optimized grid image component
+  // Add optimized grid image component with enhanced skeleton loader
   const OptimizedGridImage = ({ photo, style, onPress }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
     const fadeAnim = useState(new Animated.Value(0))[0];
+    const shimmerAnim = useState(new Animated.Value(0))[0];
+
+    // Start shimmer animation when component mounts
+    useEffect(() => {
+      const shimmerLoop = () => {
+        Animated.sequence([
+          Animated.timing(shimmerAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: false,
+          }),
+          Animated.timing(shimmerAnim, {
+            toValue: 0,
+            duration: 1000,
+            useNativeDriver: false,
+          }),
+        ]).start(() => shimmerLoop());
+      };
+      
+      if (loading) {
+        shimmerLoop();
+      }
+      
+      return () => shimmerAnim.stopAnimation();
+    }, [loading]);
 
     const handleLoadEnd = () => {
       setLoading(false);
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 200,
+        duration: 300,
         useNativeDriver: true,
       }).start();
     };
@@ -866,12 +891,30 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       setLoading(false);
     };
 
+    // Create shimmer effect
+    const shimmerTranslateX = shimmerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [-style.width || 100, style.width || 100],
+    });
+
     return (
       <TouchableOpacity style={style} onPress={onPress}>
-        {/* Placeholder while loading */}
+        {/* Enhanced skeleton loader with shimmer effect */}
         {loading && (
-          <View style={[style, styles.imagePlaceholder]}>
-            <Ionicons name="image-outline" size={20} color="#DDD" />
+          <View style={[style, styles.imageSkeleton]}>
+            <Animated.View 
+              style={[
+                styles.shimmerOverlay,
+                {
+                  transform: [{ translateX: shimmerTranslateX }],
+                }
+              ]} 
+            />
+            <View style={styles.skeletonContent}>
+              <View style={styles.skeletonIconContainer}>
+                <Ionicons name="image-outline" size={16} color="#E0E0E0" />
+              </View>
+            </View>
           </View>
         )}
         
@@ -896,15 +939,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         {/* Error fallback */}
         {error && (
           <View style={[style, styles.imageError]}>
-            <Ionicons name="image-outline" size={20} color="#999" />
+            <Ionicons name="image-outline" size={16} color="#999" />
             <Text style={styles.errorText}>Failed to load</Text>
-          </View>
-        )}
-        
-        {/* Filter badge */}
-        {photo.filterName && photo.filterName !== 'None' && (
-          <View style={styles.filterBadge}>
-            <Text style={styles.filterBadgeText}>{photo.filterName}</Text>
           </View>
         )}
         
@@ -926,17 +962,42 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     );
   };
 
-  // Add high-quality modal image component
+  // Add high-quality modal image component with enhanced skeleton loader
   const HighQualityModalImage = ({ imageUrl, style }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
     const fadeAnim = useState(new Animated.Value(0))[0];
+    const modalShimmerAnim = useState(new Animated.Value(0))[0];
+
+    // Start modal shimmer animation when component mounts
+    useEffect(() => {
+      const modalShimmerLoop = () => {
+        Animated.sequence([
+          Animated.timing(modalShimmerAnim, {
+            toValue: 1,
+            duration: 1200,
+            useNativeDriver: false,
+          }),
+          Animated.timing(modalShimmerAnim, {
+            toValue: 0,
+            duration: 1200,
+            useNativeDriver: false,
+          }),
+        ]).start(() => modalShimmerLoop());
+      };
+      
+      if (loading) {
+        modalShimmerLoop();
+      }
+      
+      return () => modalShimmerAnim.stopAnimation();
+    }, [loading]);
 
     const handleLoadEnd = () => {
       setLoading(false);
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 300,
+        duration: 400,
         useNativeDriver: true,
       }).start();
     };
@@ -946,12 +1007,31 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       setLoading(false);
     };
 
+    // Create modal shimmer effect
+    const modalShimmerTranslateX = modalShimmerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [-style.width || 200, style.width || 200],
+    });
+
     return (
       <View style={style}>
-        {/* Simple loading indicator */}
+        {/* Enhanced modal skeleton loader with shimmer effect */}
         {loading && (
-          <View style={[style, styles.modalImageLoading]}>
-            <ActivityIndicator size="large" color="#FFFFFF" />
+          <View style={[style, styles.modalImageSkeleton]}>
+            <Animated.View 
+              style={[
+                styles.modalShimmerOverlay,
+                {
+                  transform: [{ translateX: modalShimmerTranslateX }],
+                }
+              ]} 
+            />
+            <View style={styles.modalSkeletonContent}>
+              <View style={styles.modalSkeletonIconContainer}>
+                <Ionicons name="image-outline" size={48} color="#E0E0E0" />
+              </View>
+              <Text style={styles.modalSkeletonText}>Loading...</Text>
+            </View>
           </View>
         )}
         
@@ -959,7 +1039,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         <Animated.View style={[style, { opacity: fadeAnim }]}>
           <Image
             source={{ 
-              uri: error ? null : optimizeImageUrl(imageUrl, 'high'), // Original quality
+              uri: error ? null : optimizeImageUrl(imageUrl, 'medium'), // Original quality
               cache: 'web'
             }}
             style={style}
@@ -1199,10 +1279,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         {/* Gallery Title */}
         <View style={styles.galleryHeader}>
           <Text style={styles.galleryTitle}>{galleryTitle}</Text>
-          <TouchableOpacity style={styles.viewAllButton}>
-            <Text style={styles.viewAllText}>View All</Text>
-            <Ionicons name="chevron-forward" size={16} color="#FF6F61" />
-          </TouchableOpacity>
         </View>
 
         {/* Loading indicator for photos */}
@@ -1267,23 +1343,39 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         {images.length > 0 && (
           <View style={styles.instaGrid}>
             {(selectedCategory === 'person' || selectedCategory === 'group' || selectedCategory === 'camera') ? (
-              // For all dynamic photo arrays (All Photos, My Photos, and Photographer Photos)
+              // Instagram-style grid with equal squares
               images.map((photo, index) => {
-                const isFirstInRow = index % 3 === 0;
+                const row = Math.floor(index / 3);
+                const col = index % 3;
+                const isFirstInRow = col === 0;
+                const isLastInRow = col === 2;
+                const isFirstRow = row === 0;
+                const isLastRow = row === Math.floor((images.length - 1) / 3);
                 
                 if (isFirstInRow) {
                   return (
-                    <View key={`row-${index}`} style={styles.instaGridRow}>
+                    <View key={`row-${row}`} style={styles.instaGridRow}>
                       {[0, 1, 2].map((colIndex) => {
                         const photoIndex = index + colIndex;
                         const currentPhoto = images[photoIndex];
                         if (!currentPhoto) return null;
                         
+                        const isEdgeLeft = colIndex === 0;
+                        const isEdgeRight = colIndex === 2;
+                        const isEdgeTop = row === 0;
+                        const isEdgeBottom = row === Math.floor((images.length - 1) / 3);
+                        
                         return (
                           <OptimizedGridImage
                             key={`image-${currentPhoto.id}`}
                             photo={currentPhoto}
-                            style={styles.instaEqualImage}
+                            style={[
+                              styles.instaEqualImage,
+                              isEdgeLeft && styles.edgeLeft,
+                              isEdgeRight && styles.edgeRight,
+                              isEdgeTop && styles.edgeTop,
+                              isEdgeBottom && styles.edgeBottom,
+                            ]}
                             onPress={() => handleImageClick(currentPhoto)}
                           />
                         );
@@ -1659,15 +1751,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#222',
   },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  viewAllText: {
-    fontSize: 14,
-    color: '#FF6F61',
-    fontWeight: '500',
-  },
+
   // Image Grid Styles
   imageGrid: {
     flexDirection: 'row',
@@ -1747,42 +1831,67 @@ const styles = StyleSheet.create({
   },
   // Instagram-style grid
   instaGrid: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 0,
     marginBottom: 20,
   },
   instaGridRow: {
     flexDirection: 'row',
-    height: width * 0.3,
-    marginBottom: 4,
-  },
-  instaMainImage: {
-    width: '66%',
-    height: '100%',
-    borderRadius: 12,
-    marginRight: 4,
-    overflow: 'hidden',
-  },
-  instaSecondaryColumn: {
-    width: '33%',
-    height: '100%',
-    justifyContent: 'space-between',
-  },
-  instaSecondaryImage: {
-    width: '100%',
-    height: '49%',
-    borderRadius: 12,
-    overflow: 'hidden',
+    height: width / 3,
+    marginBottom: 2,
   },
   instaEqualImage: {
     flex: 1,
-    marginHorizontal: 2,
-    borderRadius: 12,
+    marginHorizontal: 1,
     overflow: 'hidden',
+  },
+  // Edge styling for Instagram-like appearance
+  edgeLeft: {
+    marginLeft: 0,
+  },
+  edgeRight: {
+    marginRight: 0,
+  },
+  edgeTop: {
+    marginTop: 0,
+  },
+  edgeBottom: {
+    marginBottom: 0,
   },
   eventImage: {
     width: '100%',
     height: '100%',
     backgroundColor: '#f0f0f0',
+  },
+  // Enhanced skeleton loader styles
+  imageSkeleton: {
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  shimmerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    width: '100%',
+    height: '100%',
+  },
+  skeletonContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  skeletonIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E8E8E8',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   printButton: {
     flexDirection: 'row',
@@ -1821,24 +1930,11 @@ const styles = StyleSheet.create({
     marginTop: 5,
     textAlign: 'center',
   },
-  filterBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 12,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-  },
-  filterBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '500',
-  },
+
   
   // Modal image loading styles
-  modalImageLoading: {
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  modalImageSkeleton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'absolute',
@@ -1847,6 +1943,36 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: 12,
+    overflow: 'hidden',
+  },
+  modalShimmerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: '100%',
+    height: '100%',
+  },
+  modalSkeletonContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  modalSkeletonIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalSkeletonText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 16,
+    fontWeight: '500',
   },
   modalImageError: {
     backgroundColor: 'rgba(0, 0, 0, 0.8)',

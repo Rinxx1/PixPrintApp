@@ -15,7 +15,9 @@ import {
   SafeAreaView,
   Alert,
   ScrollView,
+  FlatList,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { storage } from '../../firebase';
@@ -114,8 +116,8 @@ export default function InstagramCameraScreen({ route, navigation }) {
   const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [lastPhoto, setLastPhoto] = useState(null);
-  const [isUploading, setIsUploading] = useState(false);
-    // Filter states
+  const [isUploading, setIsUploading] = useState(false);  // Filter states
+  const [selectedFilterIndex, setSelectedFilterIndex] = useState(0);
   const [selectedFilter, setSelectedFilter] = useState('none');
   
   // Instagram Collage/Layout states
@@ -131,8 +133,27 @@ export default function InstagramCameraScreen({ route, navigation }) {
   const switchCameraRotation = useRef(new Animated.Value(0)).current;
   const captureScale = useRef(new Animated.Value(1)).current;
   const filterScale = useRef(new Animated.Value(1)).current;
+  const filterTransition = useRef(new Animated.Value(0)).current;
   const gridTransitionOpacity = useRef(new Animated.Value(1)).current;
   const cameraScaleAnim = useRef(new Animated.Value(1)).current;
+  const carouselRef = useRef(null);
+  const [isUserScrolling, setIsUserScrolling] = useState(false);
+  const hasUserInteractedRef = useRef(false);
+  const initialCarouselOffsetRef = useRef(null);
+
+  useEffect(() => {
+    if (isUserScrolling) return;
+    if (carouselRef.current && typeof selectedFilterIndex === 'number') {
+      try {
+        const itemWidth = FILTER_SIZE + FILTER_SPACING;
+        const targetOffset = selectedFilterIndex * itemWidth;
+        // Use precise offset to avoid extra snap jumps
+        carouselRef.current.scrollToOffset({ offset: targetOffset, animated: true });
+      } catch (_) {
+        // ignore initial layout edge cases
+      }
+    }
+  }, [selectedFilterIndex, isUserScrolling]);
   
   // Camera ref
   const cameraRef = useRef(null);
@@ -273,7 +294,6 @@ export default function InstagramCameraScreen({ route, navigation }) {
       useNativeDriver: true,
     }).start();
   };
-
   const toggleFlash = () => {
     const modes = ['auto', 'on', 'off'];
     const currentIndex = modes.indexOf(flash);
@@ -290,6 +310,26 @@ export default function InstagramCameraScreen({ route, navigation }) {
       Animated.timing(flashAnimation, {
         toValue: 0,
         duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  // Instagram-style filter swiping
+  const changeFilter = (newIndex) => {
+    const maxIndex = instagramFilters.length - 1;
+    const boundedIndex = Math.max(0, Math.min(maxIndex, newIndex));
+    setSelectedFilterIndex(boundedIndex);
+    setSelectedFilter(instagramFilters[boundedIndex].value);
+    Animated.sequence([
+      Animated.timing(filterTransition, {
+        toValue: 1,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+      Animated.timing(filterTransition, {
+        toValue: 0,
+        duration: 120,
         useNativeDriver: true,
       }),
     ]).start();
@@ -629,27 +669,130 @@ export default function InstagramCameraScreen({ route, navigation }) {
     }
   };
 
-  // Render filter overlay
-  const renderFilterOverlay = () => {
-    if (selectedFilter === 'none') return null;
-
-    const filter = instagramFilters.find(f => f.value === selectedFilter);
-    if (!filter) return null;
+  const renderFilterCarousel = () => {
+    const itemWidth = FILTER_SIZE + FILTER_SPACING;
+    const containerWidth = width - 32; // bottomControls has 16px horizontal padding on both sides
+    const horizontalPadding = Math.max(0, Math.round((containerWidth - itemWidth) / 2));
+    if (initialCarouselOffsetRef.current === null) {
+      // Start at offset 0 because left padding already centers the first item
+      initialCarouselOffsetRef.current = 0;
+    }
+    const getItemLayout = (_, index) => ({ length: itemWidth, offset: itemWidth * index, index });
+    const onMomentumEnd = (event) => {
+      const offsetX = Math.max(0, event.nativeEvent.contentOffset.x);
+      const centeredIndex = Math.round(offsetX / itemWidth);
+      changeFilter(centeredIndex);
+    };
+    const onScrollBeginDrag = () => { setIsUserScrolling(true); hasUserInteractedRef.current = true; };
+    const onMomentumEndWrapper = (e) => {
+      if (!hasUserInteractedRef.current) {
+        // Ignore first synthetic momentum event that can fire on mount
+        setIsUserScrolling(false);
+        return;
+      }
+      onMomentumEnd(e);
+      setIsUserScrolling(false);
+    };
 
     return (
-      <LinearGradient
-        colors={[...filter.gradient, 'transparent']}
-        style={[styles.filterOverlay, { opacity: 0.3 }]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
+      <View style={[styles.carouselContainer, { width: containerWidth }]}> 
+        <FlatList
+          ref={carouselRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={itemWidth}
+          snapToAlignment="start"
+          decelerationRate={0.9}
+          contentContainerStyle={[styles.carouselRow, { paddingLeft: horizontalPadding, paddingRight: horizontalPadding }]}
+          data={instagramFilters}
+          keyExtractor={(item) => item.value}
+          // Use a stable, one-time contentOffset to avoid resetting on re-renders
+          contentOffset={{ x: initialCarouselOffsetRef.current, y: 0 }}
+          getItemLayout={getItemLayout}
+          onMomentumScrollEnd={onMomentumEndWrapper}
+          onMomentumScrollBegin={() => setIsUserScrolling(true)}
+          onScrollBeginDrag={onScrollBeginDrag}
+          onScrollEndDrag={() => { /* keep scrolling state until momentum ends */ }}
+          disableIntervalMomentum={false}
+          bounces={false}
+          onScrollToIndexFailed={({ index }) => {
+            const targetOffset = horizontalPadding + index * itemWidth;
+            setTimeout(() => {
+              try { carouselRef.current?.scrollToOffset({ offset: targetOffset, animated: false }); } catch (_) {}
+            }, 50);
+          }}
+          renderItem={({ item, index }) => (
+            <TouchableOpacity
+              style={[styles.carouselItem, index === selectedFilterIndex && styles.carouselItemActive]}
+              activeOpacity={0.8}
+              onPress={() => changeFilter(index)}
+            >
+              <LinearGradient
+                colors={item.gradient}
+                style={styles.carouselCircle}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                {index === selectedFilterIndex && (
+                  <View style={styles.carouselActiveBorder} />
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+    );
+  };
+
+  // Renders the Instagram-style filter overlay on camera and preview
+  const renderFilterOverlay = () => {
+    const filter = instagramFilters[selectedFilterIndex];
+    if (!filter || filter.value === 'none') return null;
+
+    // Mono filter: overlay a semi-transparent dark layer
+    if (filter.value === 'mono') {
+      return (
+        <Animated.View
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: 'rgba(40,40,40,0.25)',
+            opacity: filterTransition.interpolate({ 
+              inputRange: [0, 1], 
+              outputRange: [1, 0.7] 
+            }),
+          }}
+          pointerEvents="none"
+        />
+      );
+    }
+
+    // Gradient filters: overlay a LinearGradient with subtle opacity so camera remains visible
+    return (
+      <Animated.View 
+        style={[
+          StyleSheet.absoluteFill, 
+          { 
+            opacity: filterTransition.interpolate({ 
+              inputRange: [0, 1], 
+              outputRange: [0.25, 0.15] 
+            }) 
+          }
+        ]} 
+        pointerEvents="none"
+      >
+        <LinearGradient
+          colors={filter.gradient}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+      </Animated.View>
     );
   };
 
   // Render camera view
   const renderCamera = () => {
     const layout = getCurrentLayout();
-  
     const cameraAndControls = (
       // This container has the final camera dimensions and acts as the boundary for controls
       <View style={[styles.camera, { overflow: 'hidden' }]}>
@@ -657,7 +800,11 @@ export default function InstagramCameraScreen({ route, navigation }) {
           // GRID MODE
           <View style={styles.fullSize}>
             <LinearGradient
-              colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.1)']}
+              colors={[
+                'rgba(0,0,0,0.1)', 
+                'rgba(0,0,0,0.3)', 
+                'rgba(0,0,0,0.1)'
+              ]}
               style={StyleSheet.absoluteFillObject}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -685,9 +832,7 @@ export default function InstagramCameraScreen({ route, navigation }) {
                         facing={facing}
                         flash={flash}
                         scale="cover"
-                      >
-                        {renderFilterOverlay()}
-                      </CameraView>
+                      />
                     </View>
                   </View>
                 );
@@ -740,6 +885,9 @@ export default function InstagramCameraScreen({ route, navigation }) {
                 );
               }
             })}
+            
+            {/* Filter overlay for grid mode */}
+            {isLayoutMode && renderFilterOverlay()}
           </View>
         ) : (
           // SINGLE PHOTO MODE
@@ -749,11 +897,12 @@ export default function InstagramCameraScreen({ route, navigation }) {
             facing={facing}
             flash={flash}
             scale="cover"
-          >
-            {renderFilterOverlay()}
-          </CameraView>
+          />
         )}
-  
+        
+        {/* Filter overlay for single photo mode */}
+        {!isLayoutMode && renderFilterOverlay()}
+
         {/* Top controls */}
         <View style={styles.topControls}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
@@ -764,71 +913,90 @@ export default function InstagramCameraScreen({ route, navigation }) {
           </View>
           <View style={styles.topRightControls}>
             <TouchableOpacity style={styles.layoutButton} onPress={() => setShowLayoutPicker(true)}>
-              <Ionicons name={getCurrentLayout().icon} size={24} color="white" />
+              <Ionicons name="grid-outline" size={24} color="white" />
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.flashButton, { opacity: flashAnimation.interpolate({ inputRange: [0, 1], outputRange: [1, 0.5] }) }]}
+              style={[
+                styles.flashButton, 
+                { 
+                  opacity: flashAnimation.interpolate({ 
+                    inputRange: [0, 1], 
+                    outputRange: [1, 0.5] 
+                  }) 
+                }
+              ]}
               onPress={toggleFlash}
             >
               <Ionicons name={flash === 'on' ? 'flash' : flash === 'off' ? 'flash-off' : 'flash-outline'} size={28} color="white" />
             </TouchableOpacity>
           </View>
-        </View>
-  
-        {/* Bottom controls */}
+        </View>        {/* Bottom controls */}
         <View style={styles.bottomControls}>
-          {/* Filter selection */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer} contentContainerStyle={styles.filterContent}>
-            {instagramFilters.map((filter) => (
-              <TouchableOpacity
-                key={filter.value}
-                style={[styles.filterButton, selectedFilter === filter.value && styles.filterButtonActive]}
-                onPress={() => {
-                  setSelectedFilter(filter.value);
-                  Animated.spring(filterScale, { toValue: 1.1, useNativeDriver: true }).start(() => {
-                    Animated.spring(filterScale, { toValue: 1, useNativeDriver: true }).start();
-                  });
-                }}
-              >
-                <LinearGradient colors={filter.gradient} style={styles.filterGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
-                <Text style={[styles.filterText, selectedFilter === filter.value && styles.filterTextActive]}>
-                  {filter.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-  
-          {/* Camera controls */}
-          <View style={styles.cameraControls}>
-            <TouchableOpacity style={styles.galleryButton} onPress={openGallery}>
-              {lastPhoto ? (
-                <Image source={{ uri: lastPhoto }} style={styles.galleryPreview} />
-              ) : (
-                <Ionicons name="images-outline" size={24} color="white" />
-              )}
-            </TouchableOpacity>
-            <Animated.View style={[styles.captureButtonContainer, { transform: [{ scale: captureScale }] }]}>
-              <TouchableOpacity
-                style={[styles.captureButton, isTakingPhoto && styles.captureButtonDisabled]}
-                onPress={takePicture}
-                disabled={isTakingPhoto}
-              >
-                {isTakingPhoto ? <ActivityIndicator size="large" color="white" /> : <View style={styles.captureButtonInner} />}
-              </TouchableOpacity>
-            </Animated.View>
-            <Animated.View style={{ transform: [{ rotateY: switchCameraRotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] }) }] }}>
-              <TouchableOpacity style={styles.switchButton} onPress={switchCamera}>
-                <Ionicons name="camera-reverse-outline" size={28} color="white" />
-              </TouchableOpacity>
+          {/* Camera controls with single container: FlatList + centered capture overlay */}
+          <View style={styles.cameraControlsRow}>
+            {renderFilterCarousel()}
+            <Animated.View style={[
+              styles.captureOverlay, 
+              { 
+                transform: [{ scale: captureScale }] 
+              }
+            ]}> 
+              <View style={styles.captureButtonWrapper} pointerEvents="auto">
+                <TouchableOpacity
+                  style={[styles.captureButton, isTakingPhoto && styles.captureButtonDisabled]}
+                  onPress={takePicture}
+                  disabled={isTakingPhoto}
+                  activeOpacity={0.85}
+                >
+                  <LinearGradient
+                    colors={instagramFilters[selectedFilterIndex].gradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.captureGradient}
+                  >
+                    {isTakingPhoto ? (
+                      <ActivityIndicator size="large" color="white" />
+                    ) : (
+                      <View style={styles.captureButtonInner} />
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
             </Animated.View>
           </View>
         </View>
       </View>
     );
-  
     return (
       <View style={styles.cameraContainer}>
         {cameraAndControls}
+        
+        {/* Bottom navigation controls - Gallery and Switch buttons at screen bottom */}
+        <View style={styles.bottomNavigationControls}>
+          <TouchableOpacity style={styles.galleryButton} onPress={openGallery}>
+            {lastPhoto ? (
+              <Image source={{ uri: lastPhoto }} style={styles.galleryPreview} />
+            ) : (
+              <Ionicons name="images-outline" size={24} color="white" />
+            )}
+          </TouchableOpacity>
+          <View style={styles.bottomBarCenter} pointerEvents="none">
+            <Text style={styles.bottomBarFilterText}>{instagramFilters[selectedFilterIndex]?.name}</Text>
+          </View>
+          
+          <Animated.View style={{ 
+            transform: [{ 
+              rotateY: switchCameraRotation.interpolate({ 
+                inputRange: [0, 1], 
+                outputRange: ['0deg', '180deg'] 
+              }) 
+            }] 
+          }}>
+            <TouchableOpacity style={styles.switchButton} onPress={switchCamera}>
+              <Ionicons name="camera-reverse-outline" size={28} color="white" />
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
       </View>
     );
   };
@@ -907,6 +1075,16 @@ export default function InstagramCameraScreen({ route, navigation }) {
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={styles.previewButton}
+              onPress={() => {
+                // TODO: Implement print functionality
+                console.log('Print button pressed');
+              }}
+            >
+              <Text style={styles.previewButtonText}>Print</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.previewButton, styles.uploadButton, isUploading && styles.uploadButtonDisabled]}
               onPress={async () => {
                 if (isGridMode && gridComplete) {
@@ -925,7 +1103,10 @@ export default function InstagramCameraScreen({ route, navigation }) {
               {isUploading ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
-                <Text style={[styles.previewButtonText, styles.uploadButtonText]}>Share</Text>
+                <View style={styles.shareButtonContent}>
+                  <Text style={[styles.previewButtonText, styles.uploadButtonText]}>Share</Text>
+                  <Ionicons name="arrow-forward" size={16} color="white" style={styles.shareArrow} />
+                </View>
               )}
             </TouchableOpacity>
           </View>
@@ -963,11 +1144,25 @@ export default function InstagramCameraScreen({ route, navigation }) {
                 onPress={() => selectLayout(layout.id)}
               >
                 <View style={styles.layoutIconContainer}>
-                  <Ionicons 
-                    name={layout.icon} 
-                    size={30} 
-                    color={selectedLayout === layout.id ? '#E1306C' : 'white'} 
-                  />
+                  <View style={styles.miniLayout}>
+                    {layout.positions.map((p, idx) => (
+                      <View
+                        key={`mini-${layout.id}-${idx}`}
+                        style={[
+                          styles.miniCell,
+                          {
+                            left: `${p.x * 100}%`,
+                            top: `${p.y * 100}%`,
+                            width: `${p.width * 100}%`,
+                            height: `${p.height * 100}%`,
+                            backgroundColor: selectedLayout === layout.id 
+                              ? 'rgba(225,48,108,0.9)' 
+                              : 'rgba(255,255,255,0.9)'
+                          }
+                        ]}
+                      />
+                    ))}
+                  </View>
                 </View>
                 <View style={styles.layoutTextContainer}>
                   <Text style={[
@@ -1071,16 +1266,20 @@ export default function InstagramCameraScreen({ route, navigation }) {
       </View>
     </Modal>
   );
-
   return (
-    <SafeAreaView style={styles.container}>
-      {renderCamera()}
-      {renderPreview()}
-      {renderLayoutPicker()}
-      {renderCollagePreview()}
-    </SafeAreaView>
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaView style={styles.container}>
+        {renderCamera()}
+        {renderPreview()}
+        {renderLayoutPicker()}
+        {renderCollagePreview()}
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
+
+const FILTER_SIZE = 54;
+const FILTER_SPACING = 26;
 
 const styles = StyleSheet.create({
   container: {
@@ -1088,7 +1287,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'black',
   },
   cameraContainer: {
-    flex: 1,
+    height: Math.floor(height * 0.95),
   },
   camera: {
     width: CAMERA_WIDTH,
@@ -1131,8 +1330,7 @@ const styles = StyleSheet.create({
   flashButton: {
     padding: 8,
     marginLeft: 16,
-  },
-  bottomControls: {
+  },  bottomControls: {
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -1144,49 +1342,80 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     zIndex: 1,
   },
-  filterContainer: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  filterContent: {
+  cameraControlsRow: {
     alignItems: 'center',
+    width: '100%',
+    paddingVertical: 20,
+    justifyContent: 'center',
   },
-  filterButton: {
-    padding: 8,
-    borderRadius: 16,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
-    overflow: 'hidden',
+  controlSpacer: {
+    width: 80, // Same width as right controls to center the capture button
   },
-  filterButtonActive: {
-    borderColor: '#E1306C',
+  rightFilterContainer: {
+    width: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  filterGradient: {
+  // Instagram-style filter carousel styles
+  carouselContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  carouselRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+  },
+  carouselItem: {
+    width: FILTER_SIZE + FILTER_SPACING,
+    alignItems: 'center',
+    marginHorizontal: 0,
+  },
+  carouselItemActive: {
+    // highlight active filter
+  },
+  carouselCircle: {
+    width: FILTER_SIZE,
+    height: FILTER_SIZE,
+    borderRadius: FILTER_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  carouselActiveBorder: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    borderRadius: 16,
+    borderRadius: FILTER_SIZE / 2,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
-  filterText: {
-    color: 'white',
-    fontWeight: '500',
+  carouselLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    marginTop: 4,
     textAlign: 'center',
-    fontSize: 14,
   },
-  filterTextActive: {
-    color: '#E1306C',
+  carouselLabelActive: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
-  cameraControls: {
-    flexDirection: 'row',
+  carouselRightContainer: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
+    justifyContent: 'center',
   },
   galleryButton: {
-    padding: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
   },
   captureButtonContainer: {
     width: 70,
@@ -1198,11 +1427,36 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'white',
   },
+  captureOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'box-none',
+  },
+  captureButtonWrapper: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    pointerEvents: 'auto',
+  },
   captureButton: {
     width: '100%',
     height: '100%',
     borderRadius: 35,
-    backgroundColor: '#E1306C',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  captureGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 35,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1214,9 +1468,15 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     backgroundColor: 'white',
-  },
-  switchButton: {
-    padding: 8,
+  },  switchButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
   },
   permissionContainer: {
     flex: 1,
@@ -1279,6 +1539,14 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: SAFE_AREA_BOTTOM,
   },
+  shareButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareArrow: {
+    marginLeft: 8,
+  },
   previewButton: {
     flex: 1,
     justifyContent: 'center',
@@ -1301,15 +1569,15 @@ const styles = StyleSheet.create({
   },
   layoutPickerOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'flex-end',
   },
   layoutPickerContainer: {
-    flex: 1,
     backgroundColor: 'black',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     paddingTop: 16,
     paddingHorizontal: 16,
+    height: Math.floor(height * 0.54),
   },
   layoutPickerHeader: {
     flexDirection: 'row',
@@ -1351,6 +1619,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+  },
+  miniLayout: {
+    position: 'relative',
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    overflow: 'hidden',
+  },
+  miniCell: {
+    position: 'absolute',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.25)',
+    borderRadius: 4,
   },
   layoutTextContainer: {
     flex: 1,
@@ -1488,11 +1770,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     overflow: 'hidden',
     position: 'relative',
-  },
-  galleryPreview: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
+  },  galleryPreview: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     resizeMode: 'cover',
   },
   filterOverlay: {
@@ -1502,5 +1783,28 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: 16,
+  },  bottomNavigationControls: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingVertical: 20,
+    paddingBottom: SAFE_AREA_BOTTOM + 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    zIndex: 10,
+  },
+  bottomBarCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  bottomBarFilterText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    opacity: 0.9,
   },
 });
