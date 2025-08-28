@@ -31,7 +31,7 @@ import { BlurView } from 'expo-blur';
 
 const { width, height } = Dimensions.get('window');
 
-// Instagram's TRUE approach - Full screen immersive experience
+// Instagram's approach - Full screen immersive experience
 const INSTAGRAM_ASPECT_RATIO = 9 / 16; // Instagram's portrait aspect ratio
 
 // Instagram uses almost the entire screen width with very minimal padding
@@ -110,7 +110,7 @@ export default function InstagramCameraScreen({ route, navigation }) {
   const [isActive, setIsActive] = useState(true);
   const [isTakingPhoto, setIsTakingPhoto] = useState(false);
   
-  // Photo statesbhgiurrwre
+  // Photo states
   const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [lastPhoto, setLastPhoto] = useState(null);
@@ -131,6 +131,8 @@ export default function InstagramCameraScreen({ route, navigation }) {
   const switchCameraRotation = useRef(new Animated.Value(0)).current;
   const captureScale = useRef(new Animated.Value(1)).current;
   const filterScale = useRef(new Animated.Value(1)).current;
+  const gridTransitionOpacity = useRef(new Animated.Value(1)).current;
+  const cameraScaleAnim = useRef(new Animated.Value(1)).current;
   
   // Camera ref
   const cameraRef = useRef(null);
@@ -212,20 +214,20 @@ export default function InstagramCameraScreen({ route, navigation }) {
   };
 
   // Check if all grid slots are filled
-  const isGridComplete = () => {
+  const isGridComplete = (currentGridImages = gridImages) => {
     const layout = getCurrentLayout();
     if (layout.id === 'single') return true;
     
-    const filledSlots = Object.keys(gridImages).length;
+    const filledSlots = Object.keys(currentGridImages).length;
     return filledSlots >= layout.gridCount;
   };
   // Get next empty grid slot
-  const getNextEmptySlot = () => {
+  const getNextEmptySlot = (currentGridImages = gridImages) => {
     const layout = getCurrentLayout();
     for (let i = 0; i < layout.gridCount; i++) {
-      if (!gridImages[i]) return i;
+      if (!currentGridImages[i]) return i;
     }
-    return layout.gridCount - 1; // Return last slot if all filled
+    return -1; // Return -1 if all filled (not last slot index)
   };
 
   // Focus and lifecycle management
@@ -293,51 +295,56 @@ export default function InstagramCameraScreen({ route, navigation }) {
     ]).start();
   };
 
-  // Apply Instagram-style filter to image
-  const applyFilter = async (imageUri, filterType) => {
+  // Apply Instagram-style filter to image and fix front camera inversion
+  const applyFilter = async (imageUri, filterType, isFrontCamera = false) => {
     try {
       let manipulations = [];
 
+      // Fix front camera inversion by flipping horizontally
+      if (isFrontCamera) {
+        manipulations.push({ flip: ImageManipulator.FlipType.Horizontal });
+      }
+
       switch (filterType) {
         case 'vivid':
-          manipulations = [
+          manipulations.push(
             { resize: { width: 1080 } },
             { brightness: 0.1 },
             { contrast: 0.2 },
             { saturation: 0.3 }
-          ];
+          );
           break;
         case 'warm':
-          manipulations = [
+          manipulations.push(
             { resize: { width: 1080 } },
             { brightness: 0.05 },
             { saturation: 0.15 }
-          ];
+          );
           break;
         case 'cool':
-          manipulations = [
+          manipulations.push(
             { resize: { width: 1080 } },
             { brightness: -0.05 },
             { contrast: 0.1 }
-          ];
+          );
           break;
         case 'vintage':
-          manipulations = [
+          manipulations.push(
             { resize: { width: 1080 } },
             { brightness: -0.1 },
             { contrast: 0.15 },
             { saturation: -0.2 }
-          ];
+          );
           break;
         case 'mono':
-          manipulations = [
+          manipulations.push(
             { resize: { width: 1080 } },
             { greyscale: {} },
             { contrast: 0.1 }
-          ];
+          );
           break;
         default:
-          manipulations = [{ resize: { width: 1080 } }];
+          manipulations.push({ resize: { width: 1080 } });
       }
 
       const result = await ImageManipulator.manipulateAsync(
@@ -381,33 +388,46 @@ export default function InstagramCameraScreen({ route, navigation }) {
 
       if (photo?.uri) {
         const layout = getCurrentLayout();
+        let processedPhotoUri = photo.uri;
+        
+        // Fix front camera inversion by flipping the image horizontally
+        if (facing === 'front') {
+          try {
+            const flippedResult = await ImageManipulator.manipulateAsync(
+              photo.uri,
+              [{ flip: ImageManipulator.FlipType.Horizontal }],
+              { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+            );
+            processedPhotoUri = flippedResult.uri;
+          } catch (error) {
+            console.log('Error flipping front camera image:', error);
+            // Continue with original image if flip fails
+          }
+        }
         
         if (layout.id === 'single') {
-          // Single photo mode - show normal preview
-          setCapturedPhoto(photo.uri);
-          setLastPhoto(photo.uri);
+          // In single mode, we can show a preview screen
+          setCapturedPhoto(processedPhotoUri);
+          setLastPhoto(processedPhotoUri);
           setShowPreview(true);
-          setIsActive(false);        } else {
-          // Grid layout mode - add to current active grid slot
+          setIsActive(false);
+        } else {
+          // For grid mode, add the image directly to the current slot
           const currentSlot = activeGridIndex;
-          const newGridImages = { ...gridImages, [currentSlot]: photo.uri };
+          const newGridImages = { ...gridImages, [currentSlot]: processedPhotoUri };
           setGridImages(newGridImages);
-          setLastPhoto(photo.uri);
+          setLastPhoto(processedPhotoUri);
           
-          // Check if grid is complete
-          if (Object.keys(newGridImages).length >= layout.gridCount) {
-            // Grid is complete - show collage preview
-            setShowCollagePreview(true);
+          // Check if grid is complete with the new images
+          if (isGridComplete(newGridImages)) {
+            // All slots are filled, show the collage in the preview container
+            setCapturedPhoto(processedPhotoUri);
+            setShowPreview(true);
             setIsActive(false);
           } else {
-            // More photos needed - find next empty slot
-            const nextEmptySlot = layout.gridCount;
-            for (let i = 0; i < layout.gridCount; i++) {
-              if (!newGridImages[i]) {
-                setActiveGridIndex(i);
-                break;
-              }
-            }
+            // Move to the next empty slot
+            const nextEmptySlot = getNextEmptySlot(newGridImages);
+            setActiveGridIndex(nextEmptySlot);
           }
         }
       }
@@ -489,39 +509,56 @@ export default function InstagramCameraScreen({ route, navigation }) {
   };
   // Access gallery
   const openGallery = async () => {
-    try {      const result = await ImagePicker.launchImageLibraryAsync({
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [9, 16],
+        aspect: [9, 16], // Instagram portrait aspect ratio
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets[0]) {
         const layout = getCurrentLayout();
+        let processedPhotoUri = result.assets[0].uri;
+        
+        // Apply the same front camera flip logic if this is replacing a front camera slot
+        // Note: This is optional since gallery images aren't inherently "front camera" images
+        // but it maintains consistency if the user is in front camera mode
+        if (facing === 'front') {
+          try {
+            const flippedResult = await ImageManipulator.manipulateAsync(
+              result.assets[0].uri,
+              [{ flip: ImageManipulator.FlipType.Horizontal }],
+              { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+            );
+            processedPhotoUri = flippedResult.uri;
+          } catch (error) {
+            console.log('Error flipping gallery image:', error);
+            // Continue with original image if flip fails
+          }
+        }
         
         if (layout.id === 'single') {
-          // Single photo mode
-          setCapturedPhoto(result.assets[0].uri);
+          setCapturedPhoto(processedPhotoUri);
           setShowPreview(true);
-          setIsActive(false);        } else {
-          // Grid layout mode - add to current active grid slot
+          setIsActive(false);
+        } else {
+          // For grid mode, add the image directly to the current slot
           const currentSlot = activeGridIndex;
-          const newGridImages = { ...gridImages, [currentSlot]: result.assets[0].uri };
+          const newGridImages = { ...gridImages, [currentSlot]: processedPhotoUri };
           setGridImages(newGridImages);
-          setLastPhoto(result.assets[0].uri);
+          setLastPhoto(processedPhotoUri);
           
-          // Check if grid is complete
-          if (Object.keys(newGridImages).length >= layout.gridCount) {
-            setShowCollagePreview(true);
+          // Check if grid is complete with the new images
+          if (isGridComplete(newGridImages)) {
+            // All slots are filled, show the collage in the preview container
+            setCapturedPhoto(processedPhotoUri); // This will be the last image selected
+            setShowPreview(true);
             setIsActive(false);
           } else {
-            // Find next empty slot
-            for (let i = 0; i < layout.gridCount; i++) {
-              if (!newGridImages[i]) {
-                setActiveGridIndex(i);
-                break;
-              }
-            }
+            // Move to the next empty slot
+            const nextEmptySlot = getNextEmptySlot(newGridImages);
+            setActiveGridIndex(nextEmptySlot);
           }
         }
       }
@@ -561,20 +598,31 @@ export default function InstagramCameraScreen({ route, navigation }) {
     const newGridImages = { ...gridImages };
     delete newGridImages[index];
     setGridImages(newGridImages);
-    setActiveGridIndex(getNextEmptySlot());
+    // After removing an image, the now-empty slot should become active.
+    setActiveGridIndex(index);
   };
 
   // Create collage from grid images
   const createCollage = async () => {
     try {
       const layout = getCurrentLayout();
-      const collageWidth = 1080;
-      const collageHeight = 1920; // 9:16 aspect ratio
       
-      // This would require a more complex implementation with image manipulation
-      // For now, we'll use the first image as the main collage representation
-      const firstImageUri = gridImages[0];
-      return firstImageUri;
+      // For now, we'll create a simple vertical or horizontal collage
+      // In a real implementation, you'd use a more sophisticated image manipulation library
+      
+      // Get all the images
+      const imageUris = [];
+      for (let i = 0; i < layout.gridCount; i++) {
+        if (gridImages[i]) {
+          imageUris.push(gridImages[i]);
+        }
+      }
+      
+      if (imageUris.length === 0) return null;
+      
+      // For now, return the first image as the collage representation
+      // In production, you would use ImageManipulator or similar to combine images
+      return imageUris[0];
     } catch (error) {
       console.error('Collage creation error:', error);
       return null;
@@ -599,111 +647,159 @@ export default function InstagramCameraScreen({ route, navigation }) {
   };
 
   // Render camera view
-  const renderCamera = () => (
-    <View style={styles.cameraContainer}>      <CameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing={facing}
-        flash={flash}
-        ratio="9:16"      >
-        {renderFilterOverlay()}
-        {renderGridOverlay()}
-        
+  const renderCamera = () => {
+    const layout = getCurrentLayout();
+  
+    const cameraAndControls = (
+      // This container has the final camera dimensions and acts as the boundary for controls
+      <View style={[styles.camera, { overflow: 'hidden' }]}>
+        {isLayoutMode ? (
+          // GRID MODE
+          <View style={styles.fullSize}>
+            <LinearGradient
+              colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.1)']}
+              style={StyleSheet.absoluteFillObject}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            />
+            {layout.positions.map((position, index) => {
+              const isActive = index === activeGridIndex;
+              const isFilled = gridImages[index];
+  
+              const cellStyle = {
+                position: 'absolute',
+                left: `${position.x * 100}%`,
+                top: `${position.y * 100}%`,
+                width: `${position.width * 100}%`,
+                height: `${position.height * 100}%`,
+                padding: 2, // Add padding for spacing between cells
+              };
+  
+              if (isActive) {
+                return (
+                  <View key={`grid-cell-${index}`} style={[cellStyle, styles.activeGridCell]}>
+                    <View style={styles.activeGridCellInner}>
+                      <CameraView
+                        ref={cameraRef}
+                        style={styles.fullSize}
+                        facing={facing}
+                        flash={flash}
+                        scale="cover"
+                      >
+                        {renderFilterOverlay()}
+                      </CameraView>
+                    </View>
+                  </View>
+                );
+              } else {
+                return (
+                  <TouchableOpacity
+                    key={`grid-cell-${index}`}
+                    style={cellStyle}
+                    onPress={() => setActiveGridIndex(index)}
+                    onLongPress={() => {
+                      if (isFilled) {
+                        // Show remove option on long press
+                        Alert.alert(
+                          'Remove Image',
+                          'Do you want to remove this image?',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Remove', style: 'destructive', onPress: () => removeGridImage(index) }
+                          ]
+                        );
+                      }
+                    }}
+                  >
+                    {isFilled ? (
+                      <View style={styles.filledGridCell}>
+                        <Image source={{ uri: gridImages[index] }} style={styles.gridImage} />
+                        <View style={styles.gridCellOverlay}>
+                          <View style={styles.filledCellIndicator}>
+                            <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                          </View>
+                        </View>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.emptyGridCellContainer}
+                        onPress={() => setActiveGridIndex(index)}
+                      >
+                        <View style={styles.emptyGridCellBackground}>
+                          <View style={styles.emptyGridPlaceholder} />
+                          <BlurView 
+                            intensity={60} 
+                            tint="dark"
+                            style={styles.emptyGridBlur} 
+                          />
+                          <View style={styles.emptyGridOverlay} />
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  </TouchableOpacity>
+                );
+              }
+            })}
+          </View>
+        ) : (
+          // SINGLE PHOTO MODE
+          <CameraView
+            ref={cameraRef}
+            style={styles.fullSize}
+            facing={facing}
+            flash={flash}
+            scale="cover"
+          >
+            {renderFilterOverlay()}
+          </CameraView>
+        )}
+  
         {/* Top controls */}
         <View style={styles.topControls}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={28} color="white" />
           </TouchableOpacity>
-          
           <View style={styles.topCenterControls}>
-            {isLayoutMode && (
-              <View style={styles.gridIndicator}>
-                <Text style={styles.gridIndicatorText}>
-                  {Object.keys(gridImages).length}/{getCurrentLayout().gridCount}
-                </Text>
-              </View>
-            )}
+            {/* Removed grid indicator for cleaner Instagram-like look */}
           </View>
-          
           <View style={styles.topRightControls}>
-            <TouchableOpacity
-              style={styles.layoutButton}
-              onPress={() => setShowLayoutPicker(true)}
-            >
-              <Ionicons 
-                name={getCurrentLayout().icon} 
-                size={24} 
-                color="white" 
-              />
+            <TouchableOpacity style={styles.layoutButton} onPress={() => setShowLayoutPicker(true)}>
+              <Ionicons name={getCurrentLayout().icon} size={24} color="white" />
             </TouchableOpacity>
-            
             <TouchableOpacity
-              style={[styles.flashButton, { opacity: flashAnimation.interpolate({
-                inputRange: [0, 1],
-                outputRange: [1, 0.5]
-              })}]}
+              style={[styles.flashButton, { opacity: flashAnimation.interpolate({ inputRange: [0, 1], outputRange: [1, 0.5] }) }]}
               onPress={toggleFlash}
             >
-              <Ionicons 
-                name={flash === 'on' ? 'flash' : flash === 'off' ? 'flash-off' : 'flash-outline'} 
-                size={28} 
-                color="white" 
-              />
+              <Ionicons name={flash === 'on' ? 'flash' : flash === 'off' ? 'flash-off' : 'flash-outline'} size={28} color="white" />
             </TouchableOpacity>
           </View>
         </View>
-
+  
         {/* Bottom controls */}
         <View style={styles.bottomControls}>
           {/* Filter selection */}
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            style={styles.filterContainer}
-            contentContainerStyle={styles.filterContent}
-          >
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer} contentContainerStyle={styles.filterContent}>
             {instagramFilters.map((filter) => (
               <TouchableOpacity
                 key={filter.value}
-                style={[
-                  styles.filterButton,
-                  selectedFilter === filter.value && styles.filterButtonActive
-                ]}
+                style={[styles.filterButton, selectedFilter === filter.value && styles.filterButtonActive]}
                 onPress={() => {
                   setSelectedFilter(filter.value);
-                  Animated.spring(filterScale, {
-                    toValue: 1.1,
-                    useNativeDriver: true,
-                  }).start(() => {
-                    Animated.spring(filterScale, {
-                      toValue: 1,
-                      useNativeDriver: true,
-                    }).start();
+                  Animated.spring(filterScale, { toValue: 1.1, useNativeDriver: true }).start(() => {
+                    Animated.spring(filterScale, { toValue: 1, useNativeDriver: true }).start();
                   });
                 }}
               >
-                <LinearGradient
-                  colors={filter.gradient}
-                  style={styles.filterGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                />
-                <Text style={[
-                  styles.filterText,
-                  selectedFilter === filter.value && styles.filterTextActive
-                ]}>
+                <LinearGradient colors={filter.gradient} style={styles.filterGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
+                <Text style={[styles.filterText, selectedFilter === filter.value && styles.filterTextActive]}>
                   {filter.name}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
-
+  
           {/* Camera controls */}
           <View style={styles.cameraControls}>
-            {/* Gallery button */}
             <TouchableOpacity style={styles.galleryButton} onPress={openGallery}>
               {lastPhoto ? (
                 <Image source={{ uri: lastPhoto }} style={styles.galleryPreview} />
@@ -711,85 +807,132 @@ export default function InstagramCameraScreen({ route, navigation }) {
                 <Ionicons name="images-outline" size={24} color="white" />
               )}
             </TouchableOpacity>
-
-            {/* Capture button */}
-            <Animated.View style={[styles.captureButtonContainer, {
-              transform: [{ scale: captureScale }]
-            }]}>
+            <Animated.View style={[styles.captureButtonContainer, { transform: [{ scale: captureScale }] }]}>
               <TouchableOpacity
                 style={[styles.captureButton, isTakingPhoto && styles.captureButtonDisabled]}
                 onPress={takePicture}
                 disabled={isTakingPhoto}
               >
-                {isTakingPhoto ? (
-                  <ActivityIndicator size="large" color="white" />
-                ) : (
-                  <View style={styles.captureButtonInner} />
-                )}
+                {isTakingPhoto ? <ActivityIndicator size="large" color="white" /> : <View style={styles.captureButtonInner} />}
               </TouchableOpacity>
             </Animated.View>
-
-            {/* Switch camera button */}
-            <Animated.View style={{
-              transform: [{
-                rotateY: switchCameraRotation.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0deg', '180deg']
-                })
-              }]
-            }}>
+            <Animated.View style={{ transform: [{ rotateY: switchCameraRotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] }) }] }}>
               <TouchableOpacity style={styles.switchButton} onPress={switchCamera}>
                 <Ionicons name="camera-reverse-outline" size={28} color="white" />
               </TouchableOpacity>
             </Animated.View>
           </View>
         </View>
-      </CameraView>
-    </View>
-  );  // Render preview screen
-  const renderPreview = () => (
-    <Modal visible={showPreview} animationType="slide">
-      <View style={styles.previewContainer}>
-        <StatusBar barStyle="light-content" />
-        
-        {/* Centered preview image with proper spacing */}
-        <View style={styles.previewImageContainer}>
-          <ViewShot ref={viewShotRef} style={styles.viewShotContainer}>
-            <Image source={{ uri: capturedPhoto }} style={styles.previewImage} />
-            <View style={styles.previewFilterOverlayContainer}>
-              {renderFilterOverlay()}
-            </View>
-          </ViewShot>
-        </View>
-
-        {/* Bottom controls positioned at screen bottom */}
-        <View style={styles.previewControls}>
-          <TouchableOpacity
-            style={styles.previewButton}
-            onPress={() => {
-              setShowPreview(false);
-              setCapturedPhoto(null);
-              setIsActive(true);
-              setSelectedFilter('none');
-            }}
-          >
-            <Text style={styles.previewButtonText}>Retake</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.previewButton, styles.uploadButton, isUploading && styles.uploadButtonDisabled]}
-            onPress={() => uploadPhoto(capturedPhoto)}
-            disabled={isUploading}
-          >
-            {isUploading ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Text style={[styles.previewButtonText, styles.uploadButtonText]}>Share</Text>
-            )}
-          </TouchableOpacity>
-        </View>
       </View>
-    </Modal>  );
+    );
+  
+    return (
+      <View style={styles.cameraContainer}>
+        {cameraAndControls}
+      </View>
+    );
+  };
+
+  // Render preview screen
+  const renderPreview = () => {
+    const layout = getCurrentLayout();
+    const isGridMode = layout.id !== 'single';
+    const gridComplete = isGridComplete(gridImages);
+    
+    return (
+      <Modal visible={showPreview} animationType="slide">
+        <View style={styles.previewContainer}>
+          <StatusBar barStyle="light-content" />
+          
+          {/* Centered preview image with proper spacing */}
+          <View style={styles.previewImageContainer}>
+            <ViewShot ref={viewShotRef} style={styles.viewShotContainer}>
+              {isGridMode && gridComplete ? (
+                // Show collage layout when all slots are filled
+                <View style={styles.collageContainer}>
+                  {layout.positions.map((position, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.collageCell,
+                        {
+                          left: `${position.x * 100}%`,
+                          top: `${position.y * 100}%`,
+                          width: `${position.width * 100}%`,
+                          height: `${position.height * 100}%`,
+                        }
+                      ]}
+                    >
+                      {gridImages[index] ? (
+                        <Image 
+                          source={{ uri: gridImages[index] }} 
+                          style={styles.collageCellImage}
+                        />
+                      ) : (
+                        <View style={styles.collageCellEmpty}>
+                          <Ionicons name="add" size={24} color="white" />
+                          <Text style={styles.emptySlotText}>Empty</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                // Show single image for single mode
+                <Image source={{ uri: capturedPhoto }} style={styles.previewImage} />
+              )}
+              <View style={styles.previewFilterOverlayContainer}>
+                {renderFilterOverlay()}
+              </View>
+            </ViewShot>
+          </View>
+
+          {/* Bottom controls positioned at screen bottom */}
+          <View style={styles.previewControls}>
+            <TouchableOpacity
+              style={styles.previewButton}
+              onPress={() => {
+                setShowPreview(false);
+                setCapturedPhoto(null);
+                setIsActive(true);
+                setSelectedFilter('none');
+                
+                // If in grid mode and completed, also clear the grid
+                if (isGridMode && gridComplete) {
+                  clearGrid();
+                }
+              }}
+            >
+              <Text style={styles.previewButtonText}>Retake</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.previewButton, styles.uploadButton, isUploading && styles.uploadButtonDisabled]}
+              onPress={async () => {
+                if (isGridMode && gridComplete) {
+                  // Create and upload collage
+                  const collageUri = await createCollage();
+                  if (collageUri) {
+                    uploadPhoto(collageUri);
+                  }
+                } else {
+                  // Upload single photo
+                  uploadPhoto(capturedPhoto);
+                }
+              }}
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text style={[styles.previewButtonText, styles.uploadButtonText]}>Share</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
   // Render layout picker modal
   const renderLayoutPicker = () => (
     <Modal visible={showLayoutPicker} animationType="slide" transparent={true}>
@@ -846,124 +989,7 @@ export default function InstagramCameraScreen({ route, navigation }) {
         </View>
       </View>
     </Modal>
-  );  // Render grid overlay - Instagram style
-  const renderGridOverlay = () => {
-    if (!isLayoutMode) return null;
-    
-    const layout = getCurrentLayout();
-    const currentImageCount = Object.keys(gridImages).length;
-    const activePosition = layout.positions[activeGridIndex];
-    
-    return (
-      <View style={styles.gridOverlay}>
-        {/* Create masked dark overlay - Instagram approach */}
-        {/* Top section above active cell */}
-        {activePosition.y > 0 && (
-          <View style={[
-            styles.darkOverlaySection,
-            {
-              top: 0,
-              left: 0,
-              right: 0,
-              height: `${activePosition.y * 100}%`,
-            }
-          ]} />
-        )}
-        
-        {/* Bottom section below active cell */}
-        {(activePosition.y + activePosition.height) < 1 && (
-          <View style={[
-            styles.darkOverlaySection,
-            {
-              top: `${(activePosition.y + activePosition.height) * 100}%`,
-              left: 0,
-              right: 0,
-              bottom: 0,
-            }
-          ]} />
-        )}
-        
-        {/* Left section beside active cell */}
-        {activePosition.x > 0 && (
-          <View style={[
-            styles.darkOverlaySection,
-            {
-              top: `${activePosition.y * 100}%`,
-              left: 0,
-              width: `${activePosition.x * 100}%`,
-              height: `${activePosition.height * 100}%`,
-            }
-          ]} />
-        )}
-        
-        {/* Right section beside active cell */}
-        {(activePosition.x + activePosition.width) < 1 && (
-          <View style={[
-            styles.darkOverlaySection,
-            {
-              top: `${activePosition.y * 100}%`,
-              left: `${(activePosition.x + activePosition.width) * 100}%`,
-              right: 0,
-              height: `${activePosition.height * 100}%`,
-            }
-          ]} />
-        )}
-        
-        {/* Active cell border and indicator */}
-        <View
-          style={[
-            styles.activeGridCell,
-            {
-              left: `${activePosition.x * 100}%`,
-              top: `${activePosition.y * 100}%`,
-              width: `${activePosition.width * 100}%`,
-              height: `${activePosition.height * 100}%`,
-            }
-          ]}
-        >
-          {/* Active cell border - bright pink like Instagram */}
-          <View style={styles.gridCellActiveBorder} />
-          
-          {/* Show counter only for active empty cell */}
-          {!gridImages[activeGridIndex] && (
-            <View style={styles.gridCellIndicator}>
-              <Text style={styles.gridCellText}>
-                {currentImageCount + 1}/{layout.gridCount}
-              </Text>
-            </View>
-          )}
-        </View>
-        
-        {/* Show preview images for filled cells that are not active */}
-        {layout.positions.map((position, index) => {
-          if (index === activeGridIndex || !gridImages[index]) return null;
-          
-          return (
-            <View
-              key={index}
-              style={[
-                styles.filledGridCell,
-                {
-                  left: `${position.x * 100}%`,
-                  top: `${position.y * 100}%`,
-                  width: `${position.width * 100}%`,
-                  height: `${position.height * 100}%`,
-                }
-              ]}
-            >
-              <Image 
-                source={{ uri: gridImages[index] }} 
-                style={styles.gridCellImage}
-              />
-              <View style={styles.filledCellOverlay} />
-            </View>
-          );
-        })}
-      </View>
-    );
-  };
-
-  // Render collage preview modal
+  );  // Render collage preview modal
   const renderCollagePreview = () => (
     <Modal visible={showCollagePreview} animationType="slide">
       <View style={styles.previewContainer}>
@@ -974,7 +1000,7 @@ export default function InstagramCameraScreen({ route, navigation }) {
           <ViewShot ref={viewShotRef} style={styles.viewShotContainer}>
             <View style={styles.collageContainer}>
               {getCurrentLayout().positions.map((position, index) => (
-                <TouchableOpacity
+                <View
                   key={index}
                   style={[
                     styles.collageCell,
@@ -985,24 +1011,19 @@ export default function InstagramCameraScreen({ route, navigation }) {
                       height: position.height * FINAL_CAMERA_HEIGHT,
                     }
                   ]}
-                  onPress={() => removeGridImage(index)}
                 >
                   {gridImages[index] ? (
-                    <>
-                      <Image 
-                        source={{ uri: gridImages[index] }} 
-                        style={styles.collageCellImage}
-                      />
-                      <View style={styles.collageCellOverlay}>
-                        <Ionicons name="close-circle" size={20} color="white" />
-                      </View>
-                    </>
+                    <Image 
+                      source={{ uri: gridImages[index] }} 
+                      style={styles.collageCellImage}
+                    />
                   ) : (
                     <View style={styles.collageCellEmpty}>
                       <Ionicons name="add" size={24} color="white" />
+                      <Text style={styles.emptySlotText}>Empty</Text>
                     </View>
                   )}
-                </TouchableOpacity>
+                </View>
               ))}
             </View>
             <View style={styles.previewFilterOverlayContainer}>
@@ -1015,9 +1036,19 @@ export default function InstagramCameraScreen({ route, navigation }) {
         <View style={styles.previewControls}>
           <TouchableOpacity
             style={styles.previewButton}
+            onPress={() => {
+              setShowCollagePreview(false);
+              setIsActive(true);
+            }}
+          >
+            <Text style={styles.previewButtonText}>Edit More</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.previewButton}
             onPress={clearGrid}
           >
-            <Text style={styles.previewButtonText}>Clear</Text>
+            <Text style={styles.previewButtonText}>Clear All</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1033,7 +1064,7 @@ export default function InstagramCameraScreen({ route, navigation }) {
             {isUploading ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
-              <Text style={[styles.previewButtonText, styles.uploadButtonText]}>Share Collage</Text>
+              <Text style={[styles.previewButtonText, styles.uploadButtonText]}>Share</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -1043,8 +1074,7 @@ export default function InstagramCameraScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="black" />
-      {isActive ? renderCamera() : null}
+      {renderCamera()}
       {renderPreview()}
       {renderLayoutPicker()}
       {renderCollagePreview()}
@@ -1057,184 +1087,180 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'black',
   },
+  cameraContainer: {
+    flex: 1,
+  },
+  camera: {
+    width: CAMERA_WIDTH,
+    height: FINAL_CAMERA_HEIGHT,
+    alignSelf: 'center',
+    position: 'relative',
+  },
+  fullSize: {
+    width: '100%',
+    height: '100%',
+  },
+  topControls: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingTop: STATUS_BAR_HEIGHT,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 1,
+  },
+  backButton: {
+    padding: 8,
+  },
+  topCenterControls: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topRightControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  layoutButton: {
+    padding: 8,
+    marginLeft: 16,
+  },
+  flashButton: {
+    padding: 8,
+    marginLeft: 16,
+  },
+  bottomControls: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: SAFE_AREA_BOTTOM,
+    paddingHorizontal: 16,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    zIndex: 1,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  filterContent: {
+    alignItems: 'center',
+  },
+  filterButton: {
+    padding: 8,
+    borderRadius: 16,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    overflow: 'hidden',
+  },
+  filterButtonActive: {
+    borderColor: '#E1306C',
+  },
+  filterGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
+  },
+  filterText: {
+    color: 'white',
+    fontWeight: '500',
+    textAlign: 'center',
+    fontSize: 14,
+  },
+  filterTextActive: {
+    color: '#E1306C',
+  },
+  cameraControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  galleryButton: {
+    padding: 8,
+  },
+  captureButtonContainer: {
+    width: 70,
+    height: 70,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 35,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  captureButton: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 35,
+    backgroundColor: '#E1306C',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  captureButtonDisabled: {
+    backgroundColor: 'rgba(225, 48, 108, 0.5)',
+  },
+  captureButtonInner: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'white',
+  },
+  switchButton: {
+    padding: 8,
+  },
   permissionContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'black',
-    padding: 20,
+    backgroundColor: 'white',
   },
   permissionText: {
-    color: 'white',
     fontSize: 18,
+    marginBottom: 16,
     textAlign: 'center',
-    marginBottom: 20,
   },
   permissionButton: {
     backgroundColor: '#E1306C',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 25,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 24,
   },
   permissionButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
-  },  cameraContainer: {
+    fontWeight: 'bold',
+  },
+  previewContainer: {
     flex: 1,
     backgroundColor: 'black',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingVertical: 8,
-  },camera: {
-    width: FINAL_CAMERA_WIDTH,
-    height: FINAL_CAMERA_HEIGHT,
-    justifyContent: 'space-between',
-    borderRadius: 20,
-    overflow: 'hidden',
   },
-  filterOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    pointerEvents: 'none',
-  },
-  topControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 20 : StatusBar.currentHeight + 10,
-    paddingHorizontal: 20,
-    paddingBottom: 10,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  flashButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bottomControls: {
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-  },
-  filterContainer: {
-    marginBottom: 20,
-  },
-  filterContent: {
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-  filterButton: {
-    alignItems: 'center',
-    marginHorizontal: 8,
-    paddingVertical: 8,
-  },
-  filterButtonActive: {
-    transform: [{ scale: 1.1 }],
-  },
-  filterGradient: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginBottom: 5,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  filterText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  filterTextActive: {
-    color: '#E1306C',
-    fontWeight: '700',
-  },
-  cameraControls: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  galleryButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'white',
-  },
-  galleryPreview: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  captureButtonContainer: {
-    alignItems: 'center',
-  },
-  captureButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'white',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 6,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  captureButtonDisabled: {
-    opacity: 0.5,
-  },
-  captureButtonInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'white',
-  },
-  switchButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'white',
-  },  previewContainer: {
+  previewImageContainer: {
     flex: 1,
-    backgroundColor: 'black',
-  },  previewImageContainer: {
-    flex: 1,
-    width: width,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingTop: 10,
-    paddingBottom: 110, // Reserve space for controls to prevent overlap
+    padding: 16,
   },
   viewShotContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: FINAL_CAMERA_WIDTH,
-    height: FINAL_CAMERA_HEIGHT,
-    borderRadius: 20,
+    width: '100%',
+    height: '100%',
+    borderRadius: 16,
     overflow: 'hidden',
-    alignSelf: 'center',
-  },previewImage: {
-    width: FINAL_CAMERA_WIDTH,
-    height: FINAL_CAMERA_HEIGHT,
+    position: 'relative',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
     resizeMode: 'cover',
-    borderRadius: 20,
   },
   previewFilterOverlayContainer: {
     position: 'absolute',
@@ -1242,128 +1268,89 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  previewFilterContainer: {
-    marginVertical: 20,
-  },
-  previewFilterButton: {
+    justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 8,
-    paddingVertical: 8,
   },
-  previewFilterGradient: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginBottom: 5,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  previewFilterText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: '500',
-    textAlign: 'center',
-  },  previewControls: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  previewControls: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 40,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'space-between',
+    width: '100%',
+    padding: 16,
+    paddingBottom: SAFE_AREA_BOTTOM,
   },
   previewButton: {
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 25,
-    borderWidth: 2,
-    borderColor: 'white',
-    backgroundColor: 'transparent',
-    minWidth: 100,
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 12,
+    borderRadius: 24,
+    marginHorizontal: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  uploadButton: {
+    backgroundColor: '#E1306C',
+  },
+  uploadButtonDisabled: {
+    backgroundColor: 'rgba(225, 48, 108, 0.5)',
   },
   previewButtonText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
-  uploadButton: {
-    backgroundColor: '#E1306C',
-    borderColor: '#E1306C',
-  },
-  uploadButtonDisabled: {
-    opacity: 0.5,
-  },  uploadButtonText: {
-    color: 'white',
-  },  // Layout picker styles
   layoutPickerOverlay: {
     flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
   },
   layoutPickerContainer: {
-    backgroundColor: 'rgba(0,0,0,0.95)',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
-    maxHeight: '70%',
-    minHeight: 400,
+    flex: 1,
+    backgroundColor: 'black',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingTop: 16,
+    paddingHorizontal: 16,
   },
   layoutPickerHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
   layoutPickerTitle: {
     color: 'white',
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: 'bold',
   },
   layoutPickerCloseButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   layoutPickerScroll: {
     flex: 1,
   },
   layoutPickerContent: {
-    paddingBottom: 20,
+    paddingBottom: 32,
   },
   layoutPickerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
-    minHeight: 70,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    marginBottom: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   layoutPickerItemActive: {
-    backgroundColor: 'rgba(225,48,108,0.1)',
+    backgroundColor: 'rgba(225, 48, 108, 0.2)',
   },
   layoutIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    marginRight: 12,
   },
   layoutTextContainer: {
     flex: 1,
@@ -1371,127 +1358,28 @@ const styles = StyleSheet.create({
   layoutPickerItemText: {
     color: 'white',
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontWeight: '500',
   },
   layoutPickerItemTextActive: {
+    fontWeight: 'bold',
     color: '#E1306C',
   },
   layoutPickerItemSubtext: {
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 14,
   },
-  // Top controls styles
-  topCenterControls: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  topRightControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  layoutButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  gridIndicator: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-  },
-  gridIndicatorText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },  // Grid overlay styles
-  gridOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    pointerEvents: 'none',
-  },
-  // New Instagram-style grid overlay styles with masking
-  darkOverlaySection: {
-    position: 'absolute',
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    zIndex: 1,
-  },
-  activeGridCell: {
-    position: 'absolute',
-    pointerEvents: 'none',
-  },
-  filledGridCell: {
-    position: 'absolute',
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  filledCellOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  // Legacy grid styles (kept for compatibility)
-  gridCellDarkOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.75)', // Dark overlay for inactive cells only
-    borderRadius: 8,
-  },
-  gridCell: {
-    position: 'absolute',
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  gridCellImage: {
+  collageContainer: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
-  },
-  gridCellIndicator: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 8,
-  },
-  gridCellText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '800',
-    marginTop: 12,
-    textShadowColor: 'rgba(0,0,0,0.9)',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 4,
-  },
-  gridCellActiveBorder: {
-    position: 'absolute',
-    top: -4,
-    left: -4,
-    right: -4,
-    bottom: -4,
-    borderWidth: 4,
-    borderColor: '#E1306C',
-    borderRadius: 12,
-    shadowColor: '#E1306C',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 15,
-    elevation: 20,
-  },
-  // Collage styles
-  collageContainer: {
-    width: FINAL_CAMERA_WIDTH,
-    height: FINAL_CAMERA_HEIGHT,
     position: 'relative',
-    borderRadius: 20,
-    overflow: 'hidden',
   },
   collageCell: {
     position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   collageCellImage: {
     width: '100%',
@@ -1500,16 +1388,119 @@ const styles = StyleSheet.create({
   },
   collageCellOverlay: {
     position: 'absolute',
-    top: 5,
-    right: 5,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 12,
-    padding: 2,
-  },
-  collageCellEmpty: {
-    flex: 1,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  collageCellEmpty: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  emptyGridCellContainer: {
+    flex: 1,
+    borderRadius: 6,
+    overflow: 'hidden',
+    backgroundColor: 'black',
+  },
+  emptyGridCellBackground: {
+    flex: 1,
+    position: 'relative',
+  },
+  emptyGridPlaceholder: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+  },
+  emptyGridBlur: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  emptyGridOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  emptyGridCell: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  emptyGridContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 8,
+  },
+  filledGridCell: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  gridImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  gridCellOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    padding: 6,
+  },
+  filledCellIndicator: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 10,
+    padding: 2,
+  },
+  activeGridCell: {
+    borderWidth: 2,
+    borderColor: '#E1306C',
+    borderRadius: 6,
+    shadowColor: '#E1306C',
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+    padding: 0,
+  },
+  activeGridCellInner: {
+    flex: 1,
+    borderRadius: 4,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  galleryPreview: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    resizeMode: 'cover',
+  },
+  filterOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
   },
 });
