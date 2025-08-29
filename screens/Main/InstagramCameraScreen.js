@@ -16,6 +16,7 @@ import {
   Alert,
   ScrollView,
   FlatList,
+  useWindowDimensions,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -1285,9 +1286,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'black',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   cameraContainer: {
-    height: Math.floor(height * 0.95),
+     height: Math.floor(height * 0.95),
   },
   camera: {
     width: CAMERA_WIDTH,

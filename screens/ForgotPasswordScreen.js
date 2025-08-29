@@ -122,7 +122,7 @@ export default function ForgotPasswordScreen({ navigation }) {
       
       showSuccess(
         'Reset Link Sent! 📧',
-        `We've sent password reset instructions to ${email.trim()}.\n\nPlease check your email (including spam folder) and follow the link to reset your password.\n\n💡 The link will expire in 1 hour for security.`,
+        `We've sent password reset instructions to ${email.trim()}.`,
         () => {
           // Navigate back to sign in screen
           navigation.navigate('SignIn');
