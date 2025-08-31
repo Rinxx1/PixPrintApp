@@ -30,6 +30,8 @@
     "react": "19.0.0",
     "react-native": "0.79.5",
     "react-native-calendars": "^1.1310.0",
+    "react-native-deepar": "^0.11.0",
+    "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "~2.24.0",
     "react-native-image-filter-kit": "^0.8.0",
     "react-native-modal-datetime-picker": "^18.0.0",

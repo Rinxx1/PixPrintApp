@@ -155,6 +155,14 @@ export default function InstagramCameraScreen({ route, navigation }) {
       }
     }
   }, [selectedFilterIndex, isUserScrolling]);
+
+  // Refresh camera when activeGridIndex changes to prevent blank preview
+  useEffect(() => {
+    if (isLayoutMode && Platform.OS === 'android') {
+      // Small delay to ensure grid cell transition is complete
+      refreshCameraPreview(30);
+    }
+  }, [activeGridIndex, isLayoutMode]);
   
   // Camera ref
   const cameraRef = useRef(null);
@@ -469,6 +477,8 @@ export default function InstagramCameraScreen({ route, navigation }) {
             // Move to the next empty slot
             const nextEmptySlot = getNextEmptySlot(newGridImages);
             setActiveGridIndex(nextEmptySlot);
+            // Refresh camera when moving to next slot to prevent blank preview
+            refreshCameraPreview(50);
           }
         }
       }
@@ -529,6 +539,8 @@ export default function InstagramCameraScreen({ route, navigation }) {
           setCapturedPhoto(null);
           setIsActive(true);
           setSelectedFilter('none');
+          // Refresh camera after successful upload
+          refreshCameraPreview(50);
         }
       );
 
@@ -542,6 +554,8 @@ export default function InstagramCameraScreen({ route, navigation }) {
           setShowPreview(false);
           setCapturedPhoto(null);
           setIsActive(true);
+          // Refresh camera when canceling upload
+          refreshCameraPreview(50);
         }
       );
     } finally {
@@ -623,8 +637,42 @@ export default function InstagramCameraScreen({ route, navigation }) {
     
     if (layoutId !== 'single') {
       setIsLayoutMode(true);
+      // Auto-switch camera to refresh preview for grid layouts (fixes Android blank preview issue)
+      refreshCameraForGridLayout();
     } else {
       setIsLayoutMode(false);
+      // Also refresh camera when switching back to single layout to prevent blank preview
+      refreshCameraPreview(30);
+    }
+  };
+
+  // Function to automatically switch camera back and forth to refresh the preview
+  // This helps prevent blank camera preview issues on Android when switching to grid layouts
+  const refreshCameraForGridLayout = () => {
+    if (Platform.OS === 'android') {
+      const currentFacing = facing;
+      // Switch to opposite camera
+      setFacing(currentFacing === 'back' ? 'front' : 'back');
+      
+      // Switch back to original camera after a very short delay
+      setTimeout(() => {
+        setFacing(currentFacing);
+      }, 50);
+    }
+  };
+
+  // Enhanced camera refresh function for various scenarios
+  const refreshCameraPreview = (delay = 20) => {
+    if (Platform.OS === 'android') {
+      setTimeout(() => {
+        const currentFacing = facing;
+        // Quick camera toggle to refresh preview
+        setFacing(currentFacing === 'back' ? 'front' : 'back');
+        
+        setTimeout(() => {
+          setFacing(currentFacing);
+        }, 50);
+      }, delay);
     }
   };
 
@@ -633,6 +681,8 @@ export default function InstagramCameraScreen({ route, navigation }) {
     setActiveGridIndex(0);
     setShowCollagePreview(false);
     setIsActive(true);
+    // Refresh camera when clearing grid to prevent blank preview
+    refreshCameraPreview(50);
   };
 
   const removeGridImage = (index) => {
@@ -864,6 +914,7 @@ export default function InstagramCameraScreen({ route, navigation }) {
                           <View style={styles.filledCellIndicator}>
                             <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
                           </View>
+
                         </View>
                       </View>
                     ) : (
@@ -1070,6 +1121,9 @@ export default function InstagramCameraScreen({ route, navigation }) {
                 if (isGridMode && gridComplete) {
                   clearGrid();
                 }
+                
+                // Refresh camera when returning from preview to prevent blank screen
+                refreshCameraPreview(50);
               }}
             >
               <Text style={styles.previewButtonText}>Retake</Text>
@@ -1235,6 +1289,8 @@ export default function InstagramCameraScreen({ route, navigation }) {
             onPress={() => {
               setShowCollagePreview(false);
               setIsActive(true);
+              // Refresh camera when returning from collage preview
+              refreshCameraPreview(50);
             }}
           >
             <Text style={styles.previewButtonText}>Edit More</Text>
@@ -1289,13 +1345,17 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   cameraContainer: {
-     height: Math.floor(height * 0.95),
+     flex: 1,
+
   },
   camera: {
     width: CAMERA_WIDTH,
     height: FINAL_CAMERA_HEIGHT,
     alignSelf: 'center',
     position: 'relative',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    overflow: 'hidden',
   },
   fullSize: {
     width: '100%',
@@ -1332,7 +1392,8 @@ const styles = StyleSheet.create({
   flashButton: {
     padding: 8,
     marginLeft: 16,
-  },  bottomControls: {
+  },  
+  bottomControls: {
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -1785,7 +1846,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: 16,
-  },  bottomNavigationControls: {
+  },  
+  bottomNavigationControls: {
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -1795,7 +1857,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 40,
     paddingVertical: 20,
-    paddingBottom: SAFE_AREA_BOTTOM + 10,
+    paddingBottom: SAFE_AREA_BOTTOM,
+    paddingBottom: Platform.OS === 'android' ? 51 : SAFE_AREA_BOTTOM,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     zIndex: 10,
   },
@@ -1810,3 +1873,4 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
 });
+
