@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "PixPrintApp",
-    "slug": "PixPrintApp",
+    "name": "Pix Print",
+    "slug": "pixprintapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,7 +16,13 @@
       "expo-camera"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "pix.print.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs access to camera to take photos.",
+        "NSMicrophoneUsageDescription": "This app needs access to microphone to record audio with photos.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -25,14 +31,18 @@
       },
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "com.anonymous.PixPrintApp"
+      "package": "pix.print.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "72d04b40-439a-42cb-a136-8bc9879e4451"
+      }
+    },
+    "owner": "rinxx14"
   }
 }

@@ -1,4 +1,4 @@
-package com.anonymous.PixPrintApp
+package pix.print.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

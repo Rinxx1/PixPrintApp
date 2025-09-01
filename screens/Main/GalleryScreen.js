@@ -3,11 +3,9 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   Image,
   TouchableOpacity,
   Dimensions,
-  Modal,
   StatusBar,
   Animated,
   ScrollView,
@@ -16,8 +14,9 @@ import {
   Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import HeaderBar from '../../components/HeaderBar';
+import EnhancedPhotoModal from '../../components/EnhancedPhotoModal';
+import InstagramGrid from '../../components/InstagramGrid';
 import { db, auth, storage } from '../../firebase';
 import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
@@ -29,6 +28,7 @@ const screenHeight = Dimensions.get('window').height;
 
 export default function GalleryScreen({ navigation }) {
   const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const [activeFilter, setActiveFilter] = useState('All');
@@ -199,31 +199,22 @@ export default function GalleryScreen({ navigation }) {
     setRefreshing(true);
     await fetchAllPhotos();
     setRefreshing(false);
-  };
-
-  const openImageModal = (photo, index) => {
+  };  const openImageModal = (photo) => {
+    console.log('Opening modal for photo:', photo);
     if (selectionMode) {
       togglePhotoSelection(photo.id);
       return;
     }
-    setSelectedImage({ photo, index });
+    setSelectedImage(photo.imageUrl);
+    setSelectedPhoto(photo);
     setModalVisible(true);
+    console.log('Modal state set - selectedImage:', photo.imageUrl);
   };
 
   const closeModal = () => {
     setModalVisible(false);
     setSelectedImage(null);
-  };
-
-  const getImageSize = () => {
-    if (viewMode === 'grid') {
-      return (screenWidth - 80) / 3;
-    }
-    return (screenWidth - 60) / 2;
-  };
-
-  const getNumColumns = () => {
-    return viewMode === 'grid' ? 3 : 2;
+    setSelectedPhoto(null);
   };
 
   const getFilteredPhotos = () => {
@@ -288,7 +279,6 @@ export default function GalleryScreen({ navigation }) {
       setDeleting(false);
     }
   };
-
   // Handle single photo deletion from modal
   const handleDeleteSinglePhoto = (photo) => {
     showConfirm(
@@ -302,8 +292,8 @@ export default function GalleryScreen({ navigation }) {
             'Photo Deleted Successfully! ✅',
             'Your photo has been permanently removed from your gallery.',
             () => {
-              closeModal();
-              fetchAllPhotos(); // Refresh the gallery
+              closeModal(); // Close modal first
+              fetchAllPhotos(); // Then refresh the gallery
             }
           );
           
@@ -375,7 +365,6 @@ export default function GalleryScreen({ navigation }) {
       setSelectedPhotos(new Set());
     }
   };
-
   // Select all photos
   const selectAllPhotos = () => {
     const filteredPhotos = getFilteredPhotos();
@@ -386,212 +375,6 @@ export default function GalleryScreen({ navigation }) {
   // Deselect all photos
   const deselectAllPhotos = () => {
     setSelectedPhotos(new Set());
-  };
-
-  // Add progressive image loading component for grid items
-  const OptimizedGridImage = ({ imageUrl, style, onPress }) => {
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
-    const fadeAnim = useState(new Animated.Value(0))[0];
-
-    const handleLoadEnd = () => {
-      setLoading(false);
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    };
-
-    const handleError = () => {
-      setError(true);
-      setLoading(false);
-    };
-
-    return (
-      <TouchableOpacity style={style} onPress={onPress}>
-        {/* Placeholder while loading */}
-        {loading && (
-          <View style={[style, styles.imagePlaceholder]}>
-            <Ionicons name="image-outline" size={20} color="#DDD" />
-          </View>
-        )}
-        
-        {/* Optimized thumbnail image */}
-        <Animated.View style={[style, { opacity: fadeAnim }]}>
-          <Image
-            source={{ 
-              uri: error ? null : optimizeImageUrl(imageUrl, 'thumbnail'),
-              cache: 'force-cache'
-            }}
-            style={style}
-            onLoadEnd={handleLoadEnd}
-            onError={handleError}
-            resizeMode="cover"
-            // Performance optimizations
-            fadeDuration={0}
-            progressiveRenderingEnabled={true}
-            removeClippedSubviews={true}
-          />
-        </Animated.View>
-        
-        {/* Error fallback */}
-        {error && (
-          <View style={[style, styles.imageError]}>
-            <Ionicons name="image-outline" size={20} color="#999" />
-            <Text style={styles.errorText}>Failed to load</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-    );
-  };
-
-  // Simplified modal image component without high-quality loading
-  const HighQualityModalImage = ({ imageUrl, style }) => {
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
-    const fadeAnim = useState(new Animated.Value(0))[0];
-
-    const handleLoadEnd = () => {
-      setLoading(false);
-      // Fade in image
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    };
-
-    const handleError = () => {
-      setError(true);
-      setLoading(false);
-    };
-
-    return (
-      <View style={style}>
-        {/* Simple loading indicator */}
-        {loading && (
-          <View style={[style, styles.modalImageLoading]}>
-            <ActivityIndicator size="large" color="#FFFFFF" />
-          </View>
-        )}
-        
-        {/* High-quality image */}
-        <Animated.View style={[style, { opacity: fadeAnim }]}>
-          <Image
-            source={{ 
-              uri: error ? null : optimizeImageUrl(imageUrl, 'high'), // Original quality
-              cache: 'web'
-            }}
-            style={style}
-            onLoadEnd={handleLoadEnd}
-            onError={handleError}
-            resizeMode="contain"
-            progressiveRenderingEnabled={true}
-          />
-        </Animated.View>
-        
-        {/* Error fallback for modal */}
-        {error && (
-          <View style={[style, styles.modalImageError]}>
-            <Ionicons name="alert-circle-outline" size={48} color="#FFFFFF" />
-            <Text style={styles.modalErrorText}>Unable to load image</Text>
-            <Text style={styles.modalErrorSubtext}>Network error or file corrupted</Text>
-          </View>
-        )}
-      </View>
-    );
-  };
-
-  const renderGridItem = ({ item, index }) => {
-    const imageSize = getImageSize();
-    const isLarge = viewMode === 'list' && index % 5 === 0;
-    const isSelected = selectedPhotos.has(item.id);
-    
-    return (
-      <View
-        style={[
-          styles.imageWrapper,
-          {
-            width: isLarge ? (screenWidth - 60) : imageSize,
-            height: isLarge ? imageSize * 1.2 : imageSize,
-            marginBottom: viewMode === 'list' ? 12 : 8,
-          },
-          isSelected && styles.selectedImageWrapper
-        ]}
-      >
-        {/* Use optimized grid image component */}
-        <OptimizedGridImage
-          imageUrl={item.imageUrl}
-          style={styles.image}
-          onPress={() => openImageModal(item, index)}
-        />
-        
-        {/* Long press handler overlay */}
-        <TouchableOpacity
-          style={styles.touchOverlay}
-          onPress={() => openImageModal(item, index)}
-          onLongPress={() => {
-            if (!selectionMode) {
-              setSelectionMode(true);
-              togglePhotoSelection(item.id);
-            }
-          }}
-          activeOpacity={1}
-        />
-        
-        {/* Selection overlay */}
-        {selectionMode && (
-          <View style={styles.selectionOverlay}>
-            <View style={[styles.selectionCircle, isSelected && styles.selectedCircle]}>
-              {isSelected && (
-                <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-              )}
-            </View>
-          </View>
-        )}
-        
-        {/* Filter indicator */}
-        {item.filterName && item.filterName !== 'None' && !selectionMode && (
-          <View style={styles.filterIndicator}>
-            <Text style={styles.filterIndicatorText}>{item.filterName}</Text>
-          </View>
-        )}
-        
-        {/* Event/Personal badge */}
-        {!selectionMode && (
-          <View style={[styles.typeBadge, { backgroundColor: item.type === 'event' ? '#4CAF50' : '#2196F3' }]}>
-            <Ionicons 
-              name={item.type === 'event' ? 'people-outline' : 'person-outline'} 
-              size={10} 
-              color="#FFFFFF" 
-            />
-          </View>
-        )}
-        
-        {!selectionMode && (
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.4)']}
-            style={styles.imageOverlay}
-          >
-            <View style={styles.imageActions}>
-              <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="heart-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.actionText}>{item.likes}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionButton}>
-                <Ionicons name="share-outline" size={16} color="#FFFFFF" />
-              </TouchableOpacity>
-              {item.isPrinted && (
-                <View style={styles.printedBadge}>
-                  <Ionicons name="print" size={12} color="#4CAF50" />
-                </View>
-              )}
-            </View>
-          </LinearGradient>
-        )}
-      </View>
-    );
   };
 
   const renderStatsCard = () => (
@@ -782,19 +565,22 @@ export default function GalleryScreen({ navigation }) {
           <Text style={styles.filterInfoText}>
             {filteredPhotos.length} {activeFilter.toLowerCase()} photo{filteredPhotos.length !== 1 ? 's' : ''}
           </Text>
-        </Animated.View>
-
-        {/* Gallery Grid */}
+        </Animated.View>        {/* Gallery Grid */}
         {filteredPhotos.length > 0 ? (
           <Animated.View style={[styles.galleryContainer, { opacity: fadeAnim }]}>
-            <FlatList
-              data={filteredPhotos}
-              renderItem={renderGridItem}
-              keyExtractor={(item) => `${item.type}-${item.id}`}
-              numColumns={getNumColumns()}
-              key={`${viewMode}-${getNumColumns()}`}
-              contentContainerStyle={styles.grid}
-              scrollEnabled={false}
+            <InstagramGrid
+              photos={filteredPhotos}
+              viewMode={viewMode}
+              selectionMode={selectionMode}
+              selectedPhotos={selectedPhotos}
+              onPhotoPress={openImageModal}
+              onToggleSelection={togglePhotoSelection}
+              onLongPress={(photo) => {
+                if (!selectionMode) {
+                  setSelectionMode(true);
+                  togglePhotoSelection(photo.id);
+                }
+              }}
             />
           </Animated.View>
         ) : (
@@ -832,72 +618,37 @@ export default function GalleryScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         )}
-      </ScrollView>
-
-      {/* Enhanced Image Modal with High Quality Loading */}
-      <Modal
-        animationType="fade"
-        transparent={true}
+      </ScrollView>      {/* Enhanced Photo Modal */}
+      <EnhancedPhotoModal
         visible={modalVisible}
-        onRequestClose={closeModal}
-      >
-        <View style={styles.modalContainer}>
-          <StatusBar backgroundColor="rgba(0,0,0,0.9)" barStyle="light-content" />
-          <TouchableOpacity style={styles.modalBackground} onPress={closeModal}>
-            <View style={styles.modalContent}>
-              {selectedImage && (
-                <>
-                  {/* High-quality modal image */}
-                  <HighQualityModalImage
-                    imageUrl={selectedImage.photo.imageUrl}
-                    style={styles.modalImage}
-                  />
-                  
-                  {/* Photo info */}
-                  <View style={styles.modalInfo}>
-                    <Text style={styles.modalInfoText}>
-                      {selectedImage.photo.type === 'event' ? 'Event Photo' : 'Personal Photo'}
-                    </Text>
-                    {selectedImage.photo.filterName !== 'None' && (
-                      <Text style={styles.modalFilterText}>
-                        Filter: {selectedImage.photo.filterName}
-                      </Text>
-                    )}
-                  </View>
-                </>
-              )}
-              
-              {/* Modal Actions */}
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.modalActionButton}>
-                  <Ionicons name="heart-outline" size={24} color="#FFFFFF" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalActionButton}>
-                  <Ionicons name="share-outline" size={24} color="#FFFFFF" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalActionButton}>
-                  <Ionicons name="print-outline" size={24} color="#FFFFFF" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalActionButton}>
-                  <Ionicons name="download-outline" size={24} color="#FFFFFF" />
-                </TouchableOpacity>
-                {/* Delete button in modal */}
-                <TouchableOpacity 
-                  style={[styles.modalActionButton, styles.modalDeleteButton]}
-                  onPress={() => selectedImage && handleDeleteSinglePhoto(selectedImage.photo)}
-                >
-                  <Ionicons name="trash-outline" size={24} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableOpacity>
-          
-          {/* Close Button */}
-          <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
-            <Ionicons name="close" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </Modal>
+        selectedPhoto={selectedPhoto}
+        selectedImage={selectedImage}
+        refreshing={refreshing}
+        onClose={closeModal}
+        onDelete={() => selectedPhoto && handleDeleteSinglePhoto(selectedPhoto)}
+        onPrint={() => {
+          // TODO: Implement print functionality
+          console.log('Print functionality to be implemented');
+        }}
+        onShare={() => {
+          // TODO: Implement share functionality
+          console.log('Share functionality to be implemented');
+        }}
+        onDownload={() => {
+          // TODO: Implement download functionality
+          console.log('Download functionality to be implemented');
+        }}
+        onToggleLike={() => {
+          // TODO: Implement like functionality
+          console.log('Like functionality to be implemented');
+        }}
+        onRefresh={async () => {
+          console.log('Refreshing gallery from modal...');
+          setRefreshing(true);
+          await fetchAllPhotos();
+          setRefreshing(false);
+        }}
+      />
     </View>
   );
 }
@@ -1042,87 +793,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     fontWeight: '500',
-  },
-  galleryContainer: {
+  },  galleryContainer: {
     marginBottom: 20,
-  },
-  grid: {
-    paddingBottom: 20,
-  },
-  imageWrapper: {
-    margin: 4,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    position: 'relative',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 16,
-  },
-  filterIndicator: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 12,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-  },
-  filterIndicatorText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  typeBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imageOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 40,
-    justifyContent: 'flex-end',
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-  },
-  imageActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 12,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  actionText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  printedBadge: {
-    backgroundColor: 'rgba(76, 175, 80, 0.8)',
-    borderRadius: 10,
-    padding: 4,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -1172,72 +844,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
-  },
-  uploadText: {
+  },  uploadText: {
     fontSize: 14,
     color: '#FF6F61',
     fontWeight: '600',
     marginLeft: 6,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalBackground: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-  },
-  modalContent: {
-    alignItems: 'center',
-  },
-  modalImage: {
-    width: screenWidth * 0.9,
-    height: screenWidth * 0.9,
-    borderRadius: 12,
-    resizeMode: 'cover',
-  },
-  modalInfo: {
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  modalInfoText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalFilterText: {
-    color: '#CCCCCC',
-    fontSize: 14,
-    marginTop: 4,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    marginTop: 20,
-    justifyContent: 'center',
-  },
-  modalActionButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 10,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   
   // Selection Mode Styles
@@ -1338,83 +949,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: 'bold',
     marginLeft: 8,
-  },
-  modalDeleteButton: {
+  },  modalDeleteButton: {
     backgroundColor: 'rgba(255, 59, 48, 0.8)',
-  },
-  
-  // Optimized image styles
-  imagePlaceholder: {
-    backgroundColor: '#F8F9FA',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 16,
-  },
-  imageError: {
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 16,
-  },
-  errorText: {
-    fontSize: 10,
-    color: '#999',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  touchOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 16,
-  },
-  
-  // Modal image loading styles - simplified
-  modalImageLoading: {
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 12,
-  },
-  modalImageError: {
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 12,
-  },
-  modalErrorText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-    marginTop: 16,
-    textAlign: 'center',
-  },
-  modalErrorSubtext: {
-    color: '#CCCCCC',
-    fontSize: 12,
-    marginTop: 8,
-    textAlign: 'center',
   },
 });
