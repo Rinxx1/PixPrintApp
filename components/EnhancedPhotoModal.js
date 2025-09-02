@@ -174,9 +174,14 @@ export default function EnhancedPhotoModal({
   selectedImage, 
   onClose, 
   onDelete,
+  onPrint,
+  onShare,
+  onDownload,
+  onToggleLike,
   canDeletePhoto = () => true,
   showUserInfo = true,
-  showControls = true 
+  showControls = true,
+  deleting = false
 }) {  // Get the image URL from either selectedImage prop or selectedPhoto
   const imageUrl = selectedImage || (selectedPhoto && selectedPhoto.imageUrl);
   
@@ -238,25 +243,37 @@ export default function EnhancedPhotoModal({
         {/* Enhanced modal controls with better spacing and responsive design */}
         {showControls && (
           <View style={styles.modalControls}>
-            <TouchableOpacity style={styles.modalControlButton}>
+            <TouchableOpacity 
+              style={styles.modalControlButton}
+              onPress={() => onToggleLike && onToggleLike(selectedPhoto)}
+            >
               <View style={styles.controlButtonBackground}>
                 <Ionicons name="heart-outline" size={20} color="#fff" />
               </View>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.modalControlButton}>
+            <TouchableOpacity 
+              style={styles.modalControlButton}
+              onPress={() => onPrint && onPrint(selectedPhoto)}
+            >
               <View style={styles.controlButtonBackground}>
                 <Ionicons name="print-outline" size={20} color="#fff" />
               </View>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.modalControlButton}>
+            <TouchableOpacity 
+              style={styles.modalControlButton}
+              onPress={() => onShare && onShare(selectedPhoto)}
+            >
               <View style={styles.controlButtonBackground}>
                 <Ionicons name="share-social-outline" size={20} color="#fff" />
               </View>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.modalControlButton}>
+            <TouchableOpacity 
+              style={styles.modalControlButton}
+              onPress={() => onDownload && onDownload(selectedPhoto)}
+            >
               <View style={styles.controlButtonBackground}>
                 <Ionicons name="download-outline" size={20} color="#fff" />
               </View>
@@ -265,11 +282,16 @@ export default function EnhancedPhotoModal({
             {/* Delete button - only show if user can delete this photo */}
             {selectedPhoto && canDeletePhoto(selectedPhoto) && onDelete && (
               <TouchableOpacity 
-                style={styles.modalControlButton}
-                onPress={() => onDelete(selectedPhoto)}
+                style={[styles.modalControlButton, deleting && styles.buttonDisabled]}
+                onPress={() => !deleting && onDelete(selectedPhoto)}
+                disabled={deleting}
               >
                 <View style={[styles.controlButtonBackground, styles.deleteButtonBackground]}>
-                  <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                  {deleting ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+                  )}
                 </View>
               </TouchableOpacity>
             )}
@@ -395,6 +417,9 @@ const styles = StyleSheet.create({
   deleteButtonBackground: {
     backgroundColor: 'rgba(255, 59, 48, 0.8)',
     borderColor: 'rgba(255, 59, 48, 0.3)',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 
   // Modal image loading styles

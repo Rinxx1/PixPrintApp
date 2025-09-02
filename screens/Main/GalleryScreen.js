@@ -75,7 +75,6 @@ export default function GalleryScreen({ navigation }) {
 
     try {
       setLoading(true);
-      console.log('Fetching all photos for user:', currentUser.uid);
 
       // Fetch photos from events (photos_tbl)
       const eventPhotosRef = collection(db, 'photos_tbl');
@@ -186,8 +185,6 @@ export default function GalleryScreen({ navigation }) {
         printedPhotos: printedPhotosData.length
       });
 
-      console.log(`Found ${sortedPhotos.length} total photos from ${uniqueEvents.size} events`);
-
     } catch (error) {
       console.error('Error fetching photos:', error);
     } finally {
@@ -200,7 +197,6 @@ export default function GalleryScreen({ navigation }) {
     await fetchAllPhotos();
     setRefreshing(false);
   };  const openImageModal = (photo) => {
-    console.log('Opening modal for photo:', photo);
     if (selectionMode) {
       togglePhotoSelection(photo.id);
       return;
@@ -208,7 +204,6 @@ export default function GalleryScreen({ navigation }) {
     setSelectedImage(photo.imageUrl);
     setSelectedPhoto(photo);
     setModalVisible(true);
-    console.log('Modal state set - selectedImage:', photo.imageUrl);
   };
 
   const closeModal = () => {
@@ -262,7 +257,6 @@ export default function GalleryScreen({ navigation }) {
               
               const imageRef = ref(storage, filePath);
               await deleteObject(imageRef);
-              console.log('Image deleted from storage:', filePath);
             }
           } catch (storageError) {
             console.error('Error deleting image from storage:', storageError);
@@ -286,15 +280,16 @@ export default function GalleryScreen({ navigation }) {
       `Are you sure you want to delete this photo?\n\n📸 ${photo.type === 'event' ? 'Event' : 'Personal'} Photo\n🕒 ${photo.uploadedAt ? new Date(photo.uploadedAt.toDate()).toLocaleDateString() : 'Unknown date'}\n\n⚠️ This action cannot be undone.\n🔄 The photo will be permanently removed.`,
       async () => {
         try {
+          setDeleting(true); // Show loading state
           await deletePhotos([photo.id]);
+          
+          // Close modal and refresh immediately after successful deletion
+          closeModal();
+          await fetchAllPhotos();
           
           showSuccess(
             'Photo Deleted Successfully! ✅',
-            'Your photo has been permanently removed from your gallery.',
-            () => {
-              closeModal(); // Close modal first
-              fetchAllPhotos(); // Then refresh the gallery
-            }
+            'Your photo has been permanently removed from your gallery.'
           );
           
         } catch (error) {
@@ -305,6 +300,8 @@ export default function GalleryScreen({ navigation }) {
             () => handleDeleteSinglePhoto(photo),
             () => {}
           );
+        } finally {
+          setDeleting(false); // Hide loading state
         }
       }
     );
@@ -624,26 +621,22 @@ export default function GalleryScreen({ navigation }) {
         selectedPhoto={selectedPhoto}
         selectedImage={selectedImage}
         refreshing={refreshing}
+        deleting={deleting}
         onClose={closeModal}
         onDelete={() => selectedPhoto && handleDeleteSinglePhoto(selectedPhoto)}
         onPrint={() => {
           // TODO: Implement print functionality
-          console.log('Print functionality to be implemented');
         }}
         onShare={() => {
           // TODO: Implement share functionality
-          console.log('Share functionality to be implemented');
         }}
         onDownload={() => {
           // TODO: Implement download functionality
-          console.log('Download functionality to be implemented');
         }}
         onToggleLike={() => {
           // TODO: Implement like functionality
-          console.log('Like functionality to be implemented');
         }}
         onRefresh={async () => {
-          console.log('Refreshing gallery from modal...');
           setRefreshing(true);
           await fetchAllPhotos();
           setRefreshing(false);
