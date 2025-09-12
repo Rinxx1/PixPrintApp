@@ -1,12 +1,17 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet, StatusBar, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth } from '../firebase';
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
 export default function HeaderBar({ navigation, showBack = false, showDashboard = false, guestUsername = null }) {
   const currentUser = auth.currentUser;
   const isGuest = !currentUser && guestUsername;
+  const insets = useSafeAreaInsets();
   
   // Only show dashboard button if user is authenticated (not guest) and showDashboard is true
   const shouldShowDashboard = showDashboard && currentUser && !isGuest;
@@ -24,7 +29,10 @@ export default function HeaderBar({ navigation, showBack = false, showDashboard 
   };
 
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { 
+      height: 72 + insets.top, // Increased from 56 to 72 for more height
+      paddingTop: insets.top + 8 
+    }]}>
       {showBack ? (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backArrow}>←</Text>
@@ -61,13 +69,12 @@ export default function HeaderBar({ navigation, showBack = false, showDashboard 
 
 const styles = StyleSheet.create({
   header: {
-    height: 110,
     backgroundColor: '#FAF8F5',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 38, // status bar space
+    paddingVertical: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
