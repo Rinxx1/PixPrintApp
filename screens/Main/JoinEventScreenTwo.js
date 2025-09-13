@@ -28,64 +28,56 @@ import { optimizeImageUrl, ImagePresets } from '../../utils/imageOptimization';
 const { width, height } = Dimensions.get('window');
 
 export default function JoinEventScreenTwo({ route, navigation }) {
-  // Extract eventId and guest info from route params
   const { eventId, username: guestUsername } = route.params || {};
   
-  // State variables
   const [eventName, setEventName] = useState(''); 
   const [eventDate, setEventDate] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [eventLocation, setEventLocation] = useState('');
   const [eventStartDate, setEventStartDate] = useState(null);
   const [eventEndDate, setEventEndDate] = useState(null);
-  const [eventImage, setEventImage] = useState(null); // Add state for event image
+  const [eventImage, setEventImage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null); 
-  const [selectedPhoto, setSelectedPhoto] = useState(null); // Add this to track the full photo object
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('person');
   const [activeTab, setActiveTab] = useState('gallery');
   const [eventCode, setEventCode] = useState('');
   const [eventTime, setEventTime] = useState('All Day');
   const [eventCreatorId, setEventCreatorId] = useState(null);
-  const [userCredits, setUserCredits] = useState(0); // This will now be updated in real-time
+  const [userCredits, setUserCredits] = useState(0);
   const [isEventCreator, setIsEventCreator] = useState(false);
   const [extensionAlertShown, setExtensionAlertShown] = useState(false);
   
-  // Updated state for different photo categories
   const [eventPhotos, setEventPhotos] = useState([]);
   const [myPhotos, setMyPhotos] = useState([]);
-  const [photographerPhotos, setPhotographerPhotos] = useState([]); // Add new state for photographer photos
-  const [photosLoading, setPhotosLoading] = useState(false);
+  const [photographerPhotos, setPhotographerPhotos] = useState([]);  const [photosLoading, setPhotosLoading] = useState(false);
   
-  // Add alert hook
+  const [displayedImages, setDisplayedImages] = useState([]);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMoreImages, setHasMoreImages] = useState(true);
+  const IMAGES_PER_PAGE = 6;
   const { showAlert, showError, showSuccess, showConfirm } = useAlert();
-  
-  // Add ref for unsubscribe function
   const unsubscribeCredits = useRef(null);
   
-  // Animation values
   const scrollY = useRef(new Animated.Value(0)).current;
   const imageOpacity = scrollY.interpolate({
     inputRange: [0, 100],
     outputRange: [1, 0.6],
     extrapolate: 'clamp'
   });
-
-  // Extension pricing configuration
   const extensionOptions = [
     { hours: 2, credits: 10, label: '2 Hours' },
     { hours: 4, credits: 15, label: '4 Hours' },
     { hours: 6, credits: 25, label: '6 Hours' }
   ];
 
-  // Updated function to fetch user credits with real-time listener
   const fetchUserCredits = async () => {
-    try {
-      const currentUser = auth.currentUser;
+    try {      const currentUser = auth.currentUser;
       if (!currentUser) return;
 
-      // Set up Firestore real-time listener to fetch user's credits
       const creditsRef = collection(db, 'credits_tbl');
       const q = query(creditsRef, where('user_id', '==', currentUser.uid));
 
@@ -103,34 +95,27 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     } catch (error) {
       console.error('Error setting up credits listener:', error);
       setUserCredits(0);
-    }
-  };
+    }  };
 
-  // Updated function to update user credits - now adds to credits_tbl
   const updateUserCredits = async (creditsToDeduct) => {
     try {
       const currentUser = auth.currentUser;
-      if (!currentUser) return false;
-
-      // Add a negative credit entry to deduct credits
-      const creditsRef = collection(db, 'credits_tbl');
-      await addDoc(creditsRef, {
-        user_id: currentUser.uid,
-        credits: -creditsToDeduct, // Negative value to deduct
-        transaction_type: 'event_extension',
-        event_id: eventId,
-        description: `Event extension for ${eventName}`,
-        created_at: new Date(),
-      });
+      if (!currentUser) return false;        const creditsRef = collection(db, 'credits_tbl');
+        await addDoc(creditsRef, {
+          user_id: currentUser.uid,
+          credits: -creditsToDeduct,
+          transaction_type: 'event_extension',
+          event_id: eventId,
+          description: `Event extension for ${eventName}`,
+          created_at: new Date(),
+        });
       
       return true;
     } catch (error) {
       console.error('Error updating user credits:', error);
       return false;
-    }
-  };
+    }  };
 
-  // Function to extend event duration
   const extendEvent = async (additionalHours) => {
     try {
       if (!eventEndDate) return false;
@@ -150,10 +135,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     } catch (error) {
       console.error('Error extending event:', error);
       return false;
-    }
-  };
+    }  };
 
-  // Function to show extension alert
   const showExtensionAlert = () => {
     if (extensionAlertShown) return;
     
@@ -175,10 +158,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           ]
         });
       }
-    );
-  };
+    );  };
 
-  // Function to show extension options
   const showExtensionOptions = () => {
     const optionButtons = extensionOptions.map(option => ({
       text: `${option.label} (${option.credits} credits)`,
@@ -203,10 +184,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       message: `Choose how long you want to extend your event:\n\n💳 Available Credits: ${userCredits}\n\n⏰ Current End Time: ${eventEndDate?.toLocaleString()}\n\nExtension Pricing:`,
       type: 'info',
       buttons: optionButtons
-    });
-  };
+    });  };
 
-  // Function to handle extension purchase
   const handleExtensionPurchase = (option) => {
     const newEndTime = new Date(eventEndDate);
     newEndTime.setHours(newEndTime.getHours() + option.hours);
@@ -216,27 +195,21 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       `Extend "${eventName}" by ${option.label}?\n\n💰 Cost: ${option.credits} credits\n💳 Remaining Credits: ${userCredits - option.credits}\n\n⏰ New End Time: ${newEndTime.toLocaleString()}\n\nThis action cannot be undone.`,
       async () => {
         setLoading(true);
-        
-        try {
-          // Deduct credits first (this will be reflected in real-time via the listener)
+          try {
           const creditsUpdated = await updateUserCredits(option.credits);
           
           if (!creditsUpdated) {
             throw new Error('Failed to update credits');
           }
 
-          // Extend the event
           const eventExtended = await extendEvent(option.hours);
           
           if (!eventExtended) {
             throw new Error('Failed to extend event');
-          }
-
-          showSuccess(
+          }          showSuccess(
             '🎉 Event Extended Successfully!',
             `Your event has been extended by ${option.label}!\n\n⏰ New End Time: ${newEndTime.toLocaleString()}\n💳 Credits will be updated shortly\n\nEnjoy your extended event time!`,
             () => {
-              // Refresh event data
               fetchEventData();
             }
           );
@@ -256,10 +229,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       () => {
         showExtensionOptions();
       }
-    );
-  };
+    );  };
 
-  // Function to show insufficient credits alert
   const showInsufficientCreditsAlert = (requiredCredits) => {
     showAlert({
       title: '💳 Insufficient Credits',
@@ -280,10 +251,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           }
         }
       ]
-    });
-  };
+    });  };
 
-  // Function to check if event is about to end and show alert
   const checkEventEndingStatus = () => {
     if (!eventEndDate || !isEventCreator || extensionAlertShown) return;
 
@@ -292,11 +261,81 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     const minutesUntilEnd = Math.floor(timeDiff / (1000 * 60));
 
     if (minutesUntilEnd <= 2 && minutesUntilEnd > 0) {
-      showExtensionAlert();
+      showExtensionAlert();    }
+  };
+  const loadMoreImages = () => {
+    if (isLoadingMore || !hasMoreImages) return;
+
+    const currentImages = selectedCategory === 'person' ? eventPhotos : 
+                         selectedCategory === 'group' ? myPhotos : 
+                         photographerPhotos;
+
+    const totalImages = currentImages.length;
+    const currentDisplayed = displayedImages.length;
+
+    if (currentDisplayed >= totalImages) {
+      setHasMoreImages(false);
+      return;
     }
+
+    setIsLoadingMore(true);
+
+    setTimeout(() => {
+      // Double check that we're still on the same category to prevent race conditions
+      const categoryImages = selectedCategory === 'person' ? eventPhotos : 
+                            selectedCategory === 'group' ? myPhotos : 
+                            photographerPhotos;
+      
+      if (categoryImages !== currentImages) {
+        // Category changed during loading, abort
+        setIsLoadingMore(false);
+        return;
+      }
+
+      const nextPage = currentPage + 1;
+      const startIndex = currentDisplayed;
+      const endIndex = Math.min(startIndex + IMAGES_PER_PAGE, totalImages);
+      
+      const newImages = currentImages.slice(startIndex, endIndex);
+      
+      // Only add images if they're not already in the displayed list
+      setDisplayedImages(prev => {
+        const existingIds = new Set(prev.map(img => img.id));
+        const uniqueNewImages = newImages.filter(img => !existingIds.has(img.id));
+        return [...prev, ...uniqueNewImages];
+      });
+      
+      setCurrentPage(nextPage);
+      setHasMoreImages(endIndex < totalImages);
+      setIsLoadingMore(false);
+    }, 300);
+  };const resetPagination = () => {
+    setDisplayedImages([]);
+    setCurrentPage(0);
+    setHasMoreImages(true);
+    setIsLoadingMore(false);
   };
 
-  // Function to check if event is finished or ongoing
+  const initializeImages = (imagesArray) => {
+    // Clear any existing state first
+    setDisplayedImages([]);
+    setCurrentPage(0);
+    setHasMoreImages(false);
+    setIsLoadingMore(false);
+
+    if (!imagesArray || imagesArray.length === 0) {
+      return;
+    }
+
+    // Use setTimeout to ensure state is cleared before setting new values
+    setTimeout(() => {
+      const firstPageImages = imagesArray.slice(0, IMAGES_PER_PAGE);
+      setDisplayedImages(firstPageImages);
+      setCurrentPage(1);
+      setHasMoreImages(imagesArray.length > IMAGES_PER_PAGE);
+    }, 50);
+  };
+
   const getEventStatus = () => {
     const now = new Date();
     
@@ -309,17 +348,14 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       eventEnd.setHours(eventEnd.getHours() + 24);
       return now > eventEnd ? 'finished' : 'active';
     }
-    
-    return 'active';
+      return 'active';
   };
-  // Function to fetch all event photos from Firebase (excluding photographer photos)
+
   const fetchEventPhotos = async () => {
     if (!eventId) return;
     
-    try {
-      setPhotosLoading(true);
+    try {      setPhotosLoading(true);
       
-      // First, get all photographers for this event to exclude their photos
       const joinedRef = collection(db, 'joined_tbl');
       const photographersQuery = query(
         joinedRef,
@@ -337,7 +373,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         }
       });
       
-      // Now fetch all event photos
       const photosRef = collection(db, 'photos_tbl');
       const q = query(
         photosRef,
@@ -350,7 +385,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       querySnapshot.forEach((doc) => {
         const photoData = doc.data();
         
-        // Exclude photos taken by photographers since they have their own dedicated album
         if (!photographerIds.includes(photoData.user_id)) {
           photos.push({
             id: doc.id,
@@ -373,20 +407,20 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         
         const dateA = a.uploadedAt.toDate ? a.uploadedAt.toDate() : new Date(a.uploadedAt);
         const dateB = b.uploadedAt.toDate ? b.uploadedAt.toDate() : new Date(b.uploadedAt);
-        
-        return dateB.getTime() - dateA.getTime();
-      });
+          return dateB.getTime() - dateA.getTime();
+      });      setEventPhotos(sortedPhotos);
       
-      setEventPhotos(sortedPhotos);
+      // Only initialize images if this category is currently selected
+      if (selectedCategory === 'person') {
+        initializeImages(sortedPhotos);
+      }
       
     } catch (error) {
       setEventPhotos([]);
     } finally {
       setPhotosLoading(false);
-    }
-  };
+    }  };
 
-  // Function to fetch current user's photos (including guest photos)
   const fetchMyPhotos = async () => {
     if (!eventId) return;
     
@@ -395,18 +429,15 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     try {
       setPhotosLoading(true);
       
-      const photosRef = collection(db, 'photos_tbl');
-      let q;
+      const photosRef = collection(db, 'photos_tbl');      let q;
       
       if (currentUser) {
-        // Authenticated user - get their photos
         q = query(
           photosRef,
           where('event_id', '==', eventId),
           where('user_id', '==', currentUser.uid)
         );
       } else if (guestUsername) {
-        // Guest user - get photos by guest username
         q = query(
           photosRef,
           where('event_id', '==', eventId),
@@ -414,7 +445,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           where('guest_username', '==', guestUsername)
         );
       } else {
-        // No user and no guest username - return empty
         setMyPhotos([]);
         return;
       }
@@ -446,27 +476,25 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         
         const dateA = a.uploadedAt.toDate ? a.uploadedAt.toDate() : new Date(a.uploadedAt);
         const dateB = b.uploadedAt.toDate ? b.uploadedAt.toDate() : new Date(b.uploadedAt);
-        
-        return dateB.getTime() - dateA.getTime();
-      });
+          return dateB.getTime() - dateA.getTime();
+      });      setMyPhotos(sortedPhotos);
       
-      setMyPhotos(sortedPhotos);
+      // Only initialize images if this category is currently selected
+      if (selectedCategory === 'group') {
+        initializeImages(sortedPhotos);
+      }
       
     } catch (error) {
       setMyPhotos([]);
     } finally {
       setPhotosLoading(false);
-    }
-  };
+    }  };
 
-  // New function to fetch photographer photos
   const fetchPhotographerPhotos = async () => {
     if (!eventId) return;
     
-    try {
-      setPhotosLoading(true);
+    try {      setPhotosLoading(true);
       
-      // First, get all photographers for this event
       const joinedRef = collection(db, 'joined_tbl');
       const photographersQuery = query(
         joinedRef,
@@ -489,7 +517,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         return;
       }
       
-      // Then, get all photos taken by these photographers
       const photosRef = collection(db, 'photos_tbl');
       const photosQuery = query(
         photosRef,
@@ -511,11 +538,9 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           filterName: photoData.filter_name,
           likes: photoData.likes || 0,
           comments: photoData.comments || 0,
-          userId: photoData.user_id
-        });
+          userId: photoData.user_id        });
       });
       
-      // Sort photos by upload date (newest first)
       const sortedPhotos = photos.sort((a, b) => {
         if (!a.uploadedAt && !b.uploadedAt) return 0;
         if (!a.uploadedAt) return 1;
@@ -523,21 +548,21 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         
         const dateA = a.uploadedAt.toDate ? a.uploadedAt.toDate() : new Date(a.uploadedAt);
         const dateB = b.uploadedAt.toDate ? b.uploadedAt.toDate() : new Date(b.uploadedAt);
-        
-        return dateB.getTime() - dateA.getTime();
-      });
+          return dateB.getTime() - dateA.getTime();
+      });      setPhotographerPhotos(sortedPhotos);
       
-      setPhotographerPhotos(sortedPhotos);
+      // Only initialize images if this category is currently selected
+      if (selectedCategory === 'camera') {
+        initializeImages(sortedPhotos);
+      }
       
     } catch (error) {
       console.error('Error fetching photographer photos:', error);
       setPhotographerPhotos([]);
     } finally {
       setPhotosLoading(false);
-    }
-  };
+    }  };
 
-  // Updated fetchEventData function with event image
   const fetchEventData = async () => {
     try {
       if (!eventId) {
@@ -552,12 +577,10 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         const eventData = eventDoc.data();
         
         setEventName(eventData.event_name || 'Unnamed Event');
-        setEventCode(eventData.event_code || '');
-        setEventLocation(eventData.event_location || 'Location not specified');
+        setEventCode(eventData.event_code || '');        setEventLocation(eventData.event_location || 'Location not specified');
         setEventCreatorId(eventData.user_id);
         
-        // Set event image - use uploaded image or default
-        console.log('Event photo URL:', eventData.event_photo_url); // Debug log
+        console.log('Event photo URL:', eventData.event_photo_url);
         if (eventData.event_photo_url && eventData.event_photo_url.trim() !== '') {
           setEventImage({ uri: eventData.event_photo_url });
           console.log('Using event image:', eventData.event_photo_url);
@@ -566,14 +589,11 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           console.log('Using default image');
         }
         
-        // Check if current user is the event creator
         const currentUser = auth.currentUser;
         if (currentUser && eventData.user_id === currentUser.uid) {
           setIsEventCreator(true);
-          await fetchUserCredits(); // Set up real-time credits listener for creator
-        }
-        
-        // Store the actual date objects for status checking
+          await fetchUserCredits();
+        }        
         let startDateObj = null;
         let endDateObj = null;
         
@@ -616,11 +636,9 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             year: 'numeric',
           });
         }
-        
-        setEventDate(formattedDateRange);
+          setEventDate(formattedDateRange);
         setEventDescription(eventData.event_description || 'No description available');
 
-        // Extract time information
         let timeDisplay = "All Day";
 
         if (eventData.event_start_date && typeof eventData.event_start_date.toDate === 'function') {
@@ -649,45 +667,52 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           setEventTime("All Day");
         }
         
-      } else {
-        setEventName('Event Not Found');
+      } else {        setEventName('Event Not Found');
         setEventDate('');
         setEventLocation('');
         setEventDescription('The requested event could not be found.');
-        setEventImage(require('../../assets/avatar.png')); // Default image for not found
+        setEventImage(require('../../assets/avatar.png'));
       }
     } catch (error) {
       console.error('Error fetching event data:', error);
-      setEventImage(require('../../assets/avatar.png')); // Default image on error
+      setEventImage(require('../../assets/avatar.png'));
     } finally {
       setLoading(false);
     }
   };
   
-  // Initial data fetch
   useEffect(() => {
     if (!eventId) {
       setLoading(false);
     } else {
       fetchEventData();
       fetchEventPhotos();
-    }
-  }, [eventId]);
-
-  // Update photos when category changes
+    }  }, [eventId]);
   useEffect(() => {
     if (eventId) {
+      // Reset pagination immediately when category changes
+      resetPagination();
+      
+      // Initialize with existing data if available
+      const currentImages = selectedCategory === 'person' ? eventPhotos : 
+                           selectedCategory === 'group' ? myPhotos : 
+                           photographerPhotos;
+      
+      if (currentImages.length > 0) {
+        initializeImages(currentImages);
+      }
+      
+      // Fetch fresh data for the selected category
       if (selectedCategory === 'person') {
         fetchEventPhotos();
       } else if (selectedCategory === 'group') {
         fetchMyPhotos();
       } else if (selectedCategory === 'camera') {
-        fetchPhotographerPhotos(); // Fetch photographer photos when camera tab is selected
+        fetchPhotographerPhotos();
       }
     }
   }, [selectedCategory]);
 
-  // Set up interval to check event ending status (only for event creators)
   useEffect(() => {
     let interval;
     
@@ -703,9 +728,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       if (interval) {
         clearInterval(interval);
       }
-    };
-  }, [isEventCreator, eventEndDate, extensionAlertShown]);
-  // Cleanup credits listener on unmount
+    };  }, [isEventCreator, eventEndDate, extensionAlertShown]);
+
   useEffect(() => {
     return () => {
       if (unsubscribeCredits.current) {
@@ -713,12 +737,12 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       }
     };
   }, []);
-
-  // Refresh photos when screen comes into focus (e.g., returning from camera)
   useFocusEffect(
     React.useCallback(() => {
       if (eventId) {
-        // Refresh the current category's photos when screen comes into focus
+        // Reset pagination when screen comes into focus
+        resetPagination();
+        
         if (selectedCategory === 'person') {
           fetchEventPhotos();
         } else if (selectedCategory === 'group') {
@@ -730,41 +754,32 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     }, [eventId, selectedCategory])
   );
 
-  // Auto-close modal if selected photo no longer exists
   useEffect(() => {
     if (isModalVisible && selectedPhoto && !isPhotoStillExists(selectedPhoto.id)) {
       closeModal();
-    }
-  }, [eventPhotos, myPhotos, photographerPhotos, isModalVisible, selectedPhoto]);
+    }  }, [eventPhotos, myPhotos, photographerPhotos, isModalVisible, selectedPhoto]);
 
-  // New function to delete a photo
   const deletePhoto = async (photoId, imageUrl) => {
     try {
-      // Delete from Firestore
       const photoRef = doc(db, 'photos_tbl', photoId);
       await deleteDoc(photoRef);
 
-      // Delete from Firebase Storage if it's a Firebase Storage URL
       if (imageUrl && imageUrl.includes('firebase')) {
         try {
-          // Extract the file path from the Firebase Storage URL
           const urlParts = imageUrl.split('/o/');
           if (urlParts.length >= 2) {
             const pathPart = urlParts[1].split('?')[0];
             const filePath = decodeURIComponent(pathPart);
             
-            // Create reference to the image and delete it
             const imageRef = ref(storage, filePath);
             await deleteObject(imageRef);
             console.log('Image deleted from storage:', filePath);
           }
         } catch (storageError) {
           console.error('Error deleting image from storage:', storageError);
-          // Don't throw error as Firestore deletion was successful
         }
       }
 
-      // Refresh all photo categories to ensure consistency
       if (selectedCategory === 'person') {
         fetchEventPhotos();
       } else if (selectedCategory === 'group') {
@@ -779,8 +794,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       throw error;
     }
   };
-
-  // Function to handle photo deletion with confirmation
   const handleDeletePhoto = (photo) => {
     showConfirm(
       'Delete Photo? 🗑️',
@@ -790,8 +803,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         
         try {
           await deletePhoto(photo.id, photo.imageUrl);
-          
-          // Close modal and clear selected photo immediately after deletion
           closeModal();
           
           showSuccess(
@@ -846,16 +857,12 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       }
     );
   };
-
-  // Function to check if current user can delete a photo
   const canDeletePhoto = (photo) => {
     const currentUser = auth.currentUser;
     
     if (currentUser) {
-      // Authenticated user - can delete their own photos
       return photo.userId === currentUser.uid;
     } else if (guestUsername) {
-      // Guest user - can delete photos they uploaded as guest
       return photo.isGuest && photo.guestUsername === guestUsername;
     }
     
@@ -866,36 +873,39 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     setSelectedCategory(category);
   };
 
-  // Add optimized grid image component with enhanced skeleton loader
   const OptimizedGridImage = ({ photo, style, onPress }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
-    const fadeAnim = useState(new Animated.Value(0))[0];
-    const shimmerAnim = useState(new Animated.Value(0))[0];
+    const fadeAnim = useState(new Animated.Value(0))[0];    const shimmerAnim = useState(new Animated.Value(0))[0];
 
-    // Start shimmer animation when component mounts
     useEffect(() => {
-      const shimmerLoop = () => {
-        Animated.sequence([
-          Animated.timing(shimmerAnim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: false,
-          }),
-          Animated.timing(shimmerAnim, {
-            toValue: 0,
-            duration: 1000,
-            useNativeDriver: false,
-          }),
-        ]).start(() => shimmerLoop());
-      };
+      let shimmerLoop;
       
       if (loading) {
-        shimmerLoop();
+        shimmerLoop = Animated.loop(
+          Animated.sequence([
+            Animated.timing(shimmerAnim, {
+              toValue: 1,
+              duration: 1200,
+              useNativeDriver: false,
+            }),
+            Animated.timing(shimmerAnim, {
+              toValue: 0,
+              duration: 800,
+              useNativeDriver: false,
+            }),
+          ])
+        );
+        shimmerLoop.start();
       }
       
-      return () => shimmerAnim.stopAnimation();
-    }, [loading]);
+      return () => {
+        if (shimmerLoop) {
+          shimmerLoop.stop();
+        }
+        shimmerAnim.stopAnimation();
+      };
+    }, [loading, shimmerAnim]);
 
     const handleLoadEnd = () => {
       setLoading(false);
@@ -906,26 +916,26 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       }).start();
     };
 
-    const handleError = () => {
-      setError(true);
+    const handleError = () => {      setError(true);
       setLoading(false);
     };
 
-    // Create shimmer effect
+    const gridImageWidth = (width - 4) / 3;
+    const gridImageHeight = width / 3;
+
     const shimmerTranslateX = shimmerAnim.interpolate({
       inputRange: [0, 1],
-      outputRange: [-style.width || 100, style.width || 100],
-    });
-
-    return (
+      outputRange: [-gridImageWidth, gridImageWidth],
+    });    return (
       <TouchableOpacity style={style} onPress={onPress}>
-        {/* Enhanced skeleton loader with shimmer effect */}
         {loading && (
-          <View style={[style, styles.imageSkeleton]}>
+          <View style={[styles.imageSkeleton, { width: gridImageWidth, height: gridImageHeight }]}>
             <Animated.View 
               style={[
                 styles.shimmerOverlay,
                 {
+                  width: gridImageWidth,
+                  height: gridImageHeight,
                   transform: [{ translateX: shimmerTranslateX }],
                 }
               ]} 
@@ -938,7 +948,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           </View>
         )}
          
-        {/* Optimized thumbnail image */}
         <Animated.View style={[style, { opacity: fadeAnim }]}>
           <Image
             source={{ 
@@ -949,14 +958,12 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             onLoadEnd={handleLoadEnd}
             onError={handleError}
             resizeMode="cover"
-            // Performance optimizations
             fadeDuration={0}
             progressiveRenderingEnabled={true}
             removeClippedSubviews={true}
           />
         </Animated.View>
         
-        {/* Error fallback */}
         {error && (
           <View style={[style, styles.imageError]}>
             <Ionicons name="image-outline" size={16} color="#999" />
@@ -967,8 +974,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       </TouchableOpacity>
     );
   };
-
-  // Enhanced high-quality modal image component with responsive design
   const HighQualityModalImage = ({ imageUrl, style }) => {
     const [imageLoading, setImageLoading] = useState(true);
     const [error, setError] = useState(false);
@@ -977,7 +982,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     const modalShimmerAnim = useState(new Animated.Value(0))[0];
     const scaleAnim = useState(new Animated.Value(0.8))[0];
 
-    // Start modal shimmer animation when component mounts
     useEffect(() => {
       if (imageLoading) {
         const modalShimmerLoop = () => {
@@ -999,18 +1003,14 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       }
       
       return () => modalShimmerAnim.stopAnimation();
-    }, [imageLoading]);
-
-    const handleLoadEnd = (event) => {
+    }, [imageLoading]);    const handleLoadEnd = (event) => {
       setImageLoading(false);
       
-      // Get image dimensions for responsive sizing
       if (event.nativeEvent) {
         const { width: imgWidth, height: imgHeight } = event.nativeEvent;
         setImageDimensions({ width: imgWidth, height: imgHeight });
       }
       
-      // Animate image appearance with scale and fade
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -1027,26 +1027,21 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     };
 
     const handleError = () => {
-      setError(true);
-      setImageLoading(false);
+      setError(true);      setImageLoading(false);
     };
 
-    // Create modal shimmer effect
     const modalShimmerTranslateX = modalShimmerAnim.interpolate({
       inputRange: [0, 1],
       outputRange: [-300, 300],
     });
 
-    // Calculate responsive image dimensions
     const getResponsiveImageStyle = () => {
       const maxWidth = width * 0.95;
       const maxHeight = height * 0.7;
       
       if (imageDimensions.width && imageDimensions.height) {
         const aspectRatio = imageDimensions.width / imageDimensions.height;
-        
-        if (aspectRatio > 1) {
-          // Landscape image
+          if (aspectRatio > 1) {
           const calculatedWidth = Math.min(maxWidth, imageDimensions.width);
           const calculatedHeight = calculatedWidth / aspectRatio;
           return {
@@ -1054,7 +1049,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             height: Math.min(calculatedHeight, maxHeight),
           };
         } else {
-          // Portrait image
           const calculatedHeight = Math.min(maxHeight, imageDimensions.height);
           const calculatedWidth = calculatedHeight * aspectRatio;
           return {
@@ -1064,16 +1058,13 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         }
       }
       
-      // Fallback to responsive dimensions
       return {
         width: Math.min(maxWidth, width * 0.9),
-        height: Math.min(maxHeight, height * 0.6),
-      };
+        height: Math.min(maxHeight, height * 0.6),      };
     };
 
     return (
       <Animated.View style={[getResponsiveImageStyle(), { transform: [{ scale: scaleAnim }] }]}>
-        {/* Enhanced modal skeleton loader with shimmer effect */}
         {imageLoading && (
           <View style={[getResponsiveImageStyle(), styles.modalImageSkeleton]}>
             <Animated.View 
@@ -1089,15 +1080,13 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                 <Ionicons name="image-outline" size={48} color="#E0E0E0" />
               </View>
               <Text style={styles.modalSkeletonText}>Loading...</Text>
-            </View>
-          </View>
+            </View>          </View>
         )}
         
-        {/* High-quality image with responsive sizing */}
         <Animated.View style={[getResponsiveImageStyle(), { opacity: fadeAnim }]}>
           <Image
             source={{ 
-              uri: error ? null : optimizeImageUrl(imageUrl, 'high'), // High quality for modal
+              uri: error ? null : optimizeImageUrl(imageUrl, 'high'),
               cache: 'web'
             }}
             style={getResponsiveImageStyle()}
@@ -1105,11 +1094,9 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             onError={handleError}
             resizeMode="contain"
             progressiveRenderingEnabled={true}
-            fadeDuration={0}
-          />
+            fadeDuration={0}          />
         </Animated.View>
         
-        {/* Error fallback for modal */}
         {error && (
           <View style={[getResponsiveImageStyle(), styles.modalImageError]}>
             <Ionicons name="alert-circle-outline" size={48} color="#FFFFFF" />
@@ -1117,11 +1104,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             <Text style={styles.modalErrorSubtext}>Network error or file corrupted</Text>
           </View>
         )}
-      </Animated.View>
-    );
+      </Animated.View>    );
   };
-
-  // Add these computed values before the render section
   const galleryTitle = selectedCategory === 'person' ? 'All Photos' : 
                       selectedCategory === 'group' ? 'My Photos' : 
                       'Photographer Photos';
@@ -1130,19 +1114,26 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                 selectedCategory === 'group' ? myPhotos : 
                 photographerPhotos;
 
+  const handleScroll = (event) => {
+    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+    const paddingToBottom = 20; // How far from bottom to trigger loading
+    
+    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
+      loadMoreImages();
+    }
+  };
+
   const handleImageClick = (photo) => {
     setSelectedImage(photo.imageUrl);
     setSelectedPhoto(photo);
     setIsModalVisible(true);
   };
-
   const closeModal = () => {
     setIsModalVisible(false);
     setSelectedImage(null);
     setSelectedPhoto(null);
   };
 
-  // Check if selected photo still exists in current photo list
   const isPhotoStillExists = (photoId) => {
     if (!photoId) return false;
     
@@ -1157,11 +1148,9 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     return false;
   };
 
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
+  const handleTabChange = (tab) => {    setActiveTab(tab);
   };
 
-  // Get current event status
   const eventStatus = getEventStatus();
 
   if (loading) {
@@ -1175,14 +1164,12 @@ export default function JoinEventScreenTwo({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      <HeaderBar navigation={navigation} showBack={false} showDashboard={true}/>
-
-      <Animated.ScrollView 
+      <HeaderBar navigation={navigation} showBack={false} showDashboard={true}/>      <Animated.ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
+          { useNativeDriver: true, listener: handleScroll }
         )}
         scrollEventThrottle={16}
       >
@@ -1205,10 +1192,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                 ]} />
                 <Text style={styles.statusText}>
                   {eventStatus === 'active' ? 'Active Event' : 'Event Finished'}
-                </Text>
-              </View>
+                </Text>              </View>
               
-              {/* Creator Badge - Show only to event creator */}
               {isEventCreator && (
                 <View style={styles.creatorBadge}>
                   <Ionicons name="star" size={12} color="#FFD700" />
@@ -1217,18 +1202,15 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                 </View>
               )}
 
-              {/* Guest Badge */}
               {guestUsername && !auth.currentUser && (
                 <View style={styles.guestStatusBadge}>
                   <Ionicons name="person-outline" size={12} color="#4CAF50" />
                   <Text style={styles.guestStatusText}>Guest: {guestUsername}</Text>
                 </View>
               )}
-            </View>
-          </ImageBackground>
+            </View>          </ImageBackground>
         </Animated.View>
 
-        {/* Event Info Card */}
         <View style={styles.eventCard}>
           <View style={styles.eventHeader}>
             <View style={styles.titleContainer}>
@@ -1245,7 +1227,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Date Row */}
           <View style={styles.dateRow}>
             <View style={styles.dateIconContainer}>
               <Ionicons name="calendar-outline" size={16} color="#FF6F61" />
@@ -1260,11 +1241,9 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             </View>
           </View>
 
-          <View style={styles.separator} />
-          
+          <View style={styles.separator} />          
           <Text style={styles.description}>{eventDescription}</Text>
 
-          {/* Event stats without attendees */}
           <View style={styles.eventStats}>
             <View style={styles.statItem}>
               <Ionicons name="location-outline" size={18} color="#FF6F61" />
@@ -1276,11 +1255,9 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             <View style={styles.statItem}>
               <Ionicons name="time-outline" size={18} color="#FF6F61" />
               <Text style={styles.statValue}>{eventTime}</Text>
-            </View>
-          </View>
+            </View>          </View>
         </View>
 
-        {/* Gallery Section */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Event Gallery</Text>
           <Text style={styles.photosCount}>
@@ -1290,7 +1267,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           </Text>
         </View>
 
-        {/* Category Selector */}
         <View style={styles.categoryContainer}>
           <TouchableOpacity 
             style={[styles.categoryTab, selectedCategory === 'person' && styles.selectedCategoryTab]}
@@ -1346,33 +1322,26 @@ export default function JoinEventScreenTwo({ route, navigation }) {
               ]}
             >
               Me
-            </Text>
-          </TouchableOpacity>
+            </Text>          </TouchableOpacity>
         </View>
 
-        {/* Gallery Title */}
         <View style={styles.galleryHeader}>
           <Text style={styles.galleryTitle}>{galleryTitle}</Text>
         </View>
 
-        {/* Loading indicator for photos */}
         {photosLoading && (selectedCategory === 'person' || selectedCategory === 'group' || selectedCategory === 'camera') && (
           <View style={styles.photosLoadingContainer}>
             <ActivityIndicator size="small" color="#FF6F61" />
-            <Text style={styles.photosLoadingText}>Loading photos...</Text>
-          </View>
+            <Text style={styles.photosLoadingText}>Loading photos...</Text>          </View>
         )}
 
-        {/* No photos message for All category */}
         {!photosLoading && selectedCategory === 'person' && eventPhotos.length === 0 && (
           <View style={styles.noPhotosContainer}>
             <Ionicons name="images-outline" size={48} color="#CCC" />
             <Text style={styles.noPhotosText}>No photos uploaded yet</Text>
-            <Text style={styles.noPhotosSubtext}>Be the first to capture memories!</Text>
-          </View>
+            <Text style={styles.noPhotosSubtext}>Be the first to capture memories!</Text>          </View>
         )}
 
-        {/* No photos message for My Photos category */}
         {!photosLoading && selectedCategory === 'group' && myPhotos.length === 0 && (
           <View style={styles.noPhotosContainer}>
             <Ionicons name="camera-outline" size={48} color="#CCC" />
@@ -1386,10 +1355,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
               {guestUsername && !auth.currentUser ? 
                 "Start taking photos to see them here! Create an account to save your memories permanently." :
                 "Start taking photos to see them here!"
-              }
-            </Text>
+              }            </Text>
             
-            {/* Account creation prompt for guests */}
             {guestUsername && !auth.currentUser && (
               <TouchableOpacity 
                 style={styles.createAccountButton}
@@ -1400,49 +1367,33 @@ export default function JoinEventScreenTwo({ route, navigation }) {
               >
                 <Text style={styles.createAccountButtonText}>Create Account</Text>
               </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {/* No photos message for Photographer category */}
-        {!photosLoading && selectedCategory === 'camera' && photographerPhotos.length === 0 && (
+            )}          </View>
+        )}        {!photosLoading && selectedCategory === 'camera' && photographerPhotos.length === 0 && (
           <View style={styles.noPhotosContainer}>
             <Ionicons name="camera-outline" size={48} color="#CCC" />
             <Text style={styles.noPhotosText}>No photographer photos yet</Text>
             <Text style={styles.noPhotosSubtext}>Photos taken by event photographers will appear here</Text>
-          </View>
-        )}
-
-        {/* Image Gallery Grid - Instagram Style with Optimized Images */}
-        {images.length > 0 && (
+          </View>        )}        {displayedImages.length > 0 && (
           <View style={styles.instaGrid}>
             {(selectedCategory === 'person' || selectedCategory === 'group' || selectedCategory === 'camera') ? (
-              // Instagram-style grid with equal squares
-              images.map((photo, index) => {
-                const row = Math.floor(index / 3);
-                const col = index % 3;
-                const isFirstInRow = col === 0;
-                const isLastInRow = col === 2;
-                const isFirstRow = row === 0;
-                const isLastRow = row === Math.floor((images.length - 1) / 3);
-                
-                if (isFirstInRow) {
-                  return (
-                    <View key={`row-${row}`} style={styles.instaGridRow}>
-                      {[0, 1, 2].map((colIndex) => {
-                        const photoIndex = index + colIndex;
-                        const currentPhoto = images[photoIndex];
-                        if (!currentPhoto) return null;
-                        
+              (() => {
+                const rows = [];
+                for (let i = 0; i < displayedImages.length; i += 3) {
+                  const rowPhotos = displayedImages.slice(i, i + 3);
+                  const rowIndex = Math.floor(i / 3);
+                  
+                  rows.push(
+                    <View key={`row-${rowIndex}`} style={styles.instaGridRow}>
+                      {rowPhotos.map((photo, colIndex) => {
                         const isEdgeLeft = colIndex === 0;
-                        const isEdgeRight = colIndex === 2;
-                        const isEdgeTop = row === 0;
-                        const isEdgeBottom = row === Math.floor((images.length - 1) / 3);
+                        const isEdgeRight = colIndex === 2 || colIndex === rowPhotos.length - 1;
+                        const isEdgeTop = rowIndex === 0;
+                        const isEdgeBottom = rowIndex === Math.floor((displayedImages.length - 1) / 3);
                         
                         return (
                           <OptimizedGridImage
-                            key={`image-${currentPhoto.id}`}
-                            photo={currentPhoto}
+                            key={`image-${photo.id}`}
+                            photo={photo}
                             style={[
                               styles.instaEqualImage,
                               isEdgeLeft && styles.edgeLeft,
@@ -1450,16 +1401,41 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                               isEdgeTop && styles.edgeTop,
                               isEdgeBottom && styles.edgeBottom,
                             ]}
-                            onPress={() => handleImageClick(currentPhoto)}
+                            onPress={() => handleImageClick(photo)}
                           />
                         );
                       })}
                     </View>
                   );
                 }
-                return null;
-              })
+                return rows;
+              })()
             ) : null}
+          </View>
+        )}
+
+        {/* Load More Button / Loading Indicator for Lazy Loading */}
+        {hasMoreImages && displayedImages.length > 0 && (
+          <View style={styles.loadMoreContainer}>
+            {isLoadingMore ? (
+              <View style={styles.loadingMoreIndicator}>
+                <ActivityIndicator size="small" color="#FF6F61" />
+                <Text style={styles.loadingMoreText}>Loading more photos...</Text>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.loadMoreButton} onPress={loadMoreImages}>
+                <Ionicons name="add-circle-outline" size={20} color="#FF6F61" />
+                <Text style={styles.loadMoreButtonText}>Load More Photos</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Show total count when all images are loaded */}
+        {!hasMoreImages && displayedImages.length > 0 && images.length > IMAGES_PER_PAGE && (
+          <View style={styles.allLoadedContainer}>
+            <Ionicons name="checkmark-circle" size={20} color="#4CD964" />
+            <Text style={styles.allLoadedText}>All {images.length} photos loaded</Text>
           </View>
         )}
 
@@ -1573,12 +1549,10 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         eventId={eventId}
         navigation={navigation}
         guestUsername={guestUsername} // Pass guest info
-      />
-    </View>
+      />    </View>
   );
 }
 
-// Updated styles with new creator badge styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1587,7 +1561,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: 30,
   },
-  // Cover Image Styles
   coverContainer: {
     height: 220,
     marginBottom: 10,
@@ -1622,11 +1595,9 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   statusText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+    color: '#FFFFFF',    fontSize: 12,
     fontWeight: '600',
   },
-  // New Creator Badge Styles
   creatorBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1650,11 +1621,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     backgroundColor: 'rgba(255, 215, 0, 0.3)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 6,    paddingVertical: 2,
     borderRadius: 10,
   },
-  // Guest Status Badge Styles
   guestStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1669,11 +1638,9 @@ const styles = StyleSheet.create({
   },
   guestStatusText: {
     color: '#4CAF50',
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 11,    fontWeight: '600',
     marginLeft: 4,
   },
-  // Event Card Styles
   eventCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -1760,11 +1727,9 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 15,
-    lineHeight: 22,
-    color: '#444',
+    lineHeight: 22,    color: '#444',
     marginBottom: 16,
   },
-  // Event stats without attendees
   eventStats: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1785,11 +1750,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   statDivider: {
-    width: 1,
-    height: '80%',
+    width: 1,    height: '80%',
     backgroundColor: '#E5E5E5',
   },
-  // Section Header Styles
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1802,11 +1765,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#222',
   },
-  photosCount: {
-    fontSize: 14,
+  photosCount: {    fontSize: 14,
     color: '#888',
   },
-  // Category Selector Styles
   categoryContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1834,11 +1795,9 @@ const styles = StyleSheet.create({
     color: '#666666',
     fontWeight: '500',
   },
-  selectedCategoryText: {
-    color: '#FFFFFF',
+  selectedCategoryText: {    color: '#FFFFFF',
     fontWeight: '600',
   },
-  // Gallery Header Styles
   galleryHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1848,11 +1807,9 @@ const styles = StyleSheet.create({
   },
   galleryTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#222',
+    fontWeight: 'bold',    color: '#222',
   },
 
-  // Image Grid Styles
   imageGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1872,12 +1829,10 @@ const styles = StyleSheet.create({
   },
   eventImage: {
     width: '100%',
-    height: '100%',
-  },
+    height: '100%',  },
   largeEventImage: {
     height: '100%',
   },
-  // Enhanced Modal Styles
   modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.95)',
@@ -1892,9 +1847,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     paddingHorizontal: 20,
-  },
-  modalImage: {
-    // This will be handled by the responsive component
+  },  modalImage: {
     borderRadius: 12,
   },
   closeButton: {
@@ -1989,11 +1942,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  deleteButtonBackground: {
-    backgroundColor: 'rgba(255, 59, 48, 0.8)',
+  deleteButtonBackground: {    backgroundColor: 'rgba(255, 59, 48, 0.8)',
     borderColor: 'rgba(255, 59, 48, 0.3)',
   },
-  // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -2001,11 +1952,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
   },
   loadingText: {
-    marginTop: 10,
-    fontSize: 16,
+    marginTop: 10,    fontSize: 16,
     color: '#888',
   },
-  // Instagram-style grid
   instaGrid: {
     paddingHorizontal: 0,
     marginBottom: 20,
@@ -2014,13 +1963,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: width / 3,
     marginBottom: 2,
-  },
-  instaEqualImage: {
-    flex: 1,
-    marginHorizontal: 1,
+  },  instaEqualImage: {
+    width: (width - 4) / 3, // Fixed width: 1/3 of screen width minus total margins (2px * 2 gaps)    marginHorizontal: 1,
     overflow: 'hidden',
   },
-  // Edge styling for Instagram-like appearance
   edgeLeft: {
     marginLeft: 0,
   },
@@ -2032,29 +1978,33 @@ const styles = StyleSheet.create({
   },
   edgeBottom: {
     marginBottom: 0,
-  },
-  eventImage: {
-    width: '100%',
-    height: '100%',
+  },  eventImage: {
+    width: '100%',    height: '100%',
     backgroundColor: '#f0f0f0',
   },
-  // Enhanced skeleton loader styles
+  imageError: {
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#999',
+    fontSize: 11,
+    marginTop: 4,
+    textAlign: 'center',
+  },
   imageSkeleton: {
     backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
     overflow: 'hidden',
-  },
-  shimmerOverlay: {
+  },  shimmerOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    width: '100%',
-    height: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    opacity: 0.8,
   },
   skeletonContent: {
     justifyContent: 'center',
@@ -2073,11 +2023,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  printText: {
-    color: '#fff',
+  printText: {    color: '#fff',
     marginLeft: 5,
   },
-  // Photo loading and empty states
   photosLoadingContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -2099,16 +2047,79 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#888',
     marginTop: 10,
-  },
-  noPhotosSubtext: {
+  },  noPhotosSubtext: {
     fontSize: 14,
     color: '#AAA',
     marginTop: 5,
     textAlign: 'center',
   },
+  createAccountButton: {
+    backgroundColor: '#FF6F61',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    marginTop: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  createAccountButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,    fontWeight: '600',
+    textAlign: 'center',
+  },
+  loadMoreContainer: {
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  loadMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: '#FF6F61',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  loadMoreButtonText: {
+    fontSize: 14,
+    color: '#FF6F61',
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  loadingMoreIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  loadingMoreText: {
+    fontSize: 14,
+    color: '#888',
+    marginLeft: 10,
+    fontWeight: '500',
+  },
+  allLoadedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    marginBottom: 10,
+  },
+  allLoadedText: {
+    fontSize: 13,
+    color: '#4CD964',
+    fontWeight: '500',    marginLeft: 6,
+  },
 
-  
-  // Modal image loading styles
   modalImageSkeleton: {
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',

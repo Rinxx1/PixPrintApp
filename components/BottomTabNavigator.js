@@ -29,7 +29,7 @@ function TabNavigator() {
           height:  Platform.OS === 'ios' ? 65 : 64,
           borderRadius: 40,
           marginHorizontal: 28,
-          marginBottom: Platform.OS === 'ios' ? 28 : 38,
+          marginBottom: Platform.OS === 'ios' ? 28 : 18,
           paddingBottom: Platform.OS === 'ios' ? 20 : 1,
           paddingTop: Platform.OS === 'ios' ? 15 : 14,
           shadowColor: '#000',

@@ -441,7 +441,7 @@ export default function InstagramCameraScreen({ route, navigation }) {
     }
   };
 
-  const uploadPhotoToStorage = async (imageUri) => {
+ const uploadPhotoToStorage = async (imageUri) => {
     try {
       const user = auth.currentUser;
       const timestamp = new Date().getTime();
@@ -819,92 +819,6 @@ export default function InstagramCameraScreen({ route, navigation }) {
         { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
       );
       return fallbackResult;
-    }
-  };
-  // Upload photo to Firebase Storage - with frame info
-  const uploadPhotoToStorage = async (imageUri, updateThumbnail = true) => {
-    try {
-      const user = auth.currentUser;
-      
-      // For non-event photos, require authentication
-      if (!eventId && !user) {
-        throw new Error('Authentication required for personal photos');
-      }
-      
-      let storageRef;
-      let firestoreData;
-      const timestamp = new Date().getTime();
-      
-      // Get current filter information - this is crucial for preserving frame data
-      const currentFilter = filterOptions[filterIndex];
-      const filterColor = currentFilter?.color || null;
-      const filterName = currentFilter?.name || 'None';      const frameType = currentFilter?.frame || null;
-      const frameUrl = currentFilter?.frameUrl || null;
-      
-      if (eventId) {
-        // Event-specific photo (supports both authenticated users and guests)
-        const filename = user ? 
-          `event_${eventId}_user_${user.uid}_${timestamp}.jpg` :
-          `event_${eventId}_guest_${guestUsername}_${timestamp}.jpg`;
-        
-        storageRef = ref(storage, `event-photos/${eventId}/${filename}`);
-        
-        firestoreData = {
-          event_id: eventId,
-          user_id: user ? user.uid : null, // null for guests
-          username: user ? (user.displayName || 'Unknown User') : guestUsername,
-          photo_url: '',
-          uploaded_at: serverTimestamp(),
-          filter: filterColor,
-          filter_name: filterName,
-          frame_type: frameType, // Add frame type
-          frame_url: frameUrl, // Add frame URL for event frames
-          has_frame: !!frameType, // Boolean to indicate if frame was applied
-          likes: 0,
-          comments: 0,
-          source: 'camera',
-          is_guest: !user, // Mark as guest photo
-          guest_username: !user ? guestUsername : null
-        };
-      } else {
-        // Personal photo (requires authentication)
-        const filename = `user_photo_${timestamp}.jpg`;
-        storageRef = ref(storage, `user-photos/${user.uid}/${filename}`);
-        
-        firestoreData = {
-          user_id: user.uid,
-          username: user.displayName || 'Unknown User',
-          photo_url: '',
-          uploaded_at: serverTimestamp(),
-          filter: filterColor,
-          filter_name: filterName,
-          frame_type: frameType, // Add frame type
-          frame_url: frameUrl, // Add frame URL for event frames
-          has_frame: !!frameType, // Boolean to indicate if frame was applied
-          is_personal: true,
-          likes: 0,
-          comments: 0,
-          source: 'camera'
-        };
-      }
-      
-      // iOS fix: Better blob conversion
-      const response = await fetch(imageUri);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
-      }
-        const blob = await response.blob();
-        const snapshot = await uploadBytes(storageRef, blob);
-
-      const downloadURL = await getDownloadURL(snapshot.ref);
-      
-      firestoreData.photo_url = downloadURL;
-      
-      // Save photo info to Firestore
-      const photoCollection = eventId ? 'photos_tbl' : 'user_photos_tbl';      const docRef = await addDoc(collection(db, photoCollection), firestoreData);
-
-    } catch (error) {
-      throw error;
     }
   };
   // New function to composite frame onto image - Enhanced version

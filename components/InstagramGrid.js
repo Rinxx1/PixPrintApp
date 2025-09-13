@@ -14,24 +14,75 @@ import { optimizeImageUrl } from '../utils/imageOptimization';
 
 const { width } = Dimensions.get('window');
 
+// Animated Skeleton Placeholder Component
+const AnimatedSkeletonPlaceholder = ({ style, index }) => {
+  const shimmerAnim = useState(new Animated.Value(0))[0];
+  
+  useEffect(() => {
+    const shimmerLoop = () => {
+      Animated.sequence([
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: false,
+        }),
+        Animated.timing(shimmerAnim, {
+          toValue: 0,
+          duration: 800,
+          useNativeDriver: false,
+        }),
+      ]).start(() => shimmerLoop());
+    };
+    
+    shimmerLoop();
+    
+    return () => shimmerAnim.stopAnimation();
+  }, [shimmerAnim]);
+  
+  const gridImageWidth = (width - 4) / 3;
+  const shimmerTranslateX = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-gridImageWidth, gridImageWidth],
+  });
+  
+  return (
+    <View style={[style, styles.imageSkeleton]}>
+      <Animated.View 
+        style={[
+          styles.shimmerOverlay,
+          {
+            width: gridImageWidth,
+            height: width / 3,
+            transform: [{ translateX: shimmerTranslateX }],
+          }
+        ]} 
+      />
+      <View style={styles.skeletonContent}>
+        <View style={styles.skeletonIconContainer}>
+          <Ionicons name="image-outline" size={16} color="#E0E0E0" />
+        </View>
+      </View>
+    </View>
+  );
+};
+
 const OptimizedGridImage = ({ photo, style, onPress, onLongPress, selectionMode, isSelected, onToggleSelection }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const fadeAnim = useState(new Animated.Value(0))[0];
   const shimmerAnim = useState(new Animated.Value(0))[0];
-
   // Start shimmer animation when component mounts
   useEffect(() => {
     const shimmerLoop = () => {
       Animated.sequence([
         Animated.timing(shimmerAnim, {
           toValue: 1,
-          duration: 1000,
+          duration: 1200,
           useNativeDriver: false,
         }),
         Animated.timing(shimmerAnim, {
           toValue: 0,
-          duration: 1000,
+          duration: 800,
           useNativeDriver: false,
         }),
       ]).start(() => shimmerLoop());
@@ -73,11 +124,11 @@ const OptimizedGridImage = ({ photo, style, onPress, onLongPress, selectionMode,
       onLongPress && onLongPress(photo);
     }
   };
-
   // Create shimmer effect
+  const gridImageWidth = (width - 4) / 3;
   const shimmerTranslateX = shimmerAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-style.width || 100, style.width || 100],
+    outputRange: [-gridImageWidth, gridImageWidth],
   });
 
   return (
@@ -86,14 +137,15 @@ const OptimizedGridImage = ({ photo, style, onPress, onLongPress, selectionMode,
       onPress={handlePress}
       onLongPress={handleLongPress}
       activeOpacity={0.8}
-    >
-      {/* Enhanced skeleton loader with shimmer effect */}
+    >      {/* Enhanced skeleton loader with shimmer effect */}
       {loading && (
         <View style={[style, styles.imageSkeleton]}>
           <Animated.View 
             style={[
               styles.shimmerOverlay,
               {
+                width: gridImageWidth,
+                height: width / 3,
                 transform: [{ translateX: shimmerTranslateX }],
               }
             ]} 
@@ -205,32 +257,26 @@ export default function InstagramGrid({
       />
     );
   };
-
   const renderLoadingPlaceholder = (index) => {
     const row = Math.floor(index / 3);
     const col = index % 3;
     const isFirstInRow = col === 0;
     const isLastInRow = col === 2;
     const isFirstRow = row === 0;
+    const isLastRow = row === Math.floor((placeholderCount - 1) / 3);
 
     return (
-      <View
+      <AnimatedSkeletonPlaceholder
         key={`placeholder-${index}`}
+        index={index}
         style={[
           styles.instaEqualImage,
-          styles.imageSkeleton,
           isFirstInRow && styles.edgeLeft,
           isLastInRow && styles.edgeRight,
           isFirstRow && styles.edgeTop,
+          isLastRow && styles.edgeBottom,
         ]}
-      >
-        <View style={styles.shimmerOverlay} />
-        <View style={styles.skeletonContent}>
-          <View style={styles.skeletonIconContainer}>
-            <Ionicons name="image-outline" size={16} color="#CCCCCC" />
-          </View>
-        </View>
-      </View>
+      />
     );
   };
 
@@ -304,9 +350,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: width / 3,
     marginBottom: 2,
-  },
-  instaEqualImage: {
-    flex: 1,
+  },  instaEqualImage: {
+    width: (width - 4) / 3, // Fixed width: 1/3 of screen width minus total margins
     marginHorizontal: 1,
     overflow: 'hidden',
     borderRadius: 8,
@@ -346,15 +391,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
     overflow: 'hidden',
-  },
-  shimmerOverlay: {
+  },  shimmerOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
     height: '100%',
   },
   skeletonContent: {
