@@ -38,30 +38,25 @@ const AnimatedSkeletonPlaceholder = ({ style, index }) => {
     
     return () => shimmerAnim.stopAnimation();
   }, [shimmerAnim]);
-  
-  const gridImageWidth = (width - 4) / 3;
+  // Use dynamic shimmer width based on grid item width for consistent animation
+  const gridItemWidth = (width - 44) / 3; // Match the actual grid item width
+  const shimmerWidth = Math.min(120, Math.max(60, gridItemWidth * 0.7)); // Use 70% of grid item width, between 60-120px
   const shimmerTranslateX = shimmerAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-gridImageWidth, gridImageWidth],
+    outputRange: [-shimmerWidth * 0.5, gridItemWidth + shimmerWidth * 0.3],
   });
-  
-  return (
+    return (
     <View style={[style, styles.imageSkeleton]}>
       <Animated.View 
         style={[
           styles.shimmerOverlay,
           {
-            width: gridImageWidth,
-            height: width / 3,
+            width: shimmerWidth,
+            height: '100%',
             transform: [{ translateX: shimmerTranslateX }],
           }
         ]} 
       />
-      <View style={styles.skeletonContent}>
-        <View style={styles.skeletonIconContainer}>
-          <Ionicons name="image-outline" size={16} color="#E0E0E0" />
-        </View>
-      </View>
     </View>
   );
 };
@@ -122,13 +117,12 @@ const OptimizedGridImage = ({ photo, style, onPress, onLongPress, selectionMode,
       onToggleSelection(photo.id);
     } else {
       onLongPress && onLongPress(photo);
-    }
-  };
-  // Create shimmer effect
-  const gridImageWidth = (width - 4) / 3;
+    }  };  // Create shimmer effect with dynamic sizing based on grid item width
+  const gridItemWidth = (width - 44) / 3; // Match the actual grid item width
+  const shimmerWidth = Math.min(120, Math.max(60, gridItemWidth * 0.7)); // Use 70% of grid item width, between 60-120px
   const shimmerTranslateX = shimmerAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-gridImageWidth, gridImageWidth],
+    outputRange: [-shimmerWidth * 0.5, gridItemWidth + shimmerWidth * 0.3],
   });
 
   return (
@@ -144,17 +138,12 @@ const OptimizedGridImage = ({ photo, style, onPress, onLongPress, selectionMode,
             style={[
               styles.shimmerOverlay,
               {
-                width: gridImageWidth,
-                height: width / 3,
+                width: shimmerWidth,
+                height: '100%',
                 transform: [{ translateX: shimmerTranslateX }],
               }
             ]} 
           />
-          <View style={styles.skeletonContent}>
-            <View style={styles.skeletonIconContainer}>
-              <Ionicons name="image-outline" size={16} color="#E0E0E0" />
-            </View>
-          </View>
         </View>
       )}
        
@@ -184,15 +173,7 @@ const OptimizedGridImage = ({ photo, style, onPress, onLongPress, selectionMode,
               <Ionicons name="checkmark" size={14} color="#FFFFFF" />
             )}
           </View>
-        </View>
-      )}
-      
-      {/* Filter indicator */}
-      {photo.filterName && photo.filterName !== 'None' && !selectionMode && (
-        <View style={styles.filterIndicator}>
-          <Text style={styles.filterIndicatorText}>{photo.filterName}</Text>
-        </View>
-      )}
+        </View>      )}
       
       {/* Type badge */}
       {!selectionMode && photo.type && (
@@ -343,15 +324,18 @@ export default function InstagramGrid({
 
 const styles = StyleSheet.create({
   instaGrid: {
-    paddingHorizontal: 0,
+    paddingHorizontal: 0, // No additional padding since GalleryScreen already has padding
     marginBottom: 20,
+    alignItems: 'center',
   },
   instaGridRow: {
     flexDirection: 'row',
     height: width / 3,
     marginBottom: 2,
-  },  instaEqualImage: {
-    width: (width - 4) / 3, // Fixed width: 1/3 of screen width minus total margins
+    justifyContent: 'center',
+  },
+  instaEqualImage: {
+    width: (width - 44) / 3, // Screen width minus GalleryScreen padding (40px) and gaps (4px) = 44px total
     marginHorizontal: 1,
     overflow: 'hidden',
     borderRadius: 8,
@@ -383,33 +367,15 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#f0f0f0',
   },
-  
-  // Enhanced skeleton loader styles
+    // Enhanced skeleton loader styles
   imageSkeleton: {
     backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
     position: 'relative',
     overflow: 'hidden',
-  },  shimmerOverlay: {
+  },shimmerOverlay: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    height: '100%',
-  },
-  skeletonContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  skeletonIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E8E8E8',
-    justifyContent: 'center',
-    alignItems: 'center',
+    top: 0,    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 8,
   },
   imageError: {
     backgroundColor: '#F5F5F5',
@@ -427,11 +393,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'center',
   },
-  
-  // Selection and overlay styles
+    // Selection and overlay styles
   selectedPhotoContainer: {
     borderWidth: 2,
-    borderColor: '#FF6F61',
+    borderColor: '#48C6EF',
   },
   selectionOverlay: {
     position: 'absolute',
@@ -448,24 +413,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  selectedCircle: {
-    backgroundColor: '#FF6F61',
-    borderColor: '#FF6F61',
-  },
-  filterIndicator: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 12,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-  },
-  filterIndicatorText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '500',
+  },  selectedCircle: {
+    backgroundColor: '#48C6EF',
+    borderColor: '#48C6EF',
   },
   typeBadge: {
     position: 'absolute',

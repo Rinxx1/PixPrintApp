@@ -557,13 +557,12 @@ export default function GalleryScreen({ navigation }) {
         style={styles.content} 
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
-        scrollEventThrottle={16}
-        refreshControl={
+        scrollEventThrottle={16}        refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#FF6F61']}
-            tintColor="#FF6F61"
+            colors={['#48C6EF']}
+            tintColor="#48C6EF"
           />
         }
       >
@@ -579,12 +578,11 @@ export default function GalleryScreen({ navigation }) {
           {/* Selection/View Toggle */}
           <View style={styles.headerControls}>
             {!selectionMode ? (
-              <>
-                <TouchableOpacity
+              <>                <TouchableOpacity
                   style={styles.selectButton}
                   onPress={toggleSelectionMode}
                 >
-                  <Ionicons name="checkmark-circle-outline" size={20} color="#FF6F61" />
+                  <Ionicons name="checkmark-circle-outline" size={20} color="#48C6EF" />
                   <Text style={styles.selectButtonText}>Select</Text>
                 </TouchableOpacity>
                 
@@ -621,8 +619,7 @@ export default function GalleryScreen({ navigation }) {
                     {selectedPhotos.size === filteredPhotos.length ? 'Deselect All' : 'Select All'}
                   </Text>
                 </TouchableOpacity>
-                
-                <TouchableOpacity
+                  <TouchableOpacity
                   style={styles.cancelButton}
                   onPress={toggleSelectionMode}
                 >
@@ -671,15 +668,12 @@ export default function GalleryScreen({ navigation }) {
                   key={filter.key} 
                   style={[styles.filterTab, activeFilter === filter.key && styles.filterActive]}
                   onPress={() => setActiveFilter(filter.key)}
-                >
-                  <Ionicons 
+                >                  <Ionicons 
                     name={filter.icon} 
                     size={16} 
                     color={activeFilter === filter.key ? '#FFFFFF' : '#666'} 
                     style={styles.filterIcon}
-                  />                  <Text style={[styles.filterText, activeFilter === filter.key && styles.filterActiveText]}>
-                    {filter.label}
-                  </Text>
+                  />
                   {/* Dynamic filter badges based on photo counts */}
                   {(() => {
                     let count = 0;
@@ -728,15 +722,14 @@ export default function GalleryScreen({ navigation }) {
 
             {/* Load More Button / Loading Indicator for Lazy Loading */}
             {hasMoreImages && (
-              <View style={styles.loadMoreContainer}>
-                {isLoadingMore ? (
+              <View style={styles.loadMoreContainer}>                {isLoadingMore ? (
                   <View style={styles.loadingMoreIndicator}>
-                    <ActivityIndicator size="small" color="#FF6F61" />
+                    <ActivityIndicator size="small" color="#48C6EF" />
                     <Text style={styles.loadingMoreText}>Loading more photos...</Text>
                   </View>
                 ) : (
                   <TouchableOpacity style={styles.loadMoreButton} onPress={loadMoreImages}>
-                    <Ionicons name="add-circle-outline" size={20} color="#FF6F61" />
+                    <Ionicons name="add-circle-outline" size={20} color="#48C6EF" />
                     <Text style={styles.loadMoreButtonText}>Load More Photos</Text>
                   </TouchableOpacity>
                 )}
@@ -760,13 +753,12 @@ export default function GalleryScreen({ navigation }) {
                 ? 'Start capturing memories by joining events!' 
                 : `You don't have any ${activeFilter.toLowerCase()} photos yet.`
               }
-            </Text>
-            {activeFilter === 'All' && (
+            </Text>            {activeFilter === 'All' && (
               <TouchableOpacity 
                 style={styles.joinEventButton}
                 onPress={() => navigation.navigate('Dashboard')}
               >
-                <Ionicons name="add-circle-outline" size={20} color="#FF6F61" />
+                <Ionicons name="add-circle-outline" size={20} color="#48C6EF" />
                 <Text style={styles.joinEventText}>Join an Event</Text>
               </TouchableOpacity>
             )}
@@ -776,12 +768,11 @@ export default function GalleryScreen({ navigation }) {
         {/* Footer */}
         {filteredPhotos.length > 0 && !selectionMode && (
           <View style={styles.footerContainer}>
-            <Text style={styles.footerText}>Tap an image to preview or print</Text>
-            <TouchableOpacity 
+            <Text style={styles.footerText}>Tap an image to preview or print</Text>            <TouchableOpacity 
               style={styles.uploadButton}
               onPress={() => navigation.navigate('Dashboard')}
             >
-              <Ionicons name="camera-outline" size={20} color="#FF6F61" />
+              <Ionicons name="camera-outline" size={20} color="#48C6EF" />
               <Text style={styles.uploadText}>Capture More</Text>
             </TouchableOpacity>
           </View>
@@ -871,9 +862,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
-  },
-  toggleActive: {
-    backgroundColor: '#FF6F61',
+  },  toggleActive: {
+    backgroundColor: '#48C6EF',
   },
   statsCard: {
     flexDirection: 'row',
@@ -890,11 +880,10 @@ const styles = StyleSheet.create({
   statItem: {
     flex: 1,
     alignItems: 'center',
-  },
-  statNumber: {
+  },  statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#FF6F61',
+    color: '#48C6EF',
   },
   statLabel: {
     fontSize: 12,
@@ -919,10 +908,9 @@ const styles = StyleSheet.create({
     marginRight: 10,
     borderWidth: 1,
     borderColor: '#EEEEEE',
-  },
-  filterActive: {
-    backgroundColor: '#FF6F61',
-    borderColor: '#FF6F61',
+  },  filterActive: {
+    backgroundColor: '#48C6EF',
+    borderColor: '#48C6EF',
   },
   filterIcon: {
     marginRight: 6,
@@ -935,9 +923,8 @@ const styles = StyleSheet.create({
   filterActiveText: {
     color: '#FFFFFF',
     fontWeight: '600',
-  },
-  filterBadge: {
-    backgroundColor: '#FF8A80',
+  },  filterBadge: {
+    backgroundColor: '#48C6EF',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -957,7 +944,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     fontWeight: '500',
-  },  galleryContainer: {
+  },  
+  galleryContainer: {
     marginBottom: 20,
   },
   emptyContainer: {
@@ -976,11 +964,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     lineHeight: 20,
-  },
-  joinEventButton: {
+  },  joinEventButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF0EF',
+    backgroundColor: 'rgba(72, 198, 239, 0.1)',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 20,
@@ -988,7 +975,7 @@ const styles = StyleSheet.create({
   },
   joinEventText: {
     fontSize: 14,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: '600',
     marginLeft: 6,
   },
@@ -1000,17 +987,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     marginBottom: 12,
-  },
-  uploadButton: {
+  },  uploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF0EF',
+    backgroundColor: 'rgba(72, 198, 239, 0.1)',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
   },  uploadText: {
     fontSize: 14,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: '600',
     marginLeft: 6,
   },
@@ -1019,11 +1005,10 @@ const styles = StyleSheet.create({
   headerControls: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  selectButton: {
+  },  selectButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF0EF',
+    backgroundColor: 'rgba(72, 198, 239, 0.1)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
@@ -1031,7 +1016,7 @@ const styles = StyleSheet.create({
   },
   selectButtonText: {
     fontSize: 14,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: '600',
     marginLeft: 4,
   },
@@ -1050,9 +1035,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
     fontWeight: '600',
-  },
-  cancelButton: {
-    backgroundColor: '#FF6F61',
+  },  cancelButton: {
+    backgroundColor: '#48C6EF',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
@@ -1061,10 +1045,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
     fontWeight: '600',
-  },
-  selectedImageWrapper: {
+  },  selectedImageWrapper: {
     borderWidth: 3,
-    borderColor: '#FF6F61',
+    borderColor: '#48C6EF',
   },
   selectionOverlay: {
     position: 'absolute',
@@ -1081,10 +1064,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  selectedCircle: {
-    backgroundColor: '#FF6F61',
-    borderColor: '#FF6F61',
+  },  selectedCircle: {
+    backgroundColor: '#48C6EF',
+    borderColor: '#48C6EF',
   },
   selectionActionsBar: {
     backgroundColor: '#FFFFFF',
@@ -1122,8 +1104,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingHorizontal: 20,
     alignItems: 'center',
-  },
-  loadMoreButton: {
+  },  loadMoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -1131,7 +1112,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 25,
     borderWidth: 2,
-    borderColor: '#FF6F61',
+    borderColor: '#48C6EF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1140,7 +1121,7 @@ const styles = StyleSheet.create({
   },
   loadMoreButtonText: {
     fontSize: 14,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: '600',
     marginLeft: 8,
   },

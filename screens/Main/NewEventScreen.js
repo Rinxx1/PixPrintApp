@@ -753,11 +753,10 @@ export default function NewEventScreen({ navigation }) {
               styles.inputContainer,
               eventStartDate && styles.inputContainerFilled
             ]}
-          >
-            <Ionicons 
+          >            <Ionicons 
               name="calendar-outline" 
               size={20} 
-              color={eventStartDate ? "#FF6F61" : "#AAAAAA"} 
+              color={eventStartDate ? "#48C6EF" : "#AAAAAA"} 
               style={styles.inputIcon} 
             />            
             <Text style={eventStartDate ? styles.dateText : styles.placeholderDateText}>
@@ -766,7 +765,7 @@ export default function NewEventScreen({ navigation }) {
             <Ionicons 
               name="chevron-down" 
               size={20} 
-              color={eventStartDate ? "#FF6F61" : "#AAAAAA"}
+              color={eventStartDate ? "#48C6EF" : "#AAAAAA"}
             />
           </TouchableOpacity>
           </View>
@@ -814,11 +813,10 @@ export default function NewEventScreen({ navigation }) {
                 onPress={generateUniqueAccessCode} 
                 disabled={isGeneratingCode}
                 style={isGeneratingCode ? styles.disabledButton : styles.refreshButton}
-              >
-                {isGeneratingCode ? (
+              >                {isGeneratingCode ? (
                   <ActivityIndicator size="small" color="#AAAAAA" />
                 ) : (
-                  <Ionicons name="refresh" size={20} color="#FF6F61" />
+                  <Ionicons name="refresh" size={20} color="#48C6EF" />
                 )}
               </TouchableOpacity>
             </View>
@@ -919,9 +917,8 @@ export default function NewEventScreen({ navigation }) {
             ]} 
             onPress={handleCreateEvent}
             disabled={!hasEnoughCredits || isLoading || isGeneratingCode || !selectedPackage}
-          >
-            <LinearGradient
-              colors={(!hasEnoughCredits || isLoading || isGeneratingCode || !selectedPackage) ? ['#CCCCCC', '#AAAAAA'] : ['#FF8D76', '#FF6F61']}
+          >            <LinearGradient
+              colors={(!hasEnoughCredits || isLoading || isGeneratingCode || !selectedPackage) ? ['#CCCCCC', '#AAAAAA'] : ['#5DD9F5', '#48C6EF']}
               style={styles.createButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -946,11 +943,10 @@ export default function NewEventScreen({ navigation }) {
         onCancel={hideDatePicker}
         minimumDate={new Date()}
         date={eventStartDate || new Date()}
-        minuteInterval={60}
-        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+        minuteInterval={60}        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
         themeVariant="light"
-        accentColor="#FF6F61"
-        buttonTextColorIOS="#FF6F61"
+        accentColor="#48C6EF"
+        buttonTextColorIOS="#48C6EF"
         pickerContainerStyleIOS={{
           backgroundColor: '#FFFFFF',
         }}
@@ -970,13 +966,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     height: '100%',
-  },
-  circle1: {
+  },  circle1: {
     position: 'absolute',
     width: width * 0.6,
     height: width * 0.6,
     borderRadius: width * 0.3,
-    backgroundColor: 'rgba(255, 111, 97, 0.08)',
+    backgroundColor: 'rgba(72, 198, 239, 0.08)',
     top: -width * 0.2,
     right: -width * 0.2,
   },
@@ -985,7 +980,7 @@ const styles = StyleSheet.create({
     width: width * 0.4,
     height: width * 0.4,
     borderRadius: width * 0.2,
-    backgroundColor: 'rgba(255, 141, 118, 0.06)',
+    backgroundColor: 'rgba(93, 217, 245, 0.06)',
     bottom: -width * 0.1,
     left: -width * 0.1,
   },
@@ -1054,10 +1049,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9F9F9',
     borderColor: '#EEEEEE',
     opacity: Platform.OS === 'ios' ? 0.8 : 1,
-  },
-  inputContainerFilled: {
-    borderColor: '#FFE4E1',
-    backgroundColor: '#FFFBFA',
+  },  inputContainerFilled: {
+    borderColor: '#D1F0FF',
+    backgroundColor: '#F8FCFF',
   },
   inputIcon: {
     marginRight: 12,
@@ -1102,12 +1096,11 @@ const styles = StyleSheet.create({
   textArea: {
     paddingVertical: 12,
     textAlignVertical: 'top',
-  },
-  codeText: {
+  },  codeText: {
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     fontSize: 18,
     letterSpacing: 1,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: '700',
   },
   codeHelpText: {
@@ -1136,16 +1129,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  packageCardSelected: {
-    borderColor: '#FF6F61',
-    backgroundColor: '#FFF8F7',
-  },
-  popularBadge: {
+  },  packageCardSelected: {
+    borderColor: '#48C6EF',
+    backgroundColor: '#F0F9FF',
+  },  popularBadge: {
     position: 'absolute',
     top: -8,
     right: 16,
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
@@ -1165,12 +1156,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666666',
     marginRight: 12,
-  },
-  packageCheckbox: {
+  },  packageCheckbox: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1275,11 +1265,10 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 8,
     flex: 1,
-  },
-  createButton: {
+  },  createButton: {
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#FF6F61',
+    shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -1338,11 +1327,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  uploadingText: {
+  },  uploadingText: {
     marginTop: 8,
     fontSize: 14,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: '500',
   },
   imagePickerButton: {
@@ -1371,12 +1359,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'center',
     lineHeight: 16,
-  },
-  imageBadge: {
+  },  imageBadge: {
     position: 'absolute',
     bottom: 8,
     left: 8,
-    backgroundColor: 'rgba(255, 111, 97, 0.9)',
+    backgroundColor: 'rgba(72, 198, 239, 0.9)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,

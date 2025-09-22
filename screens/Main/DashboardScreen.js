@@ -758,20 +758,18 @@ export default function DashboardScreen({ navigation, route }) {
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: true }
         )}
-        scrollEventThrottle={16}
-        refreshControl={
+        scrollEventThrottle={16}        refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#FF6F61']}
-            tintColor="#FF6F61"
+            colors={['#48C6EF']}
+            tintColor="#48C6EF"
             title="Pull to refresh events..."
             titleColor="#666"
           />
         }
       >
-        {/* Welcome Header Section */}
-        <Animated.View 
+        {/* Welcome Header Section */}        <Animated.View 
           style={[
             styles.welcomeHeader,
             {
@@ -781,7 +779,7 @@ export default function DashboardScreen({ navigation, route }) {
           ]}
         >
           <LinearGradient
-            colors={['#FF8D76', '#FF6F61']}
+            colors={['#48C6EF', '#0060DF']}
             style={styles.welcomeGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
@@ -806,13 +804,12 @@ export default function DashboardScreen({ navigation, route }) {
         </Animated.View>
 
         {/* Quick Actions Section */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity 
+        <View style={styles.quickActions}>          <TouchableOpacity 
             style={styles.actionButton}
             onPress={() => navigation.navigate('NewEvent')}
           >
             <View style={styles.actionIconContainer}>
-              <Ionicons name="add-circle-outline" size={24} color="#FF6F61" />
+              <Ionicons name="add-circle-outline" size={24} color="#48C6EF" />
             </View>
             <Text style={styles.actionButtonText}>Create Event</Text>
           </TouchableOpacity>
@@ -822,14 +819,14 @@ export default function DashboardScreen({ navigation, route }) {
             onPress={() => navigation.navigate('Camera')}
           >
             <View style={styles.actionIconContainer}>
-              <Ionicons name="camera-outline" size={24} color="#FF6F61" />
+              <Ionicons name="camera-outline" size={24} color="#48C6EF" />
             </View>
             <Text style={styles.actionButtonText}>Take Photos</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
             <View style={styles.actionIconContainer}>
-              <Ionicons name="print-outline" size={24} color="#FF6F61" />
+              <Ionicons name="print-outline" size={24} color="#48C6EF" />
             </View>
             <Text style={styles.actionButtonText}>My Prints</Text>
           </TouchableOpacity>
@@ -851,8 +848,7 @@ export default function DashboardScreen({ navigation, route }) {
                 autoCapitalize="characters"
                 maxLength={10}
               />
-            </View>
-            <TouchableOpacity 
+            </View>            <TouchableOpacity 
               style={[styles.joinButton, loading && styles.joinButtonDisabled]}
               onPress={handleJoinEvent}
               disabled={loading}
@@ -933,13 +929,12 @@ export default function DashboardScreen({ navigation, route }) {
                     : "No events found. Create or join an event to get started!"
                 }
               </Text>
-              {activeTab === 'created' && (
-                <TouchableOpacity 
-                  style={styles.createEventButton}
-                  onPress={() => navigation.navigate('NewEvent')}
-                >
-                  <Text style={styles.createEventButtonText}>Create Event</Text>
-                </TouchableOpacity>
+              {activeTab === 'created' && (              <TouchableOpacity 
+                style={styles.createEventButton}
+                onPress={() => navigation.navigate('NewEvent')}
+              >
+                <Text style={styles.createEventButtonText}>Create Event</Text>
+              </TouchableOpacity>
               )}
             </View>
           ) : (
@@ -985,16 +980,14 @@ export default function DashboardScreen({ navigation, route }) {
                     {event.description}
                   </Text>
                   
-                  {/* Updated event details section without attendees */}
-                  <View style={styles.eventDetailsRow}>
+                  {/* Updated event details section without attendees */}                  <View style={styles.eventDetailsRow}>
                     <View style={styles.eventDetail}>
-                      <Ionicons name="calendar-outline" size={14} color="#FF6F61" />
+                      <Ionicons name="calendar-outline" size={14} color="#48C6EF" />
                       <Text style={styles.eventDetailText}>{event.dateRange}</Text>
                     </View>
                   </View>
                   
-                  <View style={styles.eventFooter}>
-                    <View style={styles.codeContainer}>
+                  <View style={styles.eventFooter}>                    <View style={styles.codeContainer}>
                       <Text style={styles.codeLabel}>CODE:</Text>
                       <Text style={styles.codeText}>{event.code}</Text>
                     </View>
@@ -1013,8 +1006,7 @@ export default function DashboardScreen({ navigation, route }) {
           )}
         </View>
 
-        {/* Floating Create Button (optional) */}
-        <TouchableOpacity 
+        {/* Floating Create Button (optional) */}        <TouchableOpacity 
           style={styles.floatingButton}
           onPress={() => navigation.navigate('NewEvent')}
         >
@@ -1044,18 +1036,17 @@ const styles = StyleSheet.create({
     marginBottom: 20, // Reduced from 32
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  logoGlow: {
+  },  logoGlow: {
     position: 'absolute',
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
   },
   loadingIcon: {
     width: 64,
     height: 64,
-    tintColor: '#FF6F61',
+    tintColor: '#48C6EF',
   },
   brandName: {
     fontSize: 28,
@@ -1078,12 +1069,11 @@ const styles = StyleSheet.create({
   dotsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  dot: {
+  },  dot: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
     marginHorizontal: 2,
   },
   progressContainer: {
@@ -1094,11 +1084,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'flex-start',
     justifyContent: 'center',
-  },
-  progressDot: {
+  },  progressDot: {
     width: 10,
     height: 2,
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
     borderRadius: 1,
   },
 
@@ -1113,14 +1102,13 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: 30,
     paddingBottom: 40,
-  },
-  welcomeHeader: {
+  },  welcomeHeader: {
     marginHorizontal: 20,
     marginBottom: 24,
     borderRadius: 24,
     overflow: 'hidden',
     elevation: 5,
-    shadowColor: '#FF6F61',
+    shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -1191,12 +1179,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 2.65,
     elevation: 2,
-  },
-  actionIconContainer: {
+  },  actionIconContainer: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: 'rgba(255, 111, 97, 0.1)',
+    backgroundColor: 'rgba(72, 198, 239, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -1242,13 +1229,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#333',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  joinButton: {
-    backgroundColor: '#FF6F61',
+  },  joinButton: {
+    backgroundColor: '#48C6EF',
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 12,
-    shadowColor: '#FF6F61',
+    shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1296,9 +1282,8 @@ const styles = StyleSheet.create({
   activeEventTabText: {
     color: '#333',
     fontWeight: '600',
-  },
-  badgeContainer: {
-    backgroundColor: '#FF6F61',
+  },  badgeContainer: {
+    backgroundColor: '#48C6EF',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -1432,16 +1417,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#888',
     marginRight: 4,
-  },
-  codeText: {
+  },  codeText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#FF6F61',
+    color: '#48C6EF',
   },
   viewButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 8,

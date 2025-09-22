@@ -11,8 +11,7 @@ import SignUpScreen from './screens/SignUpScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ContinueAsGuestScreen from './screens/ContinueAsGuestScreen';
 import NewEventScreen from './screens/Main/NewEventScreen';
-import JoinEventScreen from './screens/Main/JoinEventScreen';
-import InstagramCameraScreen from './screens/Main/InstagramCameraScreen';
+import CameraScreen from './screens/Main/CameraScreen';
 import ChooseFrameScreen from './screens/Main/ChooseFrameScreen';
 import BottomTabNavigatorWrapper from './components/BottomTabNavigator';
 import PersonalInfoScreen from './screens/Main/PersonalInfoScreen';
@@ -55,8 +54,7 @@ function AppNavigator() {
       <Stack.Screen name="ContinueAsGuest" component={ContinueAsGuestScreen} />
       <Stack.Screen name="Tabs" component={BottomTabNavigatorWrapper} />
       <Stack.Screen name="NewEvent" component={NewEventScreen} />
-      <Stack.Screen name="JoinEvent" component={JoinEventScreen} />
-      <Stack.Screen name="Camera" component={InstagramCameraScreen} />
+      <Stack.Screen name="Camera" component={CameraScreen} />
       <Stack.Screen name="ChooseFrame" component={ChooseFrameScreen} />
       <Stack.Screen name="PersonalInfo" component={PersonalInfoScreen} />
       <Stack.Screen name='ChangePassword' component={ChangePasswordScreen} />

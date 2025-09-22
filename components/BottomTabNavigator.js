@@ -29,7 +29,7 @@ function TabNavigator() {
           height:  Platform.OS === 'ios' ? 65 : 64,
           borderRadius: 40,
           marginHorizontal: 28,
-          marginBottom: Platform.OS === 'ios' ? 28 : 18,
+          marginBottom: Platform.OS === 'ios' ? 28 : 38,
           paddingBottom: Platform.OS === 'ios' ? 20 : 1,
           paddingTop: Platform.OS === 'ios' ? 15 : 14,
           shadowColor: '#000',
@@ -42,13 +42,11 @@ function TabNavigator() {
           if (route.name === 'Dashboard') iconName = 'home';
           // if (route.name === 'Calendar') iconName = 'calendar';
           if (route.name === 'Gallery') iconName = 'images';
-          if (route.name === 'Settings') iconName = 'settings';
-
-          return (
+          if (route.name === 'Settings') iconName = 'settings';          return (
             <Ionicons
               name={iconName}
               size={focused ? 28 : 24}
-              color={focused ? '#FF6F61' : '#B0B0B0'}
+              color={focused ? '#48C6EF' : '#B0B0B0'}
             />
           );
         },

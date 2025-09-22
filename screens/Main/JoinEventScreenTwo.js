@@ -920,7 +920,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       setLoading(false);
     };
 
-    const gridImageWidth = (width - 4) / 3;
+    const gridImageWidth = (width - 10) / 3;
     const gridImageHeight = width / 3;
 
     const shimmerTranslateX = shimmerAnim.interpolate({
@@ -1156,7 +1156,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6F61" />
+        <ActivityIndicator size="large" color="#48C6EF" />
         <Text style={styles.loadingText}>Loading event details...</Text>
       </View>
     );
@@ -1217,19 +1217,19 @@ export default function JoinEventScreenTwo({ route, navigation }) {
               <Text style={styles.title}>{eventName}</Text>
               {eventCode && (
                 <View style={styles.eventCodeBadge}>
-                  <Ionicons name="key-outline" size={14} color="#FF6F61" />
+                  <Ionicons name="key-outline" size={14} color="#48C6EF" />
                   <Text style={styles.eventCodeText}>{eventCode}</Text>
                 </View>
               )}
             </View>
             <TouchableOpacity style={styles.shareButton}>
-              <Ionicons name="share-social" size={20} color="#FF6F61" />
+              <Ionicons name="share-social" size={20} color="#48C6EF" />
             </TouchableOpacity>
           </View>
 
           <View style={styles.dateRow}>
             <View style={styles.dateIconContainer}>
-              <Ionicons name="calendar-outline" size={16} color="#FF6F61" />
+              <Ionicons name="calendar-outline" size={16} color="#48C6EF" />
             </View>
             <View style={styles.dateTextContainer}>
               <Text style={styles.date}>{eventDate}</Text>
@@ -1246,14 +1246,14 @@ export default function JoinEventScreenTwo({ route, navigation }) {
 
           <View style={styles.eventStats}>
             <View style={styles.statItem}>
-              <Ionicons name="location-outline" size={18} color="#FF6F61" />
+              <Ionicons name="location-outline" size={18} color="#48C6EF" />
               <Text style={styles.statValue} numberOfLines={1} ellipsizeMode="tail">
                 {eventLocation}
               </Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Ionicons name="time-outline" size={18} color="#FF6F61" />
+              <Ionicons name="time-outline" size={18} color="#48C6EF" />
               <Text style={styles.statValue}>{eventTime}</Text>
             </View>          </View>
         </View>
@@ -1327,11 +1327,9 @@ export default function JoinEventScreenTwo({ route, navigation }) {
 
         <View style={styles.galleryHeader}>
           <Text style={styles.galleryTitle}>{galleryTitle}</Text>
-        </View>
-
-        {photosLoading && (selectedCategory === 'person' || selectedCategory === 'group' || selectedCategory === 'camera') && (
+        </View>        {photosLoading && (selectedCategory === 'person' || selectedCategory === 'group' || selectedCategory === 'camera') && (
           <View style={styles.photosLoadingContainer}>
-            <ActivityIndicator size="small" color="#FF6F61" />
+            <ActivityIndicator size="small" color="#48C6EF" />
             <Text style={styles.photosLoadingText}>Loading photos...</Text>          </View>
         )}
 
@@ -1414,17 +1412,16 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           </View>
         )}
 
-        {/* Load More Button / Loading Indicator for Lazy Loading */}
-        {hasMoreImages && displayedImages.length > 0 && (
+        {/* Load More Button / Loading Indicator for Lazy Loading */}        {hasMoreImages && displayedImages.length > 0 && (
           <View style={styles.loadMoreContainer}>
             {isLoadingMore ? (
               <View style={styles.loadingMoreIndicator}>
-                <ActivityIndicator size="small" color="#FF6F61" />
+                <ActivityIndicator size="small" color="#48C6EF" />
                 <Text style={styles.loadingMoreText}>Loading more photos...</Text>
               </View>
             ) : (
               <TouchableOpacity style={styles.loadMoreButton} onPress={loadMoreImages}>
-                <Ionicons name="add-circle-outline" size={20} color="#FF6F61" />
+                <Ionicons name="add-circle-outline" size={20} color="#48C6EF" />
                 <Text style={styles.loadMoreButtonText}>Load More Photos</Text>
               </TouchableOpacity>
             )}
@@ -1666,28 +1663,25 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#222',
-  },
-  eventCodeBadge: {
+  },  eventCodeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF0EF',
+    backgroundColor: '#E3F7FF',
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 16,
     alignSelf: 'flex-start',
     marginTop: 8,
-  },
-  eventCodeText: {
+  },eventCodeText: {
     fontSize: 14,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: '600',
     marginLeft: 5,
-  },
-  shareButton: {
+  },  shareButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFF0EF',
+    backgroundColor: '#E3F7FF',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1707,9 +1701,8 @@ const styles = StyleSheet.create({
   date: {
     fontSize: 14,
     color: '#666',
-  },
-  multiDayBadge: {
-    backgroundColor: '#FF6F61',
+  },  multiDayBadge: {
+    backgroundColor: '#48C6EF',
     borderRadius: 12,
     paddingVertical: 2,
     paddingHorizontal: 8,
@@ -1785,9 +1778,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 30,
     flex: 1,
-  },
-  selectedCategoryTab: {
-    backgroundColor: '#FF6F61',
+  },  selectedCategoryTab: {
+    backgroundColor: '#48C6EF',
   },
   categoryText: {
     marginLeft: 6,
@@ -1954,9 +1946,8 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,    fontSize: 16,
     color: '#888',
-  },
-  instaGrid: {
-    paddingHorizontal: 0,
+  },  instaGrid: {
+    paddingHorizontal: 2, // Small padding to prevent edge touching
     marginBottom: 20,
   },
   instaGridRow: {
@@ -1964,7 +1955,8 @@ const styles = StyleSheet.create({
     height: width / 3,
     marginBottom: 2,
   },  instaEqualImage: {
-    width: (width - 4) / 3, // Fixed width: 1/3 of screen width minus total margins (2px * 2 gaps)    marginHorizontal: 1,
+    width: (width - 10) / 3, // Screen width minus padding (4px) and spacing (6px) = 10px total
+    marginHorizontal: 1,
     overflow: 'hidden',
   },
   edgeLeft: {
@@ -2052,9 +2044,8 @@ const styles = StyleSheet.create({
     color: '#AAA',
     marginTop: 5,
     textAlign: 'center',
-  },
-  createAccountButton: {
-    backgroundColor: '#FF6F61',
+  },  createAccountButton: {
+    backgroundColor: '#48C6EF',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 25,
@@ -2074,8 +2065,7 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingHorizontal: 20,
     alignItems: 'center',
-  },
-  loadMoreButton: {
+  },  loadMoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -2083,16 +2073,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 25,
     borderWidth: 2,
-    borderColor: '#FF6F61',
+    borderColor: '#48C6EF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-  },
-  loadMoreButtonText: {
+  },  loadMoreButtonText: {
     fontSize: 14,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: '600',
     marginLeft: 8,
   },
