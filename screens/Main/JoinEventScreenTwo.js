@@ -50,6 +50,9 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const [isEventCreator, setIsEventCreator] = useState(false);
   const [extensionAlertShown, setExtensionAlertShown] = useState(false);
   
+  // Add state for print functionality
+  const [isPrinting, setIsPrinting] = useState(false);
+
   const [eventPhotos, setEventPhotos] = useState([]);
   const [myPhotos, setMyPhotos] = useState([]);
   const [photographerPhotos, setPhotographerPhotos] = useState([]);  const [photosLoading, setPhotosLoading] = useState(false);
@@ -1151,6 +1154,53 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const handleTabChange = (tab) => {    setActiveTab(tab);
   };
 
+  // Add print handler function
+  const handlePrintPhoto = async (photo) => {
+    if (!photo || !photo.imageUrl || !eventId) {
+      showError(
+        'Print Error',
+        'Unable to print this photo. Please try again.',
+        () => {},
+        () => {}
+      );
+      return;
+    }
+
+    setIsPrinting(true);
+
+    try {
+      // Save to que_print_tbl
+      const printQueue = {
+        event_id: eventId,
+        photo_url: photo.imageUrl,
+        created_at: new Date(),
+        status: 'pending' // Optional status field
+      };
+
+      await addDoc(collection(db, 'que_print_tbl'), printQueue);
+
+      showSuccess(
+        '🖨️ Added to Print Queue!',
+        'Your photo has been successfully added to the print queue. It will be processed shortly.',
+        () => {
+          console.log('Photo added to print queue successfully');
+        }
+      );
+
+    } catch (error) {
+      console.error('Error adding photo to print queue:', error);
+      
+      showError(
+        '🖨️ Print Queue Error',
+        'Failed to add photo to print queue. Please check your connection and try again.',
+        () => handlePrintPhoto(photo), // Retry function
+        () => {} // Cancel function
+      );
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
   const eventStatus = getEventStatus();
 
   if (loading) {
@@ -1503,10 +1553,17 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                 <Ionicons name="heart-outline" size={20} color="#fff" />
               </View>
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.modalControlButton}>
-              <View style={styles.controlButtonBackground}>
-                <Ionicons name="print-outline" size={20} color="#fff" />
+              <TouchableOpacity 
+              style={styles.modalControlButton}
+              onPress={() => selectedPhoto && handlePrintPhoto(selectedPhoto)}
+              disabled={isPrinting}
+            >
+              <View style={[styles.controlButtonBackground, isPrinting && styles.printingButtonBackground]}>
+                {isPrinting ? (
+                  <ActivityIndicator size={20} color="#fff" />
+                ) : (
+                  <Ionicons name="print-outline" size={20} color="#fff" />
+                )}
               </View>
             </TouchableOpacity>
             
@@ -1933,9 +1990,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
-  },
-  deleteButtonBackground: {    backgroundColor: 'rgba(255, 59, 48, 0.8)',
+  },  deleteButtonBackground: {    backgroundColor: 'rgba(255, 59, 48, 0.8)',
     borderColor: 'rgba(255, 59, 48, 0.3)',
+  },
+  printingButtonBackground: {
+    backgroundColor: 'rgba(72, 198, 239, 0.8)',
+    borderColor: 'rgba(72, 198, 239, 0.3)',
   },
   loadingContainer: {
     flex: 1,

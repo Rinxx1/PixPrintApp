@@ -12,7 +12,6 @@ import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ContinueAsGuestScreen from './screens/ContinueAsGuestScreen';
 import NewEventScreen from './screens/Main/NewEventScreen';
 import CameraScreen from './screens/Main/CameraScreen';
-import ChooseFrameScreen from './screens/Main/ChooseFrameScreen';
 import BottomTabNavigatorWrapper from './components/BottomTabNavigator';
 import PersonalInfoScreen from './screens/Main/PersonalInfoScreen';
 import ChangePasswordScreen from './screens/Main/ChangePasswordScreen';
@@ -55,7 +54,6 @@ function AppNavigator() {
       <Stack.Screen name="Tabs" component={BottomTabNavigatorWrapper} />
       <Stack.Screen name="NewEvent" component={NewEventScreen} />
       <Stack.Screen name="Camera" component={CameraScreen} />
-      <Stack.Screen name="ChooseFrame" component={ChooseFrameScreen} />
       <Stack.Screen name="PersonalInfo" component={PersonalInfoScreen} />
       <Stack.Screen name='ChangePassword' component={ChangePasswordScreen} />
       <Stack.Screen name='Terms&Condition' component={TermsAndConditionsScreen} />

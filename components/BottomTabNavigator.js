@@ -5,7 +5,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
 import DashboardScreen from '../screens/Main/DashboardScreen';
-import CalendarScreen from '../screens/Main/CalendarScreen';
 import GalleryScreen from '../screens/Main/GalleryScreen';
 import SettingsScreen from '../screens/Main/SettingsScreen';
 import {
@@ -53,7 +52,6 @@ function TabNavigator() {
       })}
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      {/* <Tab.Screen name="Calendar" component={CalendarScreen} /> */}
       <Tab.Screen name="Gallery" component={GalleryScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
