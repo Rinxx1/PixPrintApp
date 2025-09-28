@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -19,11 +19,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import HeaderBar from '../../components/HeaderBar';
 import JoinEventBottomNavigator from '../../components/JoinEventBottomNavigator';
 import { db, auth } from '../../firebase';
-import { doc, getDoc, collection, query, where, getDocs, updateDoc, onSnapshot, addDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../../firebase';
 import { useAlert } from '../../context/AlertContext';
 import { optimizeImageUrl, ImagePresets } from '../../utils/imageOptimization';
+import { addToCartPrintQueue } from '../../utils/printService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -690,8 +691,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     } else {
       fetchEventData();
       fetchEventPhotos();
-    }  }, [eventId]);
-  useEffect(() => {
+    }  }, [eventId]);  useEffect(() => {
     if (eventId) {
       // Reset pagination immediately when category changes
       resetPagination();
@@ -703,15 +703,15 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       
       if (currentImages.length > 0) {
         initializeImages(currentImages);
-      }
-      
-      // Fetch fresh data for the selected category
-      if (selectedCategory === 'person') {
-        fetchEventPhotos();
-      } else if (selectedCategory === 'group') {
-        fetchMyPhotos();
-      } else if (selectedCategory === 'camera') {
-        fetchPhotographerPhotos();
+      } else {
+        // Only fetch if we don't have data for this category
+        if (selectedCategory === 'person' && eventPhotos.length === 0) {
+          fetchEventPhotos();
+        } else if (selectedCategory === 'group' && myPhotos.length === 0) {
+          fetchMyPhotos();
+        } else if (selectedCategory === 'camera' && photographerPhotos.length === 0) {
+          fetchPhotographerPhotos();
+        }
       }
     }
   }, [selectedCategory]);
@@ -739,28 +739,42 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         unsubscribeCredits.current();
       }
     };
-  }, []);
-  useFocusEffect(
+  }, []);  useFocusEffect(
     React.useCallback(() => {
       if (eventId) {
-        // Reset pagination when screen comes into focus
-        resetPagination();
+        // Only fetch if we don't have data or if we're returning from a different screen
+        const hasData = selectedCategory === 'person' ? eventPhotos.length > 0 : 
+                       selectedCategory === 'group' ? myPhotos.length > 0 : 
+                       photographerPhotos.length > 0;
         
-        if (selectedCategory === 'person') {
-          fetchEventPhotos();
-        } else if (selectedCategory === 'group') {
-          fetchMyPhotos();
-        } else if (selectedCategory === 'camera') {
-          fetchPhotographerPhotos();
+        if (!hasData) {
+          // Reset pagination only if no data
+          resetPagination();
+          
+          if (selectedCategory === 'person') {
+            fetchEventPhotos();
+          } else if (selectedCategory === 'group') {
+            fetchMyPhotos();
+          } else if (selectedCategory === 'camera') {
+            fetchPhotographerPhotos();
+          }
         }
       }
     }, [eventId, selectedCategory])
   );
-
   useEffect(() => {
-    if (isModalVisible && selectedPhoto && !isPhotoStillExists(selectedPhoto.id)) {
-      closeModal();
-    }  }, [eventPhotos, myPhotos, photographerPhotos, isModalVisible, selectedPhoto]);
+    // Only check if modal is visible and we have a selected photo
+    if (isModalVisible && selectedPhoto && selectedPhoto.id) {
+      const photoExists = isPhotoStillExists(selectedPhoto.id);
+      if (!photoExists) {
+        // Photo was deleted, close modal without triggering refreshes
+        setIsModalVisible(false);
+        setSelectedImage(null);
+        setSelectedPhoto(null);
+        setIsPrinting(false);
+      }
+    }
+  }, [eventPhotos, myPhotos, photographerPhotos, isModalVisible, selectedPhoto]);
 
   const deletePhoto = async (photoId, imageUrl) => {
     try {
@@ -871,20 +885,21 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     
     return false;
   };
-
-  const handleCategoryChange = (category) => {
-    setSelectedCategory(category);
-  };
-
-  const OptimizedGridImage = ({ photo, style, onPress }) => {
+  const handleCategoryChange = useCallback((category) => {
+    if (selectedCategory !== category) {
+      setSelectedCategory(category);
+    }
+  }, [selectedCategory]);const OptimizedGridImage = React.memo(({ photo, style, onPress }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
-    const fadeAnim = useState(new Animated.Value(0))[0];    const shimmerAnim = useState(new Animated.Value(0))[0];
+    const [imageLoaded, setImageLoaded] = useState(false);
+    const fadeAnim = useRef(new Animated.Value(0)).current;    
+    const shimmerAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
       let shimmerLoop;
       
-      if (loading) {
+      if (loading && !imageLoaded) {
         shimmerLoop = Animated.loop(
           Animated.sequence([
             Animated.timing(shimmerAnim, {
@@ -908,9 +923,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         }
         shimmerAnim.stopAnimation();
       };
-    }, [loading, shimmerAnim]);
-
-    const handleLoadEnd = () => {
+    }, [loading, imageLoaded]);const handleLoadEnd = () => {
       setLoading(false);
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -950,8 +963,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             </View>
           </View>
         )}
-         
-        <Animated.View style={[style, { opacity: fadeAnim }]}>
+           <Animated.View style={[style, { opacity: fadeAnim }]}>
           <Image
             source={{ 
               uri: error ? null : optimizeImageUrl(photo.imageUrl, 'thumbnail'),
@@ -972,18 +984,19 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             <Ionicons name="image-outline" size={16} color="#999" />
             <Text style={styles.errorText}>Failed to load</Text>
           </View>
-        )}
-
-      </TouchableOpacity>
+        )}      </TouchableOpacity>
     );
-  };
-  const HighQualityModalImage = ({ imageUrl, style }) => {
+  }, (prevProps, nextProps) => {
+    // Only re-render if the photo URL or style changes
+    return prevProps.photo.imageUrl === nextProps.photo.imageUrl && 
+           JSON.stringify(prevProps.style) === JSON.stringify(nextProps.style);
+  });  const HighQualityModalImage = React.memo(({ imageUrl, style }) => {
     const [imageLoading, setImageLoading] = useState(true);
     const [error, setError] = useState(false);
     const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
-    const fadeAnim = useState(new Animated.Value(0))[0];
-    const modalShimmerAnim = useState(new Animated.Value(0))[0];
-    const scaleAnim = useState(new Animated.Value(0.8))[0];
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const modalShimmerAnim = useRef(new Animated.Value(0)).current;
+    const scaleAnim = useRef(new Animated.Value(0.8)).current;
 
     useEffect(() => {
       if (imageLoading) {
@@ -1105,10 +1118,11 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             <Ionicons name="alert-circle-outline" size={48} color="#FFFFFF" />
             <Text style={styles.modalErrorText}>Unable to load image</Text>
             <Text style={styles.modalErrorSubtext}>Network error or file corrupted</Text>
-          </View>
-        )}
-      </Animated.View>    );
-  };
+          </View>        )}      </Animated.View>    );
+  }, (prevProps, nextProps) => {
+    // Only re-render if the image URL changes
+    return prevProps.imageUrl === nextProps.imageUrl;
+  });
   const galleryTitle = selectedCategory === 'person' ? 'All Photos' : 
                       selectedCategory === 'group' ? 'My Photos' : 
                       'Photographer Photos';
@@ -1125,17 +1139,16 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       loadMoreImages();
     }
   };
-
-  const handleImageClick = (photo) => {
+  const handleImageClick = useCallback((photo) => {
     setSelectedImage(photo.imageUrl);
     setSelectedPhoto(photo);
     setIsModalVisible(true);
-  };
-  const closeModal = () => {
+  }, []);  const closeModal = useCallback(() => {
     setIsModalVisible(false);
     setSelectedImage(null);
     setSelectedPhoto(null);
-  };
+    setIsPrinting(false); // Reset printing state when modal closes
+  }, []);
 
   const isPhotoStillExists = (photoId) => {
     if (!photoId) return false;
@@ -1152,9 +1165,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   };
 
   const handleTabChange = (tab) => {    setActiveTab(tab);
-  };
-
-  // Add print handler function
+  };  // Add print handler function using global print service
   const handlePrintPhoto = async (photo) => {
     if (!photo || !photo.imageUrl || !eventId) {
       showError(
@@ -1166,30 +1177,28 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       return;
     }
 
-    setIsPrinting(true);
+    // Use local loading state to prevent re-renders of the entire component
+    const tempSetPrinting = (value) => {
+      // Only update if the modal is still visible and photo is the same
+      if (isModalVisible && selectedPhoto?.id === photo.id) {
+        setIsPrinting(value);
+      }
+    };
+
+    tempSetPrinting(true);
 
     try {
-      // Save to que_print_tbl
-      const printQueue = {
-        event_id: eventId,
-        photo_url: photo.imageUrl,
-        created_at: new Date(),
-        status: 'pending' // Optional status field
-      };
-
-      await addDoc(collection(db, 'que_print_tbl'), printQueue);
-
-      showSuccess(
-        '🖨️ Added to Print Queue!',
-        'Your photo has been successfully added to the print queue. It will be processed shortly.',
-        () => {
-          console.log('Photo added to print queue successfully');
-        }
-      );
+      // Use the global print service
+      const success = await addToCartPrintQueue(photo, eventId, showSuccess, showError);
+      
+      if (!success) {
+        // Error already handled by the print service
+        tempSetPrinting(false);
+        return;
+      }
 
     } catch (error) {
-      console.error('Error adding photo to print queue:', error);
-      
+      console.error('Error in handlePrintPhoto:', error);
       showError(
         '🖨️ Print Queue Error',
         'Failed to add photo to print queue. Please check your connection and try again.',
@@ -1197,7 +1206,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         () => {} // Cancel function
       );
     } finally {
-      setIsPrinting(false);
+      tempSetPrinting(false);
     }
   };
 

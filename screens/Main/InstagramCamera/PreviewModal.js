@@ -1,5 +1,5 @@
 // Preview Modal Component
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   View, 
   Text, 
@@ -14,6 +14,9 @@ import ViewShot from 'react-native-view-shot';
 import { INSTAGRAM_FILTERS } from './constants';
 import { previewStyles } from './previewStyles';
 import { gridStyles } from './gridStyles';
+import { addToCartPrintQueue } from '../../../utils/printService';
+import { useAlert } from '../../../context/AlertContext';
+import { uploadPhotoToStorage } from './uploadService';
 
 export const PreviewModal = ({
   showPreview,
@@ -35,9 +38,14 @@ export const PreviewModal = ({
   isLayoutMode,
   gridComplete,
   layout,
-  gridImages
+  gridImages,
+  // Print-related props
+  eventId,
+  guestUsername
 }) => {
   const isGridMode = layout?.id !== 'single';
+  const [isPrinting, setIsPrinting] = useState(false);
+  const { showAlert, showError, showSuccess } = useAlert();
 
   const handleClose = () => {
     setShowPreview(false);
@@ -53,7 +61,6 @@ export const PreviewModal = ({
     // Refresh camera when returning from preview to prevent blank screen
     refreshCameraPreview(50);
   };
-
   const handleUpload = async () => {
     if (isGridMode && gridComplete) {
       // Create and upload collage
@@ -64,6 +71,82 @@ export const PreviewModal = ({
     } else {
       // Upload single photo
       uploadPhoto(capturedPhoto);
+    }
+  };  const handlePrint = async () => {
+    if (!eventId || !capturedPhoto) {
+      showError(
+        'Print Error',
+        'Unable to print photo. Please try again.',
+        () => {},
+        () => {}
+      );
+      return;
+    }
+
+    setIsPrinting(true);
+
+    try {
+      let photoUri = capturedPhoto;
+
+      // If in grid mode, create collage first
+      if (isGridMode && gridComplete) {
+        const collageUri = await createCollage();
+        if (collageUri) {
+          photoUri = collageUri;
+        } else {
+          throw new Error('Failed to create collage');
+        }
+      }
+
+      // If we have a viewShot ref, capture the filtered version
+      if (viewShotRef.current) {
+        try {
+          const filteredSnapshot = await viewShotRef.current.capture({
+            format: 'jpg',
+            quality: 0.8,
+            result: 'tmpfile',
+          });
+          photoUri = filteredSnapshot;
+        } catch (captureError) {
+          console.warn('Could not capture filtered preview, using original:', captureError);
+        }
+      }      // Upload the image first to get a Firebase URL
+      console.log('Uploading photo for printing:', photoUri);
+      const firebaseImageUrl = await uploadPhotoToStorage(photoUri, eventId, guestUsername, selectedFilter);
+      
+      if (!firebaseImageUrl) {
+        throw new Error('Failed to upload image for printing');
+      }
+
+      // Create photo object for the print service with the Firebase URL
+      const photo = {
+        imageUrl: firebaseImageUrl,
+        id: `preview_${Date.now()}`, // Temporary ID for preview photos
+        filterName: INSTAGRAM_FILTERS[selectedFilterIndex]?.name || 'None',
+        username: guestUsername || 'Unknown User',
+        uploadedAt: new Date(),
+        userId: null, // This is a preview photo, not yet uploaded
+        isGuest: !!guestUsername,
+        guestUsername: guestUsername
+      };
+
+      // Use the global print service
+      const success = await addToCartPrintQueue(photo, eventId, showSuccess, showError);
+      
+      if (success) {
+        console.log('Photo added to print queue from preview');
+      }
+
+    } catch (error) {
+      console.error('Error printing photo from preview:', error);
+      showError(
+        '🖨️ Print Queue Error',
+        'Failed to add photo to print queue. Please check your connection and try again.',
+        () => handlePrint(), // Retry function
+        () => {} // Cancel function
+      );
+    } finally {
+      setIsPrinting(false);
     }
   };
 
@@ -144,16 +227,19 @@ export const PreviewModal = ({
             onPress={handleClose}
           >
             <Text style={previewStyles.previewButtonText}>Retake</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={previewStyles.previewButton}
-            onPress={() => {
-              // TODO: Implement print functionality
-              console.log('Print button pressed');
-            }}
+          </TouchableOpacity>          <TouchableOpacity
+            style={[
+              previewStyles.previewButton,
+              isPrinting && previewStyles.printButtonDisabled
+            ]}
+            onPress={handlePrint}
+            disabled={isPrinting}
           >
-            <Text style={previewStyles.previewButtonText}>Print</Text>
+            {isPrinting ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={previewStyles.previewButtonText}>Print</Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity

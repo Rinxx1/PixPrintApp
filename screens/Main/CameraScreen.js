@@ -581,8 +581,7 @@ export default function InstagramCameraScreen({ route, navigation }) {
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaView style={styles.container}>
         {renderCamera()}
-        
-        <PreviewModal
+          <PreviewModal
           showPreview={showPreview}
           setShowPreview={setShowPreview}
           capturedPhoto={capturedPhoto}
@@ -602,6 +601,8 @@ export default function InstagramCameraScreen({ route, navigation }) {
           gridComplete={isGridComplete(gridImages, selectedLayout)}
           layout={getCurrentLayout(selectedLayout)}
           gridImages={gridImages}
+          eventId={eventId}
+          guestUsername={guestUsername}
         />
         
         <LayoutPickerModal
