@@ -7,6 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "snapture",
     "splash": {
       "image": "./assets/icon-pix-print.png",
       "resizeMode": "contain",
@@ -17,12 +18,17 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "pix.print.app",
+      "bundleIdentifier": "com.pixprintstudio.snapture",
+      "buildNumber": "1",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app needs access to camera to take photos.",
-        "NSMicrophoneUsageDescription": "This app needs access to microphone to record audio with photos.",
-        "ITSAppUsesNonExemptEncryption": false
-      }
+        "NSCameraUsageDescription": "This app needs access to camera to take photos for events and instant printing.",
+        "NSMicrophoneUsageDescription": "This app needs access to microphone to record audio with photos for enhanced memories.",
+        "NSPhotoLibraryUsageDescription": "This app needs access to photo library to save and share your captured moments.",
+        "NSPhotoLibraryAddUsageDescription": "This app needs access to save photos to your photo library.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["background-processing"]
+      },
+      "associatedDomains": ["applinks:snapture.app"]
     },
     "android": {
       "adaptiveIcon": {
@@ -33,7 +39,7 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ],
-      "package": "pix.print.app"
+      "package": "com.pixprintstudio.snapture"
     },
     "web": {
       "favicon": "./assets/favicon.png"
