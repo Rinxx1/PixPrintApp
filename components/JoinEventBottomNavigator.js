@@ -1,9 +1,12 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 
 export default function JoinEventBottomNavigator({ activeTab, onTabChange, eventId, navigation, guestUsername }) {
+  const insets = useSafeAreaInsets();
   
   const handleTabChange = (tab) => {
     onTabChange && onTabChange(tab);
@@ -28,22 +31,36 @@ export default function JoinEventBottomNavigator({ activeTab, onTabChange, event
     }
   };
 
+  const screenWidth = Dimensions.get('window').width;
+
   return (
-    <View style={styles.bottomNavContainer}>
-      <View style={styles.bottomNav}>
+    <View style={[styles.bottomNavContainer, { height: 70 + insets.bottom }]}>
+      {/* Curved Navigation Background */}
+      <Svg
+        width={screenWidth}
+        height={70 + insets.bottom}
+        style={styles.curvedBackground}
+      >
+        <Path
+          d={`M0,20 L${screenWidth * 0.35},20 Q${screenWidth * 0.4},20 ${screenWidth * 0.42},15 Q${screenWidth * 0.5},0 ${screenWidth * 0.58},15 Q${screenWidth * 0.6},20 ${screenWidth * 0.65},20 L${screenWidth},20 L${screenWidth},${70 + insets.bottom} L0,${70 + insets.bottom} Z`}
+          fill="#FFFFFF"
+          stroke="#E1E1E1"
+          strokeWidth="0.5"
+        />
+      </Svg>
+      <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
         {/* Gallery Tab */}
         <TouchableOpacity 
           style={styles.navTab} 
           onPress={() => handleTabChange('gallery')}
         >
-          <View style={[styles.navIcon, activeTab === 'gallery' && styles.activeNavIcon]}>
+          <View style={styles.navIcon}>
             <Ionicons 
-              name="images" 
-              size={24} 
-              color={activeTab === 'gallery' ? '#FF6F61' : '#8E8E93'} 
+              name={activeTab === 'gallery' ? 'images' : 'images-outline'}
+              size={27} 
+              color={activeTab === 'gallery' ? '#48C6EF' : '#8E8E93'} 
             />
           </View>
-          {activeTab === 'gallery' && <View style={styles.activeIndicator} />}
         </TouchableOpacity>
 
         {/* Camera Tab */}
@@ -51,17 +68,18 @@ export default function JoinEventBottomNavigator({ activeTab, onTabChange, event
           style={styles.cameraTab} 
           onPress={() => handleTabChange('camera')}
         >
-          <LinearGradient
-            colors={['#FF8D76', '#FF6F61']}
-            style={styles.cameraButton}
-          >
-            <Ionicons 
-              name="camera" 
-              size={26} 
-              color="#FFFFFF" 
-            />
-          </LinearGradient>
-          {activeTab === 'camera' && <View style={styles.cameraIndicator} />}
+          <View style={styles.cameraButtonContainer}>
+            <LinearGradient
+              colors={['#48C6EF', '#36B5E6']}
+              style={styles.cameraButton}
+            >
+              <Ionicons 
+                name="camera" 
+                size={32} 
+                color="#FFFFFF"
+              />
+            </LinearGradient>
+          </View>
         </TouchableOpacity>
 
         {/* Settings Tab */}
@@ -69,14 +87,13 @@ export default function JoinEventBottomNavigator({ activeTab, onTabChange, event
           style={styles.navTab} 
           onPress={() => handleTabChange('settings')}
         >
-          <View style={[styles.navIcon, activeTab === 'settings' && styles.activeNavIcon]}>
+          <View style={styles.navIcon}>
             <Ionicons 
-              name="settings" 
-              size={24} 
-              color={activeTab === 'settings' ? '#FF6F61' : '#8E8E93'} 
+              name={activeTab === 'settings' ? 'settings' : 'settings-outline'}
+              size={27} 
+              color={activeTab === 'settings' ? '#48C6EF' : '#8E8E93'} 
             />
           </View>
-          {activeTab === 'settings' && <View style={styles.activeIndicator} />}
         </TouchableOpacity>
       </View>
     </View>
@@ -86,86 +103,70 @@ export default function JoinEventBottomNavigator({ activeTab, onTabChange, event
 const styles = StyleSheet.create({
   bottomNavContainer: {
     position: 'absolute',
-    bottom: 24,
-    left: 24,
-    right: 24,
-    alignItems: 'center',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'transparent',
+    overflow: 'visible',
+  },
+  curvedBackground: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
   },
   bottomNav: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    paddingVertical: 8,
-    paddingHorizontal: 13,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
-    width: '100%',
+    backgroundColor: 'transparent',
+    paddingTop: 25,
+    paddingHorizontal: 0,
+    height: 70,
     justifyContent: 'space-around',
-    alignItems: 'center',
-    height: 66,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
+    alignItems: 'flex-end',
+    overflow: 'visible',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   navTab: {
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     flex: 1,
-    position: 'relative',
+    paddingVertical: 0,
+    paddingBottom: 8,
   },
   navIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'transparent',
-  },
-  activeNavIcon: {
-    backgroundColor: 'rgba(255, 111, 97, 0.12)',
-    transform: [{ scale: 1.1 }],
-  },
-  activeIndicator: {
-    position: 'absolute',
-    bottom: -8,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FF6F61',
+    paddingTop: 10,
   },
   cameraTab: {
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     flex: 1,
-    position: 'relative',
+    paddingVertical: 0,
+    marginBottom: -15,
+  },
+  cameraButtonContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 25,
   },
   cameraButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#FF6F61',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
-    borderWidth: 2,
+    borderWidth: 4,
     borderColor: '#FFFFFF',
-  },
-  cameraIndicator: {
-    position: 'absolute',
-    bottom: -10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF6F61',
-    shadowColor: '#FF6F61',
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: '#48C6EF',
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 12,
+    elevation: 12,
   },
 });
