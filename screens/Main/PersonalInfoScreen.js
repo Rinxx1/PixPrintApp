@@ -581,7 +581,7 @@ export default function PersonalInfoScreen({ navigation }) {
               disabled={isUploadingImage}
             >
               <LinearGradient
-                colors={isUploadingImage ? ['#CCCCCC', '#AAAAAA'] : ['#FF8D76', '#FF6F61']}
+                colors={isUploadingImage ? ['#CCCCCC', '#AAAAAA'] : ['#4A90E2', '#357ABD']}
                 style={styles.cameraGradient}
               >
                 {isUploadingImage ? (
@@ -688,7 +688,7 @@ export default function PersonalInfoScreen({ navigation }) {
             disabled={isLoading}
           >
             <LinearGradient
-              colors={isLoading ? ['#CCCCCC', '#AAAAAA'] : ['#FF8D76', '#FF6F61']}
+              colors={isLoading ? ['#CCCCCC', '#AAAAAA'] : ['#4A90E2', '#357ABD']}
               style={styles.saveButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -731,7 +731,7 @@ const styles = StyleSheet.create({
     width: width * 0.6,
     height: width * 0.6,
     borderRadius: width * 0.3,
-    backgroundColor: 'rgba(255, 111, 97, 0.08)',
+    backgroundColor: 'rgba(74, 144, 226, 0.08)',
     top: -width * 0.2,
     right: -width * 0.2,
   },
@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
     width: width * 0.4,
     height: width * 0.4,
     borderRadius: width * 0.2,
-    backgroundColor: 'rgba(255, 141, 118, 0.06)',
+    backgroundColor: 'rgba(53, 122, 189, 0.06)',
     bottom: -width * 0.1,
     left: -width * 0.1,
   },
@@ -748,7 +748,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingTop: 104,
+    paddingTop: 15,
     paddingHorizontal: 24,
     paddingBottom: 40,
   },
@@ -877,7 +877,7 @@ const styles = StyleSheet.create({
   saveButton: {
     borderRadius: 14,
     overflow: 'hidden',
-    shadowColor: '#FF6F61',
+    shadowColor: '#4A90E2',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -921,7 +921,7 @@ const styles = StyleSheet.create({
   },
   uploadingStatus: {
     fontSize: 12,
-    color: '#FF6F61',
+    color: '#4A90E2',
     marginTop: 8,
     fontStyle: 'italic',
   },
