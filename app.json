@@ -14,21 +14,25 @@
       "backgroundColor": "#FAF8F5"
     },
     "plugins": [
-      "expo-camera"
+      "expo-camera",
+      "expo-asset",
+      "expo-font"
     ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.pixprintstudio.snapture",
       "buildNumber": "1",
+      "appleTeamId": "8T9JDUW8TU",
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs access to camera to take photos for events and instant printing.",
         "NSMicrophoneUsageDescription": "This app needs access to microphone to record audio with photos for enhanced memories.",
         "NSPhotoLibraryUsageDescription": "This app needs access to photo library to save and share your captured moments.",
         "NSPhotoLibraryAddUsageDescription": "This app needs access to save photos to your photo library.",
-        "ITSAppUsesNonExemptEncryption": false,
-        "UIBackgroundModes": ["background-processing"]
+        "ITSAppUsesNonExemptEncryption": false
       },
-      "associatedDomains": ["applinks:snapture.app"]
+      "associatedDomains": [
+        "applinks:snapture.app"
+      ]
     },
     "android": {
       "adaptiveIcon": {
