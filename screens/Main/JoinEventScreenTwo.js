@@ -13,6 +13,7 @@ import {
   ImageBackground,
   Platform
 } from 'react-native';
+import CachedImage from '../../components/CachedImage';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -963,21 +964,16 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             </View>
           </View>
         )}
-           <Animated.View style={[style, { opacity: fadeAnim }]}>
-          <Image
-            source={{ 
-              uri: error ? null : optimizeImageUrl(photo.imageUrl, 'thumbnail'),
-              cache: 'force-cache'
-            }}
-            style={styles.eventImage}
-            onLoadEnd={handleLoadEnd}
-            onError={handleError}
-            resizeMode="cover"
-            fadeDuration={0}
-            progressiveRenderingEnabled={true}
-            removeClippedSubviews={true}
-          />
-        </Animated.View>
+        <CachedImage
+          source={{ 
+            uri: error ? null : optimizeImageUrl(photo.imageUrl, 'thumbnail')
+          }}
+          style={[style, styles.eventImage]}
+          onLoadEnd={handleLoadEnd}
+          onError={handleError}
+          resizeMode="cover"
+          fallbackSource={require('../../assets/image.jpg')}
+        />
         
         {error && (
           <View style={[style, styles.imageError]}>
@@ -1022,7 +1018,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     }, [imageLoading]);    const handleLoadEnd = (event) => {
       setImageLoading(false);
       
-      if (event.nativeEvent) {
+      if (event && event.nativeEvent) {
         const { width: imgWidth, height: imgHeight } = event.nativeEvent;
         setImageDimensions({ width: imgWidth, height: imgHeight });
       }
@@ -1099,19 +1095,16 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             </View>          </View>
         )}
         
-        <Animated.View style={[getResponsiveImageStyle(), { opacity: fadeAnim }]}>
-          <Image
-            source={{ 
-              uri: error ? null : optimizeImageUrl(imageUrl, 'high'),
-              cache: 'web'
-            }}
-            style={getResponsiveImageStyle()}
-            onLoadEnd={handleLoadEnd}
-            onError={handleError}
-            resizeMode="contain"
-            progressiveRenderingEnabled={true}
-            fadeDuration={0}          />
-        </Animated.View>
+        <CachedImage
+          source={{ 
+            uri: error ? null : optimizeImageUrl(imageUrl, 'high')
+          }}
+          style={getResponsiveImageStyle()}
+          onLoadEnd={handleLoadEnd}
+          onError={handleError}
+          resizeMode="contain"
+          fallbackSource={require('../../assets/image.jpg')}
+        />
         
         {error && (
           <View style={[getResponsiveImageStyle(), styles.modalImageError]}>
@@ -1132,11 +1125,13 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                 photographerPhotos;
 
   const handleScroll = (event) => {
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const paddingToBottom = 20; // How far from bottom to trigger loading
-    
-    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
-      loadMoreImages();
+    if (event && event.nativeEvent) {
+      const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+      const paddingToBottom = 20; // How far from bottom to trigger loading
+      
+      if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
+        loadMoreImages();
+      }
     }
   };
   const handleImageClick = useCallback((photo) => {
@@ -1234,15 +1229,17 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       >
         {/* Event Cover with proper image handling */}
         <Animated.View style={[styles.coverContainer, { opacity: imageOpacity }]}>
-          <ImageBackground
-            source={eventImage || require('../../assets/avatar.png')}
-            style={styles.coverImage}
-            resizeMode="cover"
-            onError={(error) => {
-              console.log('ImageBackground error:', error);
-              setEventImage(require('../../assets/avatar.png'));
-            }}
-          >
+          <View style={styles.coverImage}>
+            <CachedImage
+              source={eventImage || require('../../assets/avatar.png')}
+              style={styles.coverImage}
+              resizeMode="cover"
+              onError={(error) => {
+                console.log('CachedImage error:', error);
+                setEventImage(require('../../assets/avatar.png'));
+              }}
+              fallbackSource={require('../../assets/avatar.png')}
+            />
             <View style={styles.coverOverlay}>
               <View style={styles.eventStatus}>
                 <View style={[
@@ -1267,7 +1264,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                   <Text style={styles.guestStatusText}>Guest: {guestUsername}</Text>
                 </View>
               )}
-            </View>          </ImageBackground>
+            </View>
+          </View>
         </Animated.View>
 
         <View style={styles.eventCard}>

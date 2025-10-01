@@ -203,7 +203,7 @@ export default function MainScreen({ navigation }) {
               <Image source={require('../assets/icon-pix-print.png')} style={styles.logo} />
             </View>
           </View>
-            <Text style={styles.brandTitle}>Snapture</Text>
+            <Text style={styles.brandTitle}>SnaptureX</Text>
           <Text style={styles.brandTagline}>Click. Print. Share.</Text>
           <Text style={styles.brandDescription}>
             Transform your special moments into lasting memories

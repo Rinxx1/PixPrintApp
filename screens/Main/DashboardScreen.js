@@ -22,32 +22,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAlert } from '../../context/AlertContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../../context/authContext';
+import CachedImage from '../../components/CachedImage';
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.85;
-
-// Simple cached image component for better performance
-const CachedEventImage = ({ source, style, fallbackSource, ...props }) => {
-  const [error, setError] = useState(false);
-  const [loading, setLoading] = useState(true);
-  
-  const imageSource = error ? fallbackSource : source;
-  
-  return (
-    <Image
-      {...props}
-      source={imageSource}
-      style={style}
-      onLoad={() => setLoading(false)}
-      onError={() => {
-        console.log('Image load error, using fallback');
-        setError(true);
-        setLoading(false);
-      }}
-      onLoadEnd={() => setLoading(false)}
-    />
-  );
-};
 
 export default function DashboardScreen({ navigation, route }) {
   const [eventCode, setEventCode] = useState('');
@@ -791,7 +769,7 @@ export default function DashboardScreen({ navigation, route }) {
                 <Text style={styles.welcomeSubtext}>Ready to capture more memories?</Text>
               </View>
               <View style={styles.avatarContainer}>
-                <CachedEventImage
+                <CachedImage
                   source={getProfileImageSource()}
                   style={styles.avatarLarge}
                   fallbackSource={require('../../assets/avatar.png')}
@@ -946,13 +924,13 @@ export default function DashboardScreen({ navigation, route }) {
               >
                 {/* Fixed image background */}
                 <View style={styles.eventImageContainer}>
-                  <CachedEventImage
+                  <CachedImage
                     source={getEventImageSource(event)}
                     style={styles.eventImageBackground}
                     fallbackSource={require('../../assets/event-wedding.png')}
                     resizeMode="cover"
-                    onLoadEnd={() => {
-                      console.log(`Event image loaded for: ${event.name}`);
+                    onLoadEnd={(event) => {
+                      console.log(`Event image loaded for: ${event?.name || 'event'}`);
                     }}
                   />
                   

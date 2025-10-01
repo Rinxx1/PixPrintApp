@@ -41,6 +41,7 @@ export default function GalleryScreen({ navigation }) {
 
   // Alert hook
   const { showAlert, showError, showSuccess, showConfirm } = useAlert();
+
   // State for different photo categories
   const [allPhotos, setAllPhotos] = useState([]);
   const [eventPhotos, setEventPhotos] = useState([]);
@@ -48,98 +49,13 @@ export default function GalleryScreen({ navigation }) {
   const [recentPhotos, setRecentPhotos] = useState([]);
   const [favoritePhotos, setFavoritePhotos] = useState([]);
 
-  // Instagram-style lazy loading pagination state
-  const [displayedImages, setDisplayedImages] = useState([]);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMoreImages, setHasMoreImages] = useState(true);
-  const IMAGES_PER_PAGE = 6; // Load 6 images at a time (2 rows of 3)
-
   // Stats
   const [stats, setStats] = useState({
     totalPhotos: 0,
-    totalEvents: 0,    printedPhotos: 0
+    totalEvents: 0,
+    printedPhotos: 0
   });
 
-  // Instagram-style lazy loading functions
-  const loadMoreImages = () => {
-    if (isLoadingMore || !hasMoreImages) return;
-
-    const currentImages = getFilteredPhotos();
-    const totalImages = currentImages.length;
-    const currentDisplayed = displayedImages.length;
-
-    if (currentDisplayed >= totalImages) {
-      setHasMoreImages(false);
-      return;
-    }
-
-    setIsLoadingMore(true);
-
-    setTimeout(() => {
-      // Double check that we're still on the same filter to prevent race conditions
-      const filterImages = getFilteredPhotos();
-      
-      if (filterImages !== currentImages) {
-        // Filter changed during loading, abort
-        setIsLoadingMore(false);
-        return;
-      }
-
-      const nextPage = currentPage + 1;
-      const startIndex = currentDisplayed;
-      const endIndex = Math.min(startIndex + IMAGES_PER_PAGE, totalImages);
-      
-      const newImages = currentImages.slice(startIndex, endIndex);
-      
-      // Only add images if they're not already in the displayed list
-      setDisplayedImages(prev => {
-        const existingIds = new Set(prev.map(img => img.id));
-        const uniqueNewImages = newImages.filter(img => !existingIds.has(img.id));
-        return [...prev, ...uniqueNewImages];
-      });
-      
-      setCurrentPage(nextPage);
-      setHasMoreImages(endIndex < totalImages);
-      setIsLoadingMore(false);
-    }, 300);
-  };
-
-  const resetPagination = () => {
-    setDisplayedImages([]);
-    setCurrentPage(0);
-    setHasMoreImages(true);
-    setIsLoadingMore(false);
-  };
-
-  const initializeImages = (imagesArray) => {
-    // Clear any existing state first
-    setDisplayedImages([]);
-    setCurrentPage(0);
-    setHasMoreImages(false);
-    setIsLoadingMore(false);
-
-    if (!imagesArray || imagesArray.length === 0) {
-      return;
-    }
-
-    // Use setTimeout to ensure state is cleared before setting new values
-    setTimeout(() => {
-      const firstPageImages = imagesArray.slice(0, IMAGES_PER_PAGE);
-      setDisplayedImages(firstPageImages);
-      setCurrentPage(1);
-      setHasMoreImages(imagesArray.length > IMAGES_PER_PAGE);
-    }, 50);
-  };
-
-  const handleScroll = (event) => {
-    const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const paddingToBottom = 20; // How far from bottom to trigger loading
-    
-    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
-      loadMoreImages();
-    }
-  };
   useEffect(() => {
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -149,13 +65,6 @@ export default function GalleryScreen({ navigation }) {
     
     fetchAllPhotos();
   }, []);
-
-  // Handle filter changes and initialize pagination
-  useEffect(() => {
-    const filteredPhotos = getFilteredPhotos();
-    resetPagination();
-    initializeImages(filteredPhotos);
-  }, [activeFilter, allPhotos, eventPhotos, personalPhotos, recentPhotos, favoritePhotos]);
 
   const fetchAllPhotos = async () => {
     const currentUser = auth.currentUser;
@@ -267,23 +176,14 @@ export default function GalleryScreen({ navigation }) {
       setEventPhotos(eventPhotosData);
       setPersonalPhotos(personalPhotosData);
       setRecentPhotos(recentPhotosData);
-      setFavoritePhotos([]); // You can implement favorites later      // Update stats
+      setFavoritePhotos([]); // You can implement favorites later
+
+      // Update stats
       setStats({
         totalPhotos: sortedPhotos.length,
         totalEvents: uniqueEvents.size,
         printedPhotos: printedPhotosData.length
       });
-
-      // Initialize pagination with the current filter
-      setTimeout(() => {
-        const filteredPhotos = activeFilter === 'All' ? sortedPhotos : 
-                              activeFilter === 'Recent' ? recentPhotosData :
-                              activeFilter === 'Events' ? eventPhotosData :
-                              activeFilter === 'Personal' ? personalPhotosData :
-                              activeFilter === 'Printed' ? printedPhotosData :
-                              sortedPhotos;
-        initializeImages(filteredPhotos);
-      }, 100);
 
     } catch (error) {
       console.error('Error fetching photos:', error);
@@ -291,12 +191,12 @@ export default function GalleryScreen({ navigation }) {
       setLoading(false);
     }
   };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    resetPagination(); // Reset pagination when refreshing
     await fetchAllPhotos();
     setRefreshing(false);
-  };const openImageModal = (photo) => {
+  };  const openImageModal = (photo) => {
     if (selectionMode) {
       togglePhotoSelection(photo.id);
       return;
@@ -503,49 +403,15 @@ export default function GalleryScreen({ navigation }) {
   ];
 
   const filteredPhotos = getFilteredPhotos();
+
   if (loading) {
     return (
       <View style={styles.container}>
         <HeaderBar navigation={navigation} showBack={false}/>
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Header Section Skeleton */}
-          <View style={styles.headerSection}>
-            <View style={styles.titleContainer}>
-              <Text style={styles.title}>Gallery</Text>
-              <Text style={styles.subtitle}>Loading your captured moments...</Text>
-            </View>
-          </View>
-
-          {/* Stats Card Skeleton */}
-          <View style={styles.statsCard}>
-            <View style={styles.statItem}>
-              <View style={[styles.skeletonBox, { width: 40, height: 30, marginBottom: 8 }]} />
-              <Text style={styles.statLabel}>Photos</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <View style={[styles.skeletonBox, { width: 30, height: 30, marginBottom: 8 }]} />
-              <Text style={styles.statLabel}>Events</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <View style={[styles.skeletonBox, { width: 25, height: 30, marginBottom: 8 }]} />
-              <Text style={styles.statLabel}>Printed</Text>
-            </View>
-          </View>
-
-          {/* Instagram Grid Skeleton Loading */}
-          <InstagramGrid 
-            photos={[]}
-            showLoadingPlaceholders={true}
-            placeholderCount={12}
-            viewMode={viewMode}
-            selectionMode={selectionMode}
-            selectedPhotos={selectedPhotos}
-            onPhotoPress={() => {}}
-            onToggleSelection={() => {}}
-          />
-        </ScrollView>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF6F61" />
+          <Text style={styles.loadingText}>Loading your photos...</Text>
+        </View>
       </View>
     );
   }
@@ -553,16 +419,16 @@ export default function GalleryScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <HeaderBar navigation={navigation} showBack={false} />
-        <ScrollView 
+      
+      <ScrollView 
         style={styles.content} 
         showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}        refreshControl={
+        refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#48C6EF']}
-            tintColor="#48C6EF"
+            colors={['#FF6F61']}
+            tintColor="#FF6F61"
           />
         }
       >
@@ -578,11 +444,12 @@ export default function GalleryScreen({ navigation }) {
           {/* Selection/View Toggle */}
           <View style={styles.headerControls}>
             {!selectionMode ? (
-              <>                <TouchableOpacity
+              <>
+                <TouchableOpacity
                   style={styles.selectButton}
                   onPress={toggleSelectionMode}
                 >
-                  <Ionicons name="checkmark-circle-outline" size={20} color="#48C6EF" />
+                  <Ionicons name="checkmark-circle-outline" size={20} color="#FF6F61" />
                   <Text style={styles.selectButtonText}>Select</Text>
                 </TouchableOpacity>
                 
@@ -619,7 +486,8 @@ export default function GalleryScreen({ navigation }) {
                     {selectedPhotos.size === filteredPhotos.length ? 'Deselect All' : 'Select All'}
                   </Text>
                 </TouchableOpacity>
-                  <TouchableOpacity
+                
+                <TouchableOpacity
                   style={styles.cancelButton}
                   onPress={toggleSelectionMode}
                 >
@@ -668,45 +536,37 @@ export default function GalleryScreen({ navigation }) {
                   key={filter.key} 
                   style={[styles.filterTab, activeFilter === filter.key && styles.filterActive]}
                   onPress={() => setActiveFilter(filter.key)}
-                >                  <Ionicons 
+                >
+                  <Ionicons 
                     name={filter.icon} 
                     size={16} 
                     color={activeFilter === filter.key ? '#FFFFFF' : '#666'} 
                     style={styles.filterIcon}
                   />
-                  {/* Dynamic filter badges based on photo counts */}
-                  {(() => {
-                    let count = 0;
-                    switch(filter.key) {
-                      case 'All': count = allPhotos.length; break;
-                      case 'Recent': count = recentPhotos.length; break;
-                      case 'Events': count = eventPhotos.length; break;
-                      case 'Personal': count = personalPhotos.length; break;
-                      case 'Favorites': count = favoritePhotos.length; break;
-                      case 'Printed': count = allPhotos.filter(p => p.isPrinted).length; break;
-                    }
-                    return count > 0 && (
-                      <View style={styles.filterBadge}>
-                        <Text style={styles.filterBadgeText}>{count}</Text>
-                      </View>
-                    );
-                  })()}
+                  <Text style={[styles.filterText, activeFilter === filter.key && styles.filterActiveText]}>
+                    {filter.label}
+                  </Text>
+                  {filter.key === 'Recent' && recentPhotos.length > 0 && (
+                    <View style={styles.filterBadge}>
+                      <Text style={styles.filterBadgeText}>{recentPhotos.length}</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               ))}
             </ScrollView>
           </Animated.View>
-        )}        {/* Current filter info with loading indicator */}
+        )}
+
+        {/* Current filter info */}
         <Animated.View style={[styles.filterInfoContainer, { opacity: fadeAnim }]}>
           <Text style={styles.filterInfoText}>
-            {displayedImages.length} of {getFilteredPhotos().length} {activeFilter.toLowerCase()} photo{getFilteredPhotos().length !== 1 ? 's' : ''}
-            {hasMoreImages && ` • ${getFilteredPhotos().length - displayedImages.length} more`}
-            {isLoadingMore && ' • Loading...'}
+            {filteredPhotos.length} {activeFilter.toLowerCase()} photo{filteredPhotos.length !== 1 ? 's' : ''}
           </Text>
-        </Animated.View>{/* Gallery Grid with Instagram-style lazy loading */}
-        {displayedImages.length > 0 ? (
+        </Animated.View>        {/* Gallery Grid */}
+        {filteredPhotos.length > 0 ? (
           <Animated.View style={[styles.galleryContainer, { opacity: fadeAnim }]}>
             <InstagramGrid
-              photos={displayedImages}
+              photos={filteredPhotos}
               viewMode={viewMode}
               selectionMode={selectionMode}
               selectedPhotos={selectedPhotos}
@@ -719,30 +579,6 @@ export default function GalleryScreen({ navigation }) {
                 }
               }}
             />
-
-            {/* Load More Button / Loading Indicator for Lazy Loading */}
-            {hasMoreImages && (
-              <View style={styles.loadMoreContainer}>                {isLoadingMore ? (
-                  <View style={styles.loadingMoreIndicator}>
-                    <ActivityIndicator size="small" color="#48C6EF" />
-                    <Text style={styles.loadingMoreText}>Loading more photos...</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity style={styles.loadMoreButton} onPress={loadMoreImages}>
-                    <Ionicons name="add-circle-outline" size={20} color="#48C6EF" />
-                    <Text style={styles.loadMoreButtonText}>Load More Photos</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-
-            {/* Show total count when all images are loaded */}
-            {!hasMoreImages && displayedImages.length > 0 && getFilteredPhotos().length > IMAGES_PER_PAGE && (
-              <View style={styles.allLoadedContainer}>
-                <Ionicons name="checkmark-circle" size={20} color="#4CD964" />
-                <Text style={styles.allLoadedText}>All {getFilteredPhotos().length} photos loaded</Text>
-              </View>
-            )}
           </Animated.View>
         ) : (
           <Animated.View style={[styles.emptyContainer, { opacity: fadeAnim }]}>
@@ -753,12 +589,13 @@ export default function GalleryScreen({ navigation }) {
                 ? 'Start capturing memories by joining events!' 
                 : `You don't have any ${activeFilter.toLowerCase()} photos yet.`
               }
-            </Text>            {activeFilter === 'All' && (
+            </Text>
+            {activeFilter === 'All' && (
               <TouchableOpacity 
                 style={styles.joinEventButton}
                 onPress={() => navigation.navigate('Dashboard')}
               >
-                <Ionicons name="add-circle-outline" size={20} color="#48C6EF" />
+                <Ionicons name="add-circle-outline" size={20} color="#FF6F61" />
                 <Text style={styles.joinEventText}>Join an Event</Text>
               </TouchableOpacity>
             )}
@@ -768,11 +605,12 @@ export default function GalleryScreen({ navigation }) {
         {/* Footer */}
         {filteredPhotos.length > 0 && !selectionMode && (
           <View style={styles.footerContainer}>
-            <Text style={styles.footerText}>Tap an image to preview or print</Text>            <TouchableOpacity 
+            <Text style={styles.footerText}>Tap an image to preview or print</Text>
+            <TouchableOpacity 
               style={styles.uploadButton}
               onPress={() => navigation.navigate('Dashboard')}
             >
-              <Ionicons name="camera-outline" size={20} color="#48C6EF" />
+              <Ionicons name="camera-outline" size={20} color="#FF6F61" />
               <Text style={styles.uploadText}>Capture More</Text>
             </TouchableOpacity>
           </View>
@@ -862,8 +700,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
-  },  toggleActive: {
-    backgroundColor: '#48C6EF',
+  },
+  toggleActive: {
+    backgroundColor: '#FF6F61',
   },
   statsCard: {
     flexDirection: 'row',
@@ -880,10 +719,11 @@ const styles = StyleSheet.create({
   statItem: {
     flex: 1,
     alignItems: 'center',
-  },  statNumber: {
+  },
+  statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#48C6EF',
+    color: '#FF6F61',
   },
   statLabel: {
     fontSize: 12,
@@ -908,9 +748,10 @@ const styles = StyleSheet.create({
     marginRight: 10,
     borderWidth: 1,
     borderColor: '#EEEEEE',
-  },  filterActive: {
-    backgroundColor: '#48C6EF',
-    borderColor: '#48C6EF',
+  },
+  filterActive: {
+    backgroundColor: '#FF6F61',
+    borderColor: '#FF6F61',
   },
   filterIcon: {
     marginRight: 6,
@@ -923,8 +764,9 @@ const styles = StyleSheet.create({
   filterActiveText: {
     color: '#FFFFFF',
     fontWeight: '600',
-  },  filterBadge: {
-    backgroundColor: '#48C6EF',
+  },
+  filterBadge: {
+    backgroundColor: '#FF8A80',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -944,8 +786,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     fontWeight: '500',
-  },  
-  galleryContainer: {
+  },  galleryContainer: {
     marginBottom: 20,
   },
   emptyContainer: {
@@ -964,10 +805,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
     lineHeight: 20,
-  },  joinEventButton: {
+  },
+  joinEventButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(72, 198, 239, 0.1)',
+    backgroundColor: '#FFF0EF',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 20,
@@ -975,7 +817,7 @@ const styles = StyleSheet.create({
   },
   joinEventText: {
     fontSize: 14,
-    color: '#48C6EF',
+    color: '#FF6F61',
     fontWeight: '600',
     marginLeft: 6,
   },
@@ -987,16 +829,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     marginBottom: 12,
-  },  uploadButton: {
+  },
+  uploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(72, 198, 239, 0.1)',
+    backgroundColor: '#FFF0EF',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
   },  uploadText: {
     fontSize: 14,
-    color: '#48C6EF',
+    color: '#FF6F61',
     fontWeight: '600',
     marginLeft: 6,
   },
@@ -1005,10 +848,11 @@ const styles = StyleSheet.create({
   headerControls: {
     flexDirection: 'row',
     alignItems: 'center',
-  },  selectButton: {
+  },
+  selectButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(72, 198, 239, 0.1)',
+    backgroundColor: '#FFF0EF',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
@@ -1016,7 +860,7 @@ const styles = StyleSheet.create({
   },
   selectButtonText: {
     fontSize: 14,
-    color: '#48C6EF',
+    color: '#FF6F61',
     fontWeight: '600',
     marginLeft: 4,
   },
@@ -1035,8 +879,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
     fontWeight: '600',
-  },  cancelButton: {
-    backgroundColor: '#48C6EF',
+  },
+  cancelButton: {
+    backgroundColor: '#FF6F61',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
@@ -1045,9 +890,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
     fontWeight: '600',
-  },  selectedImageWrapper: {
+  },
+  selectedImageWrapper: {
     borderWidth: 3,
-    borderColor: '#48C6EF',
+    borderColor: '#FF6F61',
   },
   selectionOverlay: {
     position: 'absolute',
@@ -1064,9 +910,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
-  },  selectedCircle: {
-    backgroundColor: '#48C6EF',
-    borderColor: '#48C6EF',
+  },
+  selectedCircle: {
+    backgroundColor: '#FF6F61',
+    borderColor: '#FF6F61',
   },
   selectionActionsBar: {
     backgroundColor: '#FFFFFF',
@@ -1089,70 +936,13 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
-  },  deleteSelectedText: {
+  },
+  deleteSelectedText: {
     fontSize: 16,
     color: '#FFFFFF',
     fontWeight: 'bold',
     marginLeft: 8,
-  },
-  modalDeleteButton: {
+  },  modalDeleteButton: {
     backgroundColor: 'rgba(255, 59, 48, 0.8)',
-  },
-
-  // Instagram-style lazy loading styles
-  loadMoreContainer: {
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },  loadMoreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 25,
-    borderWidth: 2,
-    borderColor: '#48C6EF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  loadMoreButtonText: {
-    fontSize: 14,
-    color: '#48C6EF',
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  loadingMoreIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  loadingMoreText: {
-    fontSize: 14,
-    color: '#888',
-    marginLeft: 10,
-    fontWeight: '500',
-  },
-  allLoadedContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 15,
-    marginBottom: 10,
-  },  allLoadedText: {
-    fontSize: 13,
-    color: '#4CD964',
-    fontWeight: '500',
-    marginLeft: 6,
-  },
-
-  // Skeleton loading styles
-  skeletonBox: {
-    backgroundColor: '#E0E0E0',
-    borderRadius: 8,
-    opacity: 0.7,
   },
 });
