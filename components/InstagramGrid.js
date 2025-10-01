@@ -131,13 +131,6 @@ const OptimizedGridImage = ({ photo, style, onPress, onLongPress, selectionMode,
         </View>
       )}
       
-      {/* Filter indicator */}
-      {photo.filterName && photo.filterName !== 'None' && !selectionMode && (
-        <View style={styles.filterIndicator}>
-          <Text style={styles.filterIndicatorText}>{photo.filterName}</Text>
-        </View>
-      )}
-      
       {/* Type badge */}
       {!selectionMode && photo.type && (
         <View style={[styles.typeBadge, { backgroundColor: photo.type === 'event' ? '#4CAF50' : '#2196F3' }]}>
@@ -407,20 +400,6 @@ const styles = StyleSheet.create({
   selectedCircle: {
     backgroundColor: '#FF6F61',
     borderColor: '#FF6F61',
-  },
-  filterIndicator: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    borderRadius: 12,
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-  },
-  filterIndicatorText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '500',
   },
   typeBadge: {
     position: 'absolute',

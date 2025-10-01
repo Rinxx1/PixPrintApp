@@ -409,7 +409,7 @@ export default function GalleryScreen({ navigation }) {
       <View style={styles.container}>
         <HeaderBar navigation={navigation} showBack={false}/>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FF6F61" />
+          <ActivityIndicator size="large" color="#48C6EF" />
           <Text style={styles.loadingText}>Loading your photos...</Text>
         </View>
       </View>
@@ -427,8 +427,8 @@ export default function GalleryScreen({ navigation }) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#FF6F61']}
-            tintColor="#FF6F61"
+            colors={['#48C6EF']}
+            tintColor="#48C6EF"
           />
         }
       >
@@ -449,7 +449,7 @@ export default function GalleryScreen({ navigation }) {
                   style={styles.selectButton}
                   onPress={toggleSelectionMode}
                 >
-                  <Ionicons name="checkmark-circle-outline" size={20} color="#FF6F61" />
+                  <Ionicons name="checkmark-circle-outline" size={20} color="#48C6EF" />
                   <Text style={styles.selectButtonText}>Select</Text>
                 </TouchableOpacity>
                 
@@ -597,7 +597,7 @@ export default function GalleryScreen({ navigation }) {
                 style={styles.joinEventButton}
                 onPress={() => navigation.navigate('Dashboard')}
               >
-                <Ionicons name="add-circle-outline" size={20} color="#FF6F61" />
+                <Ionicons name="add-circle-outline" size={20} color="#48C6EF" />
                 <Text style={styles.joinEventText}>Join an Event</Text>
               </TouchableOpacity>
             )}
@@ -612,7 +612,7 @@ export default function GalleryScreen({ navigation }) {
               style={styles.uploadButton}
               onPress={() => navigation.navigate('Dashboard')}
             >
-              <Ionicons name="camera-outline" size={20} color="#FF6F61" />
+              <Ionicons name="camera-outline" size={20} color="#48C6EF" />
               <Text style={styles.uploadText}>Capture More</Text>
             </TouchableOpacity>
           </View>
@@ -706,7 +706,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   toggleActive: {
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
   },
   statsCard: {
     flexDirection: 'row',
@@ -727,7 +727,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#FF6F61',
+    color: '#48C6EF',
   },
   statLabel: {
     fontSize: 12,
@@ -754,8 +754,8 @@ const styles = StyleSheet.create({
     borderColor: '#EEEEEE',
   },
   filterActive: {
-    backgroundColor: '#FF6F61',
-    borderColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
+    borderColor: '#48C6EF',
   },
   filterIcon: {
     marginRight: 6,
@@ -770,7 +770,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   filterBadge: {
-    backgroundColor: '#FF8A80',
+    backgroundColor: '#5DD9F5',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -813,7 +813,7 @@ const styles = StyleSheet.create({
   joinEventButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF0EF',
+    backgroundColor: '#E6F7FF',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 20,
@@ -821,7 +821,7 @@ const styles = StyleSheet.create({
   },
   joinEventText: {
     fontSize: 14,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: '600',
     marginLeft: 6,
   },
@@ -837,13 +837,13 @@ const styles = StyleSheet.create({
   uploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF0EF',
+    backgroundColor: '#E6F7FF',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
   },  uploadText: {
     fontSize: 14,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: '600',
     marginLeft: 6,
   },
@@ -856,7 +856,7 @@ const styles = StyleSheet.create({
   selectButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF0EF',
+    backgroundColor: '#E6F7FF',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
@@ -864,7 +864,7 @@ const styles = StyleSheet.create({
   },
   selectButtonText: {
     fontSize: 14,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: '600',
     marginLeft: 4,
   },
@@ -885,7 +885,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   cancelButton: {
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
@@ -897,7 +897,7 @@ const styles = StyleSheet.create({
   },
   selectedImageWrapper: {
     borderWidth: 3,
-    borderColor: '#FF6F61',
+    borderColor: '#48C6EF',
   },
   selectionOverlay: {
     position: 'absolute',
@@ -916,8 +916,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   selectedCircle: {
-    backgroundColor: '#FF6F61',
-    borderColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
+    borderColor: '#48C6EF',
   },
   selectionActionsBar: {
     backgroundColor: '#FFFFFF',
