@@ -562,7 +562,9 @@ export default function GalleryScreen({ navigation }) {
           <Text style={styles.filterInfoText}>
             {filteredPhotos.length} {activeFilter.toLowerCase()} photo{filteredPhotos.length !== 1 ? 's' : ''}
           </Text>
-        </Animated.View>        {/* Gallery Grid */}
+        </Animated.View>
+
+        {/* Gallery Grid */}
         {filteredPhotos.length > 0 ? (
           <Animated.View style={[styles.galleryContainer, { opacity: fadeAnim }]}>
             <InstagramGrid
@@ -615,7 +617,9 @@ export default function GalleryScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         )}
-      </ScrollView>      {/* Enhanced Photo Modal */}
+      </ScrollView>
+
+      {/* Enhanced Photo Modal */}
       <EnhancedPhotoModal
         visible={modalVisible}
         selectedPhoto={selectedPhoto}

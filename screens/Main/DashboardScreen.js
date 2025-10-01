@@ -37,22 +37,17 @@ export default function DashboardScreen({ navigation, route }) {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
   
-  // Add context for detecting new account creation
   const { wasAccountJustCreated, clearAccountCreatedFlag } = useContext(AuthContext);
-  
-  // Add flag to force refresh after conversion
   const [forceRefresh, setForceRefresh] = useState(false);
   
   const { showAlert, showError, showSuccess, showConfirm } = useAlert();
   
-  // Enhanced but minimal animation values for loading
   const rotateAnim = useState(new Animated.Value(0))[0];
   const scaleAnim = useState(new Animated.Value(0.8))[0];
   const fadeInAnim = useState(new Animated.Value(0))[0];
   const dotsAnim = useState(new Animated.Value(0))[0];
   const scrollY = useState(new Animated.Value(0))[0];
 
-  // Animation values
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 100],
     outputRange: [1, 0.9],
@@ -65,7 +60,6 @@ export default function DashboardScreen({ navigation, route }) {
     extrapolate: 'clamp',
   });
 
-  // Enhanced fetch user data
   const fetchUserData = async () => {
     try {
       const user = auth.currentUser;
@@ -85,7 +79,6 @@ export default function DashboardScreen({ navigation, route }) {
     return null;
   };
 
-  // Simplified helper function to get profile image source
   const getProfileImageSource = () => {
     if (userProfileUrl && userProfileUrl.trim() !== '') {
       return { uri: userProfileUrl };
@@ -93,23 +86,18 @@ export default function DashboardScreen({ navigation, route }) {
     return require('../../assets/avatar.png');
   };
 
-  // Simplified function to get event image source
   const getEventImageSource = (event) => {
-    // Check if event has an image with URI
     if (event.image && typeof event.image === 'object' && event.image.uri) {
       return { uri: event.image.uri };
     }
     
-    // Check if event.image is a direct URI string
     if (event.image && typeof event.image === 'string') {
       return { uri: event.image };
     }
     
-    // Use default fallback
     return require('../../assets/event-wedding.png');
   };
 
-  // Enhanced fetch function with better image handling
   const fetchCreatedEvents = async () => {
     try {
       const user = auth.currentUser;
@@ -124,7 +112,6 @@ export default function DashboardScreen({ navigation, route }) {
           const data = doc.data();
           const eventId = doc.id;
           
-          // Format start date
           let formattedStartDate = 'No date specified';
           let startDateObj = null;
           
@@ -135,8 +122,7 @@ export default function DashboardScreen({ navigation, route }) {
               day: 'numeric',
             });
           }
-          
-          // Format end date
+
           let formattedEndDate = '';
           let dateRangeText = '';
           
@@ -148,19 +134,13 @@ export default function DashboardScreen({ navigation, route }) {
               day: 'numeric',
             });
             
-            // Get year from start date
             const eventYear = startDateObj ? startDateObj.getFullYear() : new Date().getFullYear();
-            
-            // Create a formatted date range
             if (formattedStartDate === formattedEndDate) {
-              // Single day event
               dateRangeText = `${formattedStartDate}, ${eventYear}`;
             } else {
-              // Multi-day event
               dateRangeText = `${formattedStartDate} - ${formattedEndDate}, ${eventYear}`;
             }
           } else {
-            // Only start date available
             if (startDateObj) {
               dateRangeText = `${formattedStartDate}, ${startDateObj.getFullYear()}`;
             } else {
@@ -176,7 +156,6 @@ export default function DashboardScreen({ navigation, route }) {
             dateRange: dateRangeText,
             code: data.event_code,
             description: data.event_description || 'No description available',
-            // Simplified image handling
             image: data.event_photo_url && data.event_photo_url.trim() !== '' 
               ? { uri: data.event_photo_url } 
               : require('../../assets/event-wedding.png'),
@@ -192,13 +171,10 @@ export default function DashboardScreen({ navigation, route }) {
     }
   };
 
-  // Updated fetchJoinedEvents function with simplified image handling
   const fetchJoinedEvents = async (retryCount = 0) => {
     try {
       const user = auth.currentUser;
-      if (user) {
-        //console.log(`Fetching joined events for user: ${user.uid} (attempt ${retryCount + 1})`);
-        
+      if (user) {      
         const joinedRef = collection(db, 'joined_tbl');
         const q = query(
           joinedRef,
@@ -207,22 +183,16 @@ export default function DashboardScreen({ navigation, route }) {
         );
         
         const querySnapshot = await getDocs(q);
-        //console.log(`Found ${querySnapshot.size} joined events for user ${user.uid}`);
-
         const eventPromises = [];
         
         querySnapshot.forEach(joinedDoc => {
           const joinedData = joinedDoc.data();
           const eventId = joinedData.event_id;
-          
-          console.log(`Processing joined event: ${eventId}, converted: ${joinedData.converted_from_guest}`);
-          
+              
           const eventPromise = getDoc(doc(db, 'event_tbl', eventId))
             .then(eventDoc => {
               if (eventDoc.exists()) {
                 const eventData = eventDoc.data();
-                
-                // Format dates as before...
                 let formattedStartDate = 'No date specified';
                 let startDateObj = null;
                 
@@ -268,12 +238,10 @@ export default function DashboardScreen({ navigation, route }) {
                   dateRange: dateRangeText,
                   code: eventData.event_code,
                   description: eventData.event_description || 'No description available',
-                  // Simplified image handling
                   image: eventData.event_photo_url && eventData.event_photo_url.trim() !== '' 
                     ? { uri: eventData.event_photo_url } 
                     : require('../../assets/event-wedding.png'),
                   joinedId: joinedDoc.id,
-                  // Mark if this was converted from guest
                   wasGuest: joinedData.converted_from_guest || false,
                 };
               }
@@ -289,37 +257,26 @@ export default function DashboardScreen({ navigation, route }) {
         
         const eventResults = await Promise.all(eventPromises);
         const validEvents = eventResults.filter(event => event !== null);
-        
-        //console.log(`Successfully loaded ${validEvents.length} joined events`);
         return validEvents;
       }
       return [];
     } catch (error) {
       console.error("Error fetching joined events:", error);
-      
-      // Retry logic for recently converted users
       if (retryCount < 2 && (wasAccountJustCreated || forceRefresh)) {
-        console.log(`Retrying fetch joined events (attempt ${retryCount + 2})`);
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        await new Promise(resolve => setTimeout(resolve, 1000));
         return fetchJoinedEvents(retryCount + 1);
       }
       
       return [];
     }
   };
-
-  // Enhanced fetch function with better handling for converted users
   const fetchAllData = async (showLoadingState = false, isNewUser = false) => {
     if (showLoadingState) {
       setLoading(true);
     }
     
     try {
-      //console.log(`Fetching all data - isNewUser: ${isNewUser}, wasAccountJustCreated: ${wasAccountJustCreated}`);
-      
-      // For newly converted users, add a small delay to ensure Firebase sync
       if (isNewUser || wasAccountJustCreated || forceRefresh) {
-        console.log('Adding delay for newly converted user...');
         await new Promise(resolve => setTimeout(resolve, 1500));
       }
       
@@ -329,18 +286,12 @@ export default function DashboardScreen({ navigation, route }) {
         fetchJoinedEvents()
       ]);
       
-      // Ensure we have arrays even if functions return undefined
       const safeCreatedEvents = Array.isArray(newCreatedEvents) ? newCreatedEvents : [];
       const safeJoinedEvents = Array.isArray(newJoinedEvents) ? newJoinedEvents : [];
       
       setCreatedEvents(safeCreatedEvents);
       setJoinedEvents(safeJoinedEvents);
-      
-      //console.log(`Data fetched - Created: ${safeCreatedEvents.length}, Joined: ${safeJoinedEvents.length}`);
-      
-      // If this was a converted user and we got joined events, show success message
       if ((wasAccountJustCreated || forceRefresh) && safeJoinedEvents.length > 0) {
-        console.log('Converted user events loaded successfully');
         setTimeout(() => {
           showSuccess(
             'Events Loaded Successfully! 🎉',
@@ -348,8 +299,7 @@ export default function DashboardScreen({ navigation, route }) {
           );
         }, 500);
       }
-      
-      // Clear flags after successful load
+
       if (wasAccountJustCreated) {
         clearAccountCreatedFlag();
       }
@@ -359,8 +309,7 @@ export default function DashboardScreen({ navigation, route }) {
       
     } catch (error) {
       console.error("Error in data fetching:", error);
-      
-      // Set empty arrays to prevent undefined errors
+
       setCreatedEvents([]);
       setJoinedEvents([]);
       
@@ -375,16 +324,9 @@ export default function DashboardScreen({ navigation, route }) {
       setRefreshing(false);
     }
   };
-
-  // Enhanced focus effect with better new user detection
   useFocusEffect(
     useCallback(() => {
-      console.log('Screen focused - checking for new user status');
-      
-      // Check if this is a newly converted user
       const isNewUser = wasAccountJustCreated || route?.params?.fromAccountCreation;
-      
-      // Force refresh if coming from account creation
       if (isNewUser) {
         setForceRefresh(true);
       }
@@ -393,18 +335,13 @@ export default function DashboardScreen({ navigation, route }) {
     }, [wasAccountJustCreated, route?.params?.fromAccountCreation])
   );
 
-  // Enhanced pull to refresh
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    console.log('Manual refresh triggered');
     fetchAllData(false, false);
   }, []);
 
-  // Initial data fetch
   useEffect(() => {
-    // Start minimal loading animations
     Animated.parallel([
-      // Gentle rotation
       Animated.loop(
         Animated.timing(rotateAnim, {
           toValue: 1,
@@ -412,7 +349,6 @@ export default function DashboardScreen({ navigation, route }) {
           useNativeDriver: true,
         })
       ),
-      // Gentle scale breathing
       Animated.loop(
         Animated.sequence([
           Animated.timing(scaleAnim, {
@@ -427,7 +363,6 @@ export default function DashboardScreen({ navigation, route }) {
           }),
         ])
       ),
-      // Simple dots animation
       Animated.loop(
         Animated.timing(dotsAnim, {
           toValue: 1,
@@ -435,7 +370,6 @@ export default function DashboardScreen({ navigation, route }) {
           useNativeDriver: true,
         })
       ),
-      // Fade in
       Animated.timing(fadeInAnim, {
         toValue: 1,
         duration: 600,
@@ -443,7 +377,6 @@ export default function DashboardScreen({ navigation, route }) {
       }),
     ]).start();
 
-    // Initial data fetch with new user detection
     const isNewUser = wasAccountJustCreated;
     fetchAllData(true, isNewUser);
   }, []);
@@ -478,8 +411,6 @@ export default function DashboardScreen({ navigation, route }) {
         }
       },
       () => {
-        // User cancelled logout
-        console.log('Logout cancelled');
       }
     );
   };
@@ -588,7 +519,6 @@ export default function DashboardScreen({ navigation, route }) {
         },
         () => {
           setLoading(false);
-          console.log('Join event cancelled');
         }
       );
       
@@ -747,7 +677,8 @@ export default function DashboardScreen({ navigation, route }) {
           />
         }
       >
-        {/* Welcome Header Section */}        <Animated.View 
+        {/* Welcome Header Section */}
+        <Animated.View 
           style={[
             styles.welcomeHeader,
             {
@@ -782,7 +713,8 @@ export default function DashboardScreen({ navigation, route }) {
         </Animated.View>
 
         {/* Quick Actions Section */}
-        <View style={styles.quickActions}>          <TouchableOpacity 
+        <View style={styles.quickActions}>
+          <TouchableOpacity 
             style={styles.actionButton}
             onPress={() => navigation.navigate('NewEvent')}
           >
@@ -826,7 +758,8 @@ export default function DashboardScreen({ navigation, route }) {
                 autoCapitalize="characters"
                 maxLength={10}
               />
-            </View>            <TouchableOpacity 
+            </View>
+            <TouchableOpacity 
               style={[styles.joinButton, loading && styles.joinButtonDisabled]}
               onPress={handleJoinEvent}
               disabled={loading}
@@ -907,12 +840,13 @@ export default function DashboardScreen({ navigation, route }) {
                     : "No events found. Create or join an event to get started!"
                 }
               </Text>
-              {activeTab === 'created' && (              <TouchableOpacity 
-                style={styles.createEventButton}
-                onPress={() => navigation.navigate('NewEvent')}
-              >
-                <Text style={styles.createEventButtonText}>Create Event</Text>
-              </TouchableOpacity>
+              {activeTab === 'created' && (
+                <TouchableOpacity
+                  style={styles.createEventButton}
+                  onPress={() => navigation.navigate('NewEvent')}
+                >
+                  <Text style={styles.createEventButtonText}>Create Event</Text>
+                </TouchableOpacity>
               )}
             </View>
           ) : (
@@ -930,7 +864,7 @@ export default function DashboardScreen({ navigation, route }) {
                     fallbackSource={require('../../assets/event-wedding.png')}
                     resizeMode="cover"
                     onLoadEnd={(event) => {
-                      console.log(`Event image loaded for: ${event?.name || 'event'}`);
+                     
                     }}
                   />
                   
@@ -958,14 +892,16 @@ export default function DashboardScreen({ navigation, route }) {
                     {event.description}
                   </Text>
                   
-                  {/* Updated event details section without attendees */}                  <View style={styles.eventDetailsRow}>
+                  {/* Updated event details section without attendees */}
+                  <View style={styles.eventDetailsRow}>
                     <View style={styles.eventDetail}>
                       <Ionicons name="calendar-outline" size={14} color="#48C6EF" />
                       <Text style={styles.eventDetailText}>{event.dateRange}</Text>
                     </View>
                   </View>
                   
-                  <View style={styles.eventFooter}>                    <View style={styles.codeContainer}>
+                  <View style={styles.eventFooter}>
+                    <View style={styles.codeContainer}>
                       <Text style={styles.codeLabel}>CODE:</Text>
                       <Text style={styles.codeText}>{event.code}</Text>
                     </View>
@@ -984,7 +920,8 @@ export default function DashboardScreen({ navigation, route }) {
           )}
         </View>
 
-        {/* Floating Create Button (optional) */}        <TouchableOpacity 
+        {/* Floating Create Button (optional) */}
+        <TouchableOpacity 
           style={styles.floatingButton}
           onPress={() => navigation.navigate('NewEvent')}
         >
@@ -998,7 +935,6 @@ export default function DashboardScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  // Minimalist Loading Styles - Adjusted spacing
   loadingContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -1464,58 +1400,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  // Add these styles to the StyleSheet
-  eventDateDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 20,
-  },
-  calendarIcon: {
-    marginRight: 6,
-    color: '#FF6F61',
-  },
-  dateContainer: {
-    flexDirection: 'column',
-  },
-  dateText: {
-    fontSize: 13,
-    color: '#666',
-  },
-  dateSubtext: {
-    fontSize: 11,
-    color: '#888',
-    marginTop: 2,
-  },
-  durationBadge: {
-    backgroundColor: 'rgba(255, 111, 97, 0.1)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginTop: 2,
-  },
-  durationText: {
-    fontSize: 10,
-    color: '#FF6F61',
-    fontWeight: '500',
-  },
-  // Floating Button
-  floatingButton: {
-    position: 'absolute',
-    bottom: 30,
-    right: 30,
-    backgroundColor: '#FF6F61',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#FF6F61',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  // Add these styles to the StyleSheet
   eventDateDetail: {
     flexDirection: 'row',
     alignItems: 'center',

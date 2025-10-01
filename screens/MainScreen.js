@@ -139,7 +139,9 @@ export default function MainScreen({ navigation }) {
             source={require('../assets/icon-pix-print.png')} 
             style={styles.patternImage}
           />
-        </Animated.View>        {/* Enhanced gradient overlay */}
+        </Animated.View>
+
+        {/* Enhanced gradient overlay */}
         <LinearGradient
           colors={[
             'rgba(72, 198, 239, 0.02)',
@@ -203,7 +205,8 @@ export default function MainScreen({ navigation }) {
               <Image source={require('../assets/icon-pix-print.png')} style={styles.logo} />
             </View>
           </View>
-            <Text style={styles.brandTitle}>SnaptureX</Text>
+
+          <Text style={styles.brandTitle}>SnaptureX</Text>
           <Text style={styles.brandTagline}>Click. Print. Share.</Text>
           <Text style={styles.brandDescription}>
             Transform your special moments into lasting memories
@@ -220,7 +223,8 @@ export default function MainScreen({ navigation }) {
             }
           ]}
         >
-          <View style={styles.featuresRow}>            <View style={styles.featureItem}>
+          <View style={styles.featuresRow}>
+            <View style={styles.featureItem}>
               <Ionicons name="camera" size={20} color="#48C6EF" />
               <Text style={styles.featureText}>Smart Events</Text>
             </View>
@@ -251,7 +255,8 @@ export default function MainScreen({ navigation }) {
               style={styles.primaryButton}
               onPress={() => navigation.navigate('SignIn')}
               activeOpacity={0.8}
-            >              <LinearGradient
+            >
+              <LinearGradient
                 colors={['#48C6EF', '#0060DF']}
                 style={styles.primaryButtonGradient}
                 start={{ x: 0, y: 0 }}
@@ -272,11 +277,14 @@ export default function MainScreen({ navigation }) {
             style={styles.guestButton}
             onPress={() => navigation.navigate('ContinueAsGuest')}
             activeOpacity={0.7}
-          >            <View style={styles.guestButtonContent}>
+          >
+            <View style={styles.guestButtonContent}>
               <Ionicons name="person-outline" size={18} color="#48C6EF" />
               <Text style={styles.guestButtonText}>Continue as Guest</Text>
             </View>
-          </TouchableOpacity>          {/* Sign Up Prompt */}
+          </TouchableOpacity>
+
+          {/* Sign Up Prompt */}
           <View style={styles.signupPrompt}>
             <Text style={styles.signupText}>New to Snapture?</Text>
             <TouchableOpacity 
@@ -387,7 +395,8 @@ const styles = StyleSheet.create({
   logoContainer: {
     position: 'relative',
     marginBottom: 20, // Reduced
-  },  logoGlow: {
+  },
+  logoGlow: {
     position: 'absolute',
     width: 100, // Reduced
     height: 100,
@@ -395,7 +404,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(72, 198, 239, 0.1)',
     top: -5,
     left: -5,
-  },  logoWrapper: {
+  },
+  logoWrapper: {
     width: 90, // Reduced
     height: 90,
     borderRadius: 45,
@@ -420,7 +430,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     textAlign: 'center',
     letterSpacing: -1,
-  },  brandTagline: {
+  },
+  brandTagline: {
     fontSize: 16, // Reduced
     color: '#48C6EF',
     fontWeight: '600',
@@ -487,7 +498,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 10,
     padding: 3,
-  },  guestButton: {
+  },
+  guestButton: {
     backgroundColor: 'rgba(72, 198, 239, 0.08)',
     borderRadius: 18,
     paddingVertical: 14,
@@ -501,7 +513,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  },  guestButtonText: {
+  },
+  guestButtonText: {
     fontSize: 14,
     color: '#48C6EF',
     fontWeight: '600',
@@ -529,7 +542,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 6,
     paddingHorizontal: 8,
-  },  signupLinkText: {
+  },
+  signupLinkText: {
     fontSize: 14,
     color: '#48C6EF',
     fontWeight: '600',
@@ -540,7 +554,8 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     pointerEvents: 'none',
-  },  circle1: {
+  },
+  circle1: {
     position: 'absolute',
     width: 150, // Reduced
     height: 150,

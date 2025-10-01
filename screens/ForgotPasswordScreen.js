@@ -205,7 +205,8 @@ export default function ForgotPasswordScreen({ navigation }) {
       style={{ flex: 1 }}
     >
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>        <LinearGradient
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        <LinearGradient
           colors={['#F8FCFF', '#FFFFFF', '#F8F9FA']}
           style={styles.container}
         >
@@ -225,7 +226,8 @@ export default function ForgotPasswordScreen({ navigation }) {
                 transform: [{ translateY: slideAnim }]
               }
             ]}
-          >            <View style={styles.logoContainer}>
+          >
+            <View style={styles.logoContainer}>
               <LinearGradient
                 colors={['#5DD9F5', '#48C6EF']}
                 style={styles.logoGradient}
@@ -272,7 +274,7 @@ export default function ForgotPasswordScreen({ navigation }) {
                 </View>
               </View>
 
-              {/* Info Box */}              
+              {/* Info Box */}
               <View style={styles.infoBox}>
                 <Ionicons name="information-circle-outline" size={20} color="#4A90E2" />
                 <Text style={styles.infoText}>
@@ -285,7 +287,8 @@ export default function ForgotPasswordScreen({ navigation }) {
                 style={[styles.resetButton, isSubmitting && styles.buttonDisabled]}
                 onPress={handleResetPassword}
                 disabled={isSubmitting}
-              >                <LinearGradient
+              >
+                <LinearGradient
                   colors={isSubmitting ? ['#B3E5FC', '#B3E5FC'] : ['#5DD9F5', '#48C6EF']}
                   style={styles.buttonGradient}
                   start={{ x: 0, y: 0 }}
@@ -397,7 +400,8 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: 24,
     marginBottom: 40,
-  },  logoContainer: {
+  },
+  logoContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
@@ -486,7 +490,8 @@ const styles = StyleSheet.create({
     color: '#4A90E2',
     marginLeft: 8,
     lineHeight: 20,
-  },  resetButton: {
+  },
+  resetButton: {
     borderRadius: 12,
     marginBottom: 20,
     shadowColor: '#48C6EF',
@@ -551,7 +556,8 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 16,
     color: '#666666',
-  },  signInText: {
+  },
+  signInText: {
     fontSize: 16,
     color: '#48C6EF',
     fontWeight: 'bold',

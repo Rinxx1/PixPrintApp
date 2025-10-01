@@ -471,7 +471,8 @@ export default function SignUpScreen({ route, navigation }) {
       style={{ flex: 1 }}
     >
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>        <LinearGradient
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        <LinearGradient
           colors={['#F8FCFF', '#FFFFFF', '#F8F9FA']}
           style={styles.container}
         >
@@ -591,7 +592,8 @@ export default function SignUpScreen({ route, navigation }) {
                     style={styles.input}
                     keyboardType="email-address"
                     autoCapitalize="none"
-                    editable={!isLoading}                    maxLength={100}
+                    editable={!isLoading}
+                    maxLength={100}
                   />
                 </View>
               </View>
@@ -657,7 +659,8 @@ export default function SignUpScreen({ route, navigation }) {
                 style={[styles.signUpButton, isLoading && styles.buttonDisabled]}
                 onPress={handleSignUp}
                 disabled={isLoading}
-              >                <LinearGradient
+              >
+                <LinearGradient
                   colors={isLoading ? ['#B3E5FC', '#B3E5FC'] : ['#5DD9F5', '#48C6EF']}
                   style={styles.buttonGradient}
                   start={{ x: 0, y: 0 }}
@@ -746,7 +749,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 30,
     position: 'relative',
-  },  logoContainer: {
+  },
+  logoContainer: {
     width: 70,
     height: 70,
     borderRadius: 35,
@@ -827,7 +831,8 @@ const styles = StyleSheet.create({
   eyeIcon: {
     paddingVertical: 14,
     padding: 4,
-  },  signUpButton: {
+  },
+  signUpButton: {
     borderRadius: 12,
     marginTop: 8,
     shadowColor: '#48C6EF',
@@ -866,7 +871,8 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 15,
     color: '#666666',
-  },  signInText: {
+  },
+  signInText: {
     fontSize: 15,
     color: '#48C6EF',
     fontWeight: 'bold',

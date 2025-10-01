@@ -316,11 +316,13 @@ export default function SignInScreen({ navigation }) {
                 <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
               </TouchableOpacity>
 
-              {/* Sign In Button */}              <TouchableOpacity
+              {/* Sign In Button */}
+              <TouchableOpacity
                 style={[styles.signInButton, isSubmitting && styles.buttonDisabled]}
                 onPress={handleSignIn}
                 disabled={isSubmitting}
-              >                <LinearGradient
+              >
+                <LinearGradient
                   colors={isSubmitting ? ['#48C6EF', '#0060DF'] : ['#48C6EF', '#0060DF']}
                   style={styles.buttonGradient}
                   start={{ x: 0, y: 0 }}
@@ -345,7 +347,9 @@ export default function SignInScreen({ navigation }) {
                 <View style={styles.dividerLine} />
                 <Text style={styles.dividerText}>or continue as</Text>
                 <View style={styles.dividerLine} />
-              </View>              <TouchableOpacity
+              </View>
+
+              <TouchableOpacity
                 style={styles.guestButton}
                 onPress={() => navigation.navigate('ContinueAsGuest')}
                 disabled={isSubmitting}
@@ -447,7 +451,8 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     justifyContent: 'center',
-    alignItems: 'center',    marginBottom: 10,
+    alignItems: 'center',
+    marginBottom: 10,
     shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
@@ -526,7 +531,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   signInButton: {
-    borderRadius: 12,    marginBottom: 24,
+    borderRadius: 12,
+    marginBottom: 24,
     shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
@@ -563,7 +569,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#888888',
     marginHorizontal: 16,
-  },  guestButton: {
+  },
+  guestButton: {
     borderRadius: 12,
     shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 4 },
@@ -598,7 +605,8 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 16,
     color: '#666666',
-  },  signUpText: {
+  },
+  signUpText: {
     fontSize: 16,
     color: '#48C6EF',
     fontWeight: 'bold',

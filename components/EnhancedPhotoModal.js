@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { optimizeImageUrl } from '../utils/imageOptimization';
-
+import CachedImage from './CachedImage';
 const { width, height } = Dimensions.get('window');
 
 const HighQualityModalImage = ({ imageUrl, style }) => {
@@ -142,17 +142,15 @@ const HighQualityModalImage = ({ imageUrl, style }) => {
       )}
         {/* High-quality image with responsive sizing */}
       <Animated.View style={[getResponsiveImageStyle(), { opacity: fadeAnim }]}>
-        <Image
+        <CachedImage
           source={{ 
-            uri: error ? null : (optimizeImageUrl(imageUrl, 'high') || imageUrl),
-            cache: 'web'
+            uri: error ? null : (optimizeImageUrl(imageUrl, 'high') || imageUrl)
           }}
           style={getResponsiveImageStyle()}
           onLoadEnd={handleLoadEnd}
           onError={handleError}
           resizeMode="contain"
-          progressiveRenderingEnabled={true}
-          fadeDuration={0}
+          fallbackSource={require('../assets/image.jpg')}
         />
       </Animated.View>
       

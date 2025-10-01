@@ -546,7 +546,8 @@ export default function ContinueAsGuestScreen({ navigation }) {
         )}
       </Animated.View>
       
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>        <LinearGradient
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        <LinearGradient
           colors={['#F0F9FF', '#FFFFFF', '#F8FAFC']}
           style={styles.container}
         >
@@ -613,7 +614,8 @@ export default function ContinueAsGuestScreen({ navigation }) {
                   transform: [{ translateY: slideAnim }]
                 }
               ]}
-            >              <View style={styles.formHeader}>
+            >
+              <View style={styles.formHeader}>
                 <Ionicons name="people-outline" size={24} color="#48C6EF" />
                 <Text style={styles.formTitle}>Event Details</Text>
               </View>
@@ -672,7 +674,8 @@ export default function ContinueAsGuestScreen({ navigation }) {
                 ]} 
                 onPress={handleJoin}
                 disabled={isLoading || networkStatus === 'offline'}
-              >                <LinearGradient
+              >
+                <LinearGradient
                   colors={
                     isLoading ? ['#A8DDFF', '#A8DDFF'] : 
                     networkStatus === 'offline' ? ['#CCCCCC', '#BBBBBB'] : 
@@ -842,10 +845,12 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     width: 80,
-    height: 80,    borderRadius: 40,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: 'rgba(72, 198, 239, 0.1)',
     justifyContent: 'center',
-    alignItems: 'center',marginBottom: 20,
+    alignItems: 'center',
+    marginBottom: 20,
     shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
@@ -923,7 +928,8 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     fontSize: 16,
     color: '#333',
-  },  joinButton: {
+  },
+  joinButton: {
     borderRadius: 12,
     marginBottom: 24,
     shadowColor: '#48C6EF',
@@ -990,7 +996,8 @@ const styles = StyleSheet.create({
   signInText: {
     fontSize: 16,
     color: '#666666',
-  },  signInLink: {
+  },
+  signInLink: {
     fontSize: 16,
     color: '#48C6EF',
     fontWeight: 'bold',

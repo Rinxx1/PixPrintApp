@@ -136,7 +136,8 @@ export default function SettingsScreen({ navigation }) {
   };
 
   const renderSettingItem = (icon, title, subtitle, onPress, showArrow = true, customComponent = null) => (
-    <TouchableOpacity style={styles.settingItem} onPress={onPress}>      <View style={styles.settingLeft}>
+    <TouchableOpacity style={styles.settingItem} onPress={onPress}>
+      <View style={styles.settingLeft}>
         <View style={styles.iconContainer}>
           <Ionicons name={icon} size={20} color="#48C6EF" />
         </View>
@@ -179,7 +180,8 @@ export default function SettingsScreen({ navigation }) {
           style={[
             { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
           ]}
-        >          <LinearGradient
+        >
+          <LinearGradient
             colors={['#48C6EF', '#0060DF']}
             style={styles.creditsCard}
             start={{ x: 0, y: 0 }}
@@ -195,7 +197,7 @@ export default function SettingsScreen({ navigation }) {
                   <Text style={styles.creditsAmount}>{credits}</Text>
                 </View>
               </View>
-                <TouchableOpacity 
+              <TouchableOpacity 
                 style={styles.addCreditsBtn} 
                 onPress={() => navigation.navigate('AddMoreCredits')}
               >
@@ -250,7 +252,8 @@ export default function SettingsScreen({ navigation }) {
               'Dark Mode',
               'Switch to dark theme',
               handleDarkModeToggle,
-              false,              <Switch 
+              false,
+              <Switch 
                 value={darkMode} 
                 onValueChange={handleDarkModeToggle}
                 trackColor={{ false: '#E5E5E5', true: '#48C6EF' }}
@@ -262,7 +265,8 @@ export default function SettingsScreen({ navigation }) {
               'Push Notifications',
               'Receive app notifications',
               handleNotificationsToggle,
-              false,              <Switch 
+              false,
+              <Switch 
                 value={notifications} 
                 onValueChange={handleNotificationsToggle}
                 trackColor={{ false: '#E5E5E5', true: '#48C6EF' }}
@@ -318,7 +322,9 @@ export default function SettingsScreen({ navigation }) {
             <Ionicons name="log-out-outline" size={20} color="#FFFFFF" />
             <Text style={styles.logoutText}>Log Out</Text>
           </TouchableOpacity>
-        </Animated.View>        {/* App Version */}
+        </Animated.View>
+
+        {/* App Version */}
         <View style={styles.versionContainer}>
           <Text style={styles.versionText}>Snapture v1.0.0</Text>
         </View>

@@ -584,14 +584,11 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         setEventName(eventData.event_name || 'Unnamed Event');
         setEventCode(eventData.event_code || '');        setEventLocation(eventData.event_location || 'Location not specified');
         setEventCreatorId(eventData.user_id);
-        
-        console.log('Event photo URL:', eventData.event_photo_url);
+
         if (eventData.event_photo_url && eventData.event_photo_url.trim() !== '') {
           setEventImage({ uri: eventData.event_photo_url });
-          console.log('Using event image:', eventData.event_photo_url);
         } else {
           setEventImage(require('../../assets/avatar.png'));
-          console.log('Using default image');
         }
         
         const currentUser = auth.currentUser;
@@ -890,18 +887,27 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     if (selectedCategory !== category) {
       setSelectedCategory(category);
     }
-  }, [selectedCategory]);const OptimizedGridImage = React.memo(({ photo, style, onPress }) => {
+  }, [selectedCategory]);
+
+  const OptimizedGridImage = React.memo(({ photo, style, onPress }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
     const fadeAnim = useRef(new Animated.Value(0)).current;    
     const shimmerAnim = useRef(new Animated.Value(0)).current;
+    const shimmerLoopRef = useRef(null);
+
+    // Reset states when photo URL changes
+    useEffect(() => {
+      setLoading(true);
+      setError(false);
+      setImageLoaded(false);
+      fadeAnim.setValue(0);
+    }, [photo.imageUrl]);
 
     useEffect(() => {
-      let shimmerLoop;
-      
-      if (loading && !imageLoaded) {
-        shimmerLoop = Animated.loop(
+      if (loading && !imageLoaded && !error) {
+        shimmerLoopRef.current = Animated.loop(
           Animated.sequence([
             Animated.timing(shimmerAnim, {
               toValue: 1,
@@ -915,17 +921,24 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             }),
           ])
         );
-        shimmerLoop.start();
+        shimmerLoopRef.current.start();
       }
       
       return () => {
-        if (shimmerLoop) {
-          shimmerLoop.stop();
+        if (shimmerLoopRef.current) {
+          shimmerLoopRef.current.stop();
         }
         shimmerAnim.stopAnimation();
       };
-    }, [loading, imageLoaded]);const handleLoadEnd = () => {
+    }, [loading, imageLoaded, error]);const handleLoadEnd = (event) => {
       setLoading(false);
+      setImageLoaded(true);
+      
+      // Stop shimmer animation
+      if (shimmerLoopRef.current) {
+        shimmerLoopRef.current.stop();
+      }
+      
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 300,
@@ -933,8 +946,16 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       }).start();
     };
 
-    const handleError = () => {      setError(true);
+    const handleError = (errorEvent) => {
+      console.log('Grid image error:', errorEvent?.nativeEvent?.error || 'Unknown error');
+      setError(true);
       setLoading(false);
+      setImageLoaded(false);
+      
+      // Stop shimmer animation on error
+      if (shimmerLoopRef.current) {
+        shimmerLoopRef.current.stop();
+      }
     };
 
     const gridImageWidth = (width - 10) / 3;
@@ -980,23 +1001,36 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             <Ionicons name="image-outline" size={16} color="#999" />
             <Text style={styles.errorText}>Failed to load</Text>
           </View>
-        )}      </TouchableOpacity>
+        )}
+      </TouchableOpacity>
     );
   }, (prevProps, nextProps) => {
     // Only re-render if the photo URL or style changes
     return prevProps.photo.imageUrl === nextProps.photo.imageUrl && 
            JSON.stringify(prevProps.style) === JSON.stringify(nextProps.style);
-  });  const HighQualityModalImage = React.memo(({ imageUrl, style }) => {
+  });
+
+  const HighQualityModalImage = React.memo(({ imageUrl, style }) => {
     const [imageLoading, setImageLoading] = useState(true);
     const [error, setError] = useState(false);
     const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const modalShimmerAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(0.8)).current;
+    const shimmerLoopRef = useRef(null);
+
+    // Reset states when imageUrl changes
+    useEffect(() => {
+      setImageLoading(true);
+      setError(false);
+      setImageDimensions({ width: 0, height: 0 });
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(0.8);
+    }, [imageUrl]);
 
     useEffect(() => {
-      if (imageLoading) {
-        const modalShimmerLoop = () => {
+      if (imageLoading && !error) {
+        shimmerLoopRef.current = Animated.loop(
           Animated.sequence([
             Animated.timing(modalShimmerAnim, {
               toValue: 1,
@@ -1008,19 +1042,30 @@ export default function JoinEventScreenTwo({ route, navigation }) {
               duration: 1200,
               useNativeDriver: false,
             }),
-          ]).start(() => modalShimmerLoop());
-        };
-        
-        modalShimmerLoop();
+          ])
+        );
+        shimmerLoopRef.current.start();
       }
       
-      return () => modalShimmerAnim.stopAnimation();
-    }, [imageLoading]);    const handleLoadEnd = (event) => {
+      return () => {
+        if (shimmerLoopRef.current) {
+          shimmerLoopRef.current.stop();
+        }
+        modalShimmerAnim.stopAnimation();
+      };
+    }, [imageLoading, error]);    const handleLoadEnd = (event) => {
       setImageLoading(false);
+      
+      // Stop shimmer animation
+      if (shimmerLoopRef.current) {
+        shimmerLoopRef.current.stop();
+      }
       
       if (event && event.nativeEvent) {
         const { width: imgWidth, height: imgHeight } = event.nativeEvent;
-        setImageDimensions({ width: imgWidth, height: imgHeight });
+        if (imgWidth && imgHeight) {
+          setImageDimensions({ width: imgWidth, height: imgHeight });
+        }
       }
       
       Animated.parallel([
@@ -1038,8 +1083,15 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       ]).start();
     };
 
-    const handleError = () => {
-      setError(true);      setImageLoading(false);
+    const handleError = (errorEvent) => {
+      console.log('Modal image error:', errorEvent?.nativeEvent?.error || 'Unknown error');
+      setError(true);
+      setImageLoading(false);
+      
+      // Stop shimmer animation on error
+      if (shimmerLoopRef.current) {
+        shimmerLoopRef.current.stop();
+      }
     };
 
     const modalShimmerTranslateX = modalShimmerAnim.interpolate({
@@ -1092,7 +1144,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                 <Ionicons name="image-outline" size={48} color="#E0E0E0" />
               </View>
               <Text style={styles.modalSkeletonText}>Loading...</Text>
-            </View>          </View>
+            </View>
+          </View>
         )}
         
         <CachedImage
@@ -1111,7 +1164,10 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             <Ionicons name="alert-circle-outline" size={48} color="#FFFFFF" />
             <Text style={styles.modalErrorText}>Unable to load image</Text>
             <Text style={styles.modalErrorSubtext}>Network error or file corrupted</Text>
-          </View>        )}      </Animated.View>    );
+          </View>
+        )}
+      </Animated.View>
+    );
   }, (prevProps, nextProps) => {
     // Only re-render if the image URL changes
     return prevProps.imageUrl === nextProps.imageUrl;
@@ -1218,7 +1274,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      <HeaderBar navigation={navigation} showBack={false} showDashboard={true}/>      <Animated.ScrollView 
+      <HeaderBar navigation={navigation} showBack={false} showDashboard={true}/>
+      <Animated.ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
@@ -1248,7 +1305,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                 ]} />
                 <Text style={styles.statusText}>
                   {eventStatus === 'active' ? 'Active Event' : 'Event Finished'}
-                </Text>              </View>
+                </Text>
+              </View>
               
               {isEventCreator && (
                 <View style={styles.creatorBadge}>
@@ -1298,7 +1356,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             </View>
           </View>
 
-          <View style={styles.separator} />          
+          <View style={styles.separator} />
           <Text style={styles.description}>{eventDescription}</Text>
 
           <View style={styles.eventStats}>
@@ -1312,7 +1370,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
             <View style={styles.statItem}>
               <Ionicons name="time-outline" size={18} color="#48C6EF" />
               <Text style={styles.statValue}>{eventTime}</Text>
-            </View>          </View>
+            </View>
+          </View>
         </View>
 
         <View style={styles.sectionHeader}>
@@ -1379,22 +1438,27 @@ export default function JoinEventScreenTwo({ route, navigation }) {
               ]}
             >
               Me
-            </Text>          </TouchableOpacity>
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.galleryHeader}>
           <Text style={styles.galleryTitle}>{galleryTitle}</Text>
-        </View>        {photosLoading && (selectedCategory === 'person' || selectedCategory === 'group' || selectedCategory === 'camera') && (
+        </View>
+
+        {photosLoading && (selectedCategory === 'person' || selectedCategory === 'group' || selectedCategory === 'camera') && (
           <View style={styles.photosLoadingContainer}>
             <ActivityIndicator size="small" color="#48C6EF" />
-            <Text style={styles.photosLoadingText}>Loading photos...</Text>          </View>
+            <Text style={styles.photosLoadingText}>Loading photos...</Text>
+          </View>
         )}
 
         {!photosLoading && selectedCategory === 'person' && eventPhotos.length === 0 && (
           <View style={styles.noPhotosContainer}>
             <Ionicons name="images-outline" size={48} color="#CCC" />
             <Text style={styles.noPhotosText}>No photos uploaded yet</Text>
-            <Text style={styles.noPhotosSubtext}>Be the first to capture memories!</Text>          </View>
+            <Text style={styles.noPhotosSubtext}>Be the first to capture memories!</Text>
+          </View>
         )}
 
         {!photosLoading && selectedCategory === 'group' && myPhotos.length === 0 && (
@@ -1410,7 +1474,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
               {guestUsername && !auth.currentUser ? 
                 "Start taking photos to see them here! Create an account to save your memories permanently." :
                 "Start taking photos to see them here!"
-              }            </Text>
+              }
+            </Text>
             
             {guestUsername && !auth.currentUser && (
               <TouchableOpacity 
@@ -1422,13 +1487,19 @@ export default function JoinEventScreenTwo({ route, navigation }) {
               >
                 <Text style={styles.createAccountButtonText}>Create Account</Text>
               </TouchableOpacity>
-            )}          </View>
-        )}        {!photosLoading && selectedCategory === 'camera' && photographerPhotos.length === 0 && (
+            )}
+          </View>
+        )}
+
+        {!photosLoading && selectedCategory === 'camera' && photographerPhotos.length === 0 && (
           <View style={styles.noPhotosContainer}>
             <Ionicons name="camera-outline" size={48} color="#CCC" />
             <Text style={styles.noPhotosText}>No photographer photos yet</Text>
             <Text style={styles.noPhotosSubtext}>Photos taken by event photographers will appear here</Text>
-          </View>        )}        {displayedImages.length > 0 && (
+          </View>
+        )}
+
+        {displayedImages.length > 0 && (
           <View style={styles.instaGrid}>
             {(selectedCategory === 'person' || selectedCategory === 'group' || selectedCategory === 'camera') ? (
               (() => {
@@ -1469,7 +1540,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           </View>
         )}
 
-        {/* Load More Button / Loading Indicator for Lazy Loading */}        {hasMoreImages && displayedImages.length > 0 && (
+        {/* Load More Button / Loading Indicator for Lazy Loading */}
+        {hasMoreImages && displayedImages.length > 0 && (
           <View style={styles.loadMoreContainer}>
             {isLoadingMore ? (
               <View style={styles.loadingMoreIndicator}>
@@ -1547,6 +1619,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           {selectedImage && (
             <View style={styles.modalImageContainer}>
               <HighQualityModalImage
+                key={selectedImage} // Force re-mount on image change for Android compatibility
                 imageUrl={selectedImage}
                 style={styles.modalImage}
               />
@@ -1598,8 +1671,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
               </TouchableOpacity>
             )}
           </View>
-          
-
         </View>
       </Modal>
 
@@ -1610,7 +1681,8 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         eventId={eventId}
         navigation={navigation}
         guestUsername={guestUsername} // Pass guest info
-      />    </View>
+      />
+    </View>
   );
 }
 
