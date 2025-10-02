@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Snapture",
+    "name": "SnaptureX",
     "slug": "pixprintapp",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/App_Icon.png",
     "userInterfaceStyle": "light",
@@ -21,7 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.pixprintstudio.snapture",
-      "buildNumber": "1",
+      "buildNumber": "3",
       "icon": "./assets/App_Icon.png",
       "appleTeamId": "8T9JDUW8TU",
       "infoPlist": {
