@@ -13,7 +13,9 @@ import {
   ImageBackground,
   Platform
 } from 'react-native';
+import ProgressiveImage from '../../components/ProgressiveImage';
 import CachedImage from '../../components/CachedImage';
+import imagePreloader from '../../utils/imagePreloader';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -42,6 +44,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null); 
   const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('person');
   const [activeTab, setActiveTab] = useState('gallery');
@@ -889,289 +892,212 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     }
   }, [selectedCategory]);
 
-  const OptimizedGridImage = React.memo(({ photo, style, onPress }) => {
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(false);
-    const [imageLoaded, setImageLoaded] = useState(false);
-    const fadeAnim = useRef(new Animated.Value(0)).current;    
-    const shimmerAnim = useRef(new Animated.Value(0)).current;
-    const shimmerLoopRef = useRef(null);
+  // Preload images when they change
+  useEffect(() => {
+    if (displayedImages.length > 0) {
+      // Preload first batch of images
+      const urlsToPreload = displayedImages.slice(0, 12).map(img => img.imageUrl).filter(Boolean);
+      imagePreloader.preloadBatch(urlsToPreload, 'high');
+    }
+  }, [displayedImages]);
 
-    // Reset states when photo URL changes
-    useEffect(() => {
-      setLoading(true);
-      setError(false);
-      setImageLoaded(false);
-      fadeAnim.setValue(0);
-    }, [photo.imageUrl]);
+  // Instagram-style Grid Image with progressive loading
+  const InstagramGridImage = React.memo(({ photo, style, onPress, index }) => {
+    const [isVisible, setIsVisible] = useState(false);
+    const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
     useEffect(() => {
-      if (loading && !imageLoaded && !error) {
-        shimmerLoopRef.current = Animated.loop(
-          Animated.sequence([
-            Animated.timing(shimmerAnim, {
-              toValue: 1,
-              duration: 1200,
-              useNativeDriver: false,
-            }),
-            Animated.timing(shimmerAnim, {
-              toValue: 0,
-              duration: 800,
-              useNativeDriver: false,
-            }),
-          ])
-        );
-        shimmerLoopRef.current.start();
-      }
-      
-      return () => {
-        if (shimmerLoopRef.current) {
-          shimmerLoopRef.current.stop();
-        }
-        shimmerAnim.stopAnimation();
-      };
-    }, [loading, imageLoaded, error]);const handleLoadEnd = (event) => {
-      setLoading(false);
-      setImageLoaded(true);
-      
-      // Stop shimmer animation
-      if (shimmerLoopRef.current) {
-        shimmerLoopRef.current.stop();
-      }
-      
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    };
+      // Stagger animation for smooth appearance
+      const delay = index * 30; // 30ms delay between images
+      const timer = setTimeout(() => {
+        setIsVisible(true);
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 100,
+          friction: 10,
+          useNativeDriver: true,
+        }).start();
+      }, delay);
 
-    const handleError = (errorEvent) => {
-      console.log('Grid image error:', errorEvent?.nativeEvent?.error || 'Unknown error');
-      setError(true);
-      setLoading(false);
-      setImageLoaded(false);
-      
-      // Stop shimmer animation on error
-      if (shimmerLoopRef.current) {
-        shimmerLoopRef.current.stop();
-      }
-    };
+      // Preload adjacent images
+      const currentImages = selectedCategory === 'person' ? eventPhotos : 
+                           selectedCategory === 'group' ? myPhotos : 
+                           photographerPhotos;
+      imagePreloader.preloadAdjacentImages(currentImages, index, 2);
+
+      return () => clearTimeout(timer);
+    }, [index]);
 
     const gridImageWidth = (width - 10) / 3;
-    const gridImageHeight = width / 3;
 
-    const shimmerTranslateX = shimmerAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [-gridImageWidth, gridImageWidth],
-    });    return (
-      <TouchableOpacity style={style} onPress={onPress}>
-        {loading && (
-          <View style={[styles.imageSkeleton, { width: gridImageWidth, height: gridImageHeight }]}>
-            <Animated.View 
-              style={[
-                styles.shimmerOverlay,
-                {
-                  width: gridImageWidth,
-                  height: gridImageHeight,
-                  transform: [{ translateX: shimmerTranslateX }],
-                }
-              ]} 
+    // Generate thumbnail URL (if using Firebase Storage, you can add resize params)
+    const thumbnailUrl = photo.imageUrl ? 
+      `${photo.imageUrl.split('?')[0]}?alt=media&w=200` : null;
+
+    return (
+      <Animated.View style={[style, { transform: [{ scale: scaleAnim }] }]}>
+        <TouchableOpacity 
+          style={[style, styles.gridImageContainer]} 
+          onPress={onPress}
+          activeOpacity={0.9}
+        >
+          {isVisible ? (
+            <ProgressiveImage
+              source={{ uri: photo.imageUrl }}
+              thumbnailSource={{ uri: thumbnailUrl }}
+              style={[style, styles.gridImage]}
+              resizeMode="cover"
+              priority="normal"
             />
-            <View style={styles.skeletonContent}>
-              <View style={styles.skeletonIconContainer}>
-                <Ionicons name="image-outline" size={16} color="#E0E0E0" />
-              </View>
+          ) : (
+            <View style={[style, styles.gridImagePlaceholder]}>
+              <SkeletonLoader width={gridImageWidth} height={gridImageWidth} borderRadius={0} />
             </View>
-          </View>
-        )}
-        <CachedImage
-          source={{ 
-            uri: error ? null : optimizeImageUrl(photo.imageUrl, 'thumbnail')
-          }}
-          style={[style, styles.eventImage]}
-          onLoadEnd={handleLoadEnd}
-          onError={handleError}
-          resizeMode="cover"
-          fallbackSource={require('../../assets/image.jpg')}
-        />
-        
-        {error && (
-          <View style={[style, styles.imageError]}>
-            <Ionicons name="image-outline" size={16} color="#999" />
-            <Text style={styles.errorText}>Failed to load</Text>
-          </View>
-        )}
-      </TouchableOpacity>
+          )}
+        </TouchableOpacity>
+      </Animated.View>
     );
   }, (prevProps, nextProps) => {
-    // Only re-render if the photo URL or style changes
     return prevProps.photo.imageUrl === nextProps.photo.imageUrl && 
-           JSON.stringify(prevProps.style) === JSON.stringify(nextProps.style);
+           prevProps.index === nextProps.index;
   });
 
-  const HighQualityModalImage = React.memo(({ imageUrl, style }) => {
-    const [imageLoading, setImageLoading] = useState(true);
-    const [error, setError] = useState(false);
+  // Instagram-style Modal Image with high-quality loading
+  const InstagramModalImage = React.memo(({ imageUrl, index }) => {
     const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const modalShimmerAnim = useRef(new Animated.Value(0)).current;
-    const scaleAnim = useRef(new Animated.Value(0.8)).current;
-    const shimmerLoopRef = useRef(null);
+    const scaleAnim = useRef(new Animated.Value(0.9)).current;
+    const opacityAnim = useRef(new Animated.Value(0)).current;
 
-    // Reset states when imageUrl changes
     useEffect(() => {
-      setImageLoading(true);
-      setError(false);
-      setImageDimensions({ width: 0, height: 0 });
-      fadeAnim.setValue(0);
-      scaleAnim.setValue(0.8);
+      // Preload adjacent images in modal
+      const currentImages = selectedCategory === 'person' ? eventPhotos : 
+                           selectedCategory === 'group' ? myPhotos : 
+                           photographerPhotos;
+      imagePreloader.preloadAdjacentImages(currentImages, index, 1);
+
+      // Animate entrance
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          tension: 50,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        })
+      ]).start();
     }, [imageUrl]);
 
-    useEffect(() => {
-      if (imageLoading && !error) {
-        shimmerLoopRef.current = Animated.loop(
-          Animated.sequence([
-            Animated.timing(modalShimmerAnim, {
-              toValue: 1,
-              duration: 1200,
-              useNativeDriver: false,
-            }),
-            Animated.timing(modalShimmerAnim, {
-              toValue: 0,
-              duration: 1200,
-              useNativeDriver: false,
-            }),
-          ])
-        );
-        shimmerLoopRef.current.start();
-      }
-      
-      return () => {
-        if (shimmerLoopRef.current) {
-          shimmerLoopRef.current.stop();
-        }
-        modalShimmerAnim.stopAnimation();
-      };
-    }, [imageLoading, error]);    const handleLoadEnd = (event) => {
-      setImageLoading(false);
-      
-      // Stop shimmer animation
-      if (shimmerLoopRef.current) {
-        shimmerLoopRef.current.stop();
-      }
-      
-      if (event && event.nativeEvent) {
-        const { width: imgWidth, height: imgHeight } = event.nativeEvent;
+    const handleLoad = (event) => {
+      if (event?.source) {
+        const { width: imgWidth, height: imgHeight } = event.source;
         if (imgWidth && imgHeight) {
           setImageDimensions({ width: imgWidth, height: imgHeight });
         }
       }
-      
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          tension: 100,
-          friction: 8,
-          useNativeDriver: true,
-        })
-      ]).start();
     };
-
-    const handleError = (errorEvent) => {
-      console.log('Modal image error:', errorEvent?.nativeEvent?.error || 'Unknown error');
-      setError(true);
-      setImageLoading(false);
-      
-      // Stop shimmer animation on error
-      if (shimmerLoopRef.current) {
-        shimmerLoopRef.current.stop();
-      }
-    };
-
-    const modalShimmerTranslateX = modalShimmerAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [-300, 300],
-    });
 
     const getResponsiveImageStyle = () => {
       const maxWidth = width * 0.95;
-      const maxHeight = height * 0.7;
+      const maxHeight = height * 0.63;
       
       if (imageDimensions.width && imageDimensions.height) {
         const aspectRatio = imageDimensions.width / imageDimensions.height;
-          if (aspectRatio > 1) {
+        
+        if (aspectRatio > 1) {
+          // Landscape
           const calculatedWidth = Math.min(maxWidth, imageDimensions.width);
           const calculatedHeight = calculatedWidth / aspectRatio;
           return {
             width: calculatedWidth,
             height: Math.min(calculatedHeight, maxHeight),
+            borderRadius: 12,
           };
         } else {
+          // Portrait or square
           const calculatedHeight = Math.min(maxHeight, imageDimensions.height);
           const calculatedWidth = calculatedHeight * aspectRatio;
           return {
             width: Math.min(calculatedWidth, maxWidth),
             height: calculatedHeight,
+            borderRadius: 12,
           };
         }
       }
       
       return {
         width: Math.min(maxWidth, width * 0.9),
-        height: Math.min(maxHeight, height * 0.6),      };
+        height: Math.min(maxHeight, height * 0.6),
+        borderRadius: 12,
+      };
     };
 
+    const imageStyle = getResponsiveImageStyle();
+    const thumbnailUrl = imageUrl ? `${imageUrl.split('?')[0]}?alt=media&w=400` : null;
+
     return (
-      <Animated.View style={[getResponsiveImageStyle(), { transform: [{ scale: scaleAnim }] }]}>
-        {imageLoading && (
-          <View style={[getResponsiveImageStyle(), styles.modalImageSkeleton]}>
-            <Animated.View 
-              style={[
-                styles.modalShimmerOverlay,
-                {
-                  transform: [{ translateX: modalShimmerTranslateX }],
-                }
-              ]} 
-            />
-            <View style={styles.modalSkeletonContent}>
-              <View style={styles.modalSkeletonIconContainer}>
-                <Ionicons name="image-outline" size={48} color="#E0E0E0" />
-              </View>
-              <Text style={styles.modalSkeletonText}>Loading...</Text>
-            </View>
-          </View>
-        )}
-        
-        <CachedImage
-          source={{ 
-            uri: error ? null : optimizeImageUrl(imageUrl, 'high')
-          }}
-          style={getResponsiveImageStyle()}
-          onLoadEnd={handleLoadEnd}
-          onError={handleError}
+      <Animated.View 
+        style={[
+          imageStyle, 
+          { 
+            transform: [{ scale: scaleAnim }],
+            opacity: opacityAnim,
+            overflow: 'hidden',
+          }
+        ]}
+      >
+        <ProgressiveImage
+          source={{ uri: imageUrl }}
+          thumbnailSource={{ uri: thumbnailUrl }}
+          style={[imageStyle, { borderRadius: 12 }]}
           resizeMode="contain"
-          fallbackSource={require('../../assets/image.jpg')}
+          onLoadEnd={handleLoad}
+          priority="high"
         />
-        
-        {error && (
-          <View style={[getResponsiveImageStyle(), styles.modalImageError]}>
-            <Ionicons name="alert-circle-outline" size={48} color="#FFFFFF" />
-            <Text style={styles.modalErrorText}>Unable to load image</Text>
-            <Text style={styles.modalErrorSubtext}>Network error or file corrupted</Text>
-          </View>
-        )}
       </Animated.View>
     );
   }, (prevProps, nextProps) => {
-    // Only re-render if the image URL changes
     return prevProps.imageUrl === nextProps.imageUrl;
   });
+
+  // Simple skeleton loader component using LinearGradient
+  const SkeletonLoader = ({ width, height, borderRadius = 0, style }) => {
+    const shimmerAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+      const animation = Animated.loop(
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        })
+      );
+      animation.start();
+      return () => animation.stop();
+    }, []);
+
+    const translateX = shimmerAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [-width, width],
+    });
+
+    return (
+      <View style={[{ width, height, backgroundColor: '#E8E8E8', borderRadius, overflow: 'hidden' }, style]}>
+        <Animated.View style={{ transform: [{ translateX }], width: '100%', height: '100%' }}>
+          <LinearGradient
+            colors={['#E8E8E8', '#F5F5F5', '#E8E8E8']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{ width: '100%', height: '100%' }}
+          />
+        </Animated.View>
+      </View>
+    );
+  };
+
   const galleryTitle = selectedCategory === 'person' ? 'All Photos' : 
                       selectedCategory === 'group' ? 'My Photos' : 
                       'Photographer Photos';
@@ -1190,14 +1116,18 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       }
     }
   };
-  const handleImageClick = useCallback((photo) => {
+  const handleImageClick = useCallback((photo, index = 0) => {
     setSelectedImage(photo.imageUrl);
     setSelectedPhoto(photo);
+    setSelectedPhotoIndex(index);
     setIsModalVisible(true);
-  }, []);  const closeModal = useCallback(() => {
+  }, []);
+
+  const closeModal = useCallback(() => {
     setIsModalVisible(false);
     setSelectedImage(null);
     setSelectedPhoto(null);
+    setSelectedPhotoIndex(0);
     setIsPrinting(false); // Reset printing state when modal closes
   }, []);
 
@@ -1511,15 +1441,17 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                   rows.push(
                     <View key={`row-${rowIndex}`} style={styles.instaGridRow}>
                       {rowPhotos.map((photo, colIndex) => {
+                        const imageIndex = i + colIndex;
                         const isEdgeLeft = colIndex === 0;
                         const isEdgeRight = colIndex === 2 || colIndex === rowPhotos.length - 1;
                         const isEdgeTop = rowIndex === 0;
                         const isEdgeBottom = rowIndex === Math.floor((displayedImages.length - 1) / 3);
                         
                         return (
-                          <OptimizedGridImage
-                            key={`image-${photo.id}`}
+                          <InstagramGridImage
+                            key={`image-${photo.id}-${imageIndex}`}
                             photo={photo}
+                            index={imageIndex}
                             style={[
                               styles.instaEqualImage,
                               isEdgeLeft && styles.edgeLeft,
@@ -1527,7 +1459,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
                               isEdgeTop && styles.edgeTop,
                               isEdgeBottom && styles.edgeBottom,
                             ]}
-                            onPress={() => handleImageClick(photo)}
+                            onPress={() => handleImageClick(photo, imageIndex)}
                           />
                         );
                       })}
@@ -1618,10 +1550,10 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           {/* High-quality modal image with responsive sizing */}
           {selectedImage && (
             <View style={styles.modalImageContainer}>
-              <HighQualityModalImage
-                key={selectedImage} // Force re-mount on image change for Android compatibility
+              <InstagramModalImage
+                key={`modal-${selectedImage}-${selectedPhotoIndex}`}
                 imageUrl={selectedImage}
-                style={styles.modalImage}
+                index={selectedPhotoIndex}
               />
             </View>
           )}
@@ -1975,7 +1907,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     paddingHorizontal: 20,
-  },  modalImage: {
+  },  
+  modalImage: {
     borderRadius: 12,
   },
   closeButton: {
@@ -2098,6 +2031,20 @@ const styles = StyleSheet.create({
     marginHorizontal: 1,
     overflow: 'hidden',
   },
+  gridImageContainer: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F0F0F0',
+  },
+  gridImage: {
+    width: '100%',
+    height: '100%',
+  },
+  gridImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F0F0F0',
+  },
   edgeLeft: {
     marginLeft: 0,
   },
@@ -2123,32 +2070,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 4,
     textAlign: 'center',
-  },
-  imageSkeleton: {
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },  shimmerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    opacity: 0.8,
-  },
-  skeletonContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  skeletonIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E8E8E8',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   printButton: {
     flexDirection: 'row',
@@ -2248,50 +2169,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',    marginLeft: 6,
   },
 
-  modalImageSkeleton: {
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  modalShimmerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    width: 100,
-    height: '100%',
-    borderRadius: 12,
-  },
-  modalSkeletonContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  modalSkeletonIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  modalSkeletonText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 16,
-    fontWeight: '500',
-  },
   modalImageError: {
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
