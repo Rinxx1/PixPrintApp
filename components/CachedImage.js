@@ -51,7 +51,7 @@ const CachedImage = ({
     }
   };
 
-  const handleLoadEnd = () => {
+  const handleLoadEnd = (event) => {
     setLoading(false);
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -60,7 +60,7 @@ const CachedImage = ({
     }).start();
     
     if (onLoadEnd) {
-      onLoadEnd();
+      onLoadEnd(event);
     }
   };
 

@@ -122,7 +122,7 @@ export default function ForgotPasswordScreen({ navigation }) {
       
       showSuccess(
         'Reset Link Sent! 📧',
-        `We've sent password reset instructions to ${email.trim()}.\n\nPlease check your email (including spam folder) and follow the link to reset your password.\n\n💡 The link will expire in 1 hour for security.`,
+        `We've sent password reset instructions to ${email.trim()}.`,
         () => {
           // Navigate back to sign in screen
           navigation.navigate('SignIn');
@@ -207,7 +207,7 @@ export default function ForgotPasswordScreen({ navigation }) {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         <LinearGradient
-          colors={['#FFF9F8', '#FFFFFF', '#F8F9FA']}
+          colors={['#F8FCFF', '#FFFFFF', '#F8F9FA']}
           style={styles.container}
         >
           {/* Decorative Background Elements */}
@@ -229,7 +229,7 @@ export default function ForgotPasswordScreen({ navigation }) {
           >
             <View style={styles.logoContainer}>
               <LinearGradient
-                colors={['#FF8D76', '#FF6F61']}
+                colors={['#5DD9F5', '#48C6EF']}
                 style={styles.logoGradient}
               >
                 <Ionicons name="mail" size={40} color="#FFFFFF" />
@@ -274,7 +274,7 @@ export default function ForgotPasswordScreen({ navigation }) {
                 </View>
               </View>
 
-              {/* Info Box */}              
+              {/* Info Box */}
               <View style={styles.infoBox}>
                 <Ionicons name="information-circle-outline" size={20} color="#4A90E2" />
                 <Text style={styles.infoText}>
@@ -289,7 +289,7 @@ export default function ForgotPasswordScreen({ navigation }) {
                 disabled={isSubmitting}
               >
                 <LinearGradient
-                  colors={isSubmitting ? ['#FFB0A8', '#FFB0A8'] : ['#FF8D76', '#FF6F61']}
+                  colors={isSubmitting ? ['#B3E5FC', '#B3E5FC'] : ['#5DD9F5', '#48C6EF']}
                   style={styles.buttonGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -368,13 +368,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     height: '100%',
-  },
-  circle1: {
+  },  circle1: {
     position: 'absolute',
     width: width * 0.8,
     height: width * 0.8,
     borderRadius: width * 0.4,
-    backgroundColor: 'rgba(255, 111, 97, 0.08)',
+    backgroundColor: 'rgba(72, 198, 239, 0.08)',
     top: -width * 0.3,
     right: -width * 0.3,
   },
@@ -383,7 +382,7 @@ const styles = StyleSheet.create({
     width: width * 0.6,
     height: width * 0.6,
     borderRadius: width * 0.3,
-    backgroundColor: 'rgba(255, 141, 118, 0.06)',
+    backgroundColor: 'rgba(93, 217, 245, 0.06)',
     bottom: -width * 0.2,
     left: -width * 0.2,
   },
@@ -392,7 +391,7 @@ const styles = StyleSheet.create({
     width: width * 0.4,
     height: width * 0.4,
     borderRadius: width * 0.2,
-    backgroundColor: 'rgba(255, 111, 97, 0.05)',
+    backgroundColor: 'rgba(72, 198, 239, 0.05)',
     top: height * 0.6,
     right: -width * 0.1,
   },
@@ -407,7 +406,7 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 40,
     marginBottom: 24,
-    shadowColor: '#FF6F61',
+    shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
@@ -495,7 +494,7 @@ const styles = StyleSheet.create({
   resetButton: {
     borderRadius: 12,
     marginBottom: 20,
-    shadowColor: '#FF6F61',
+    shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -560,7 +559,7 @@ const styles = StyleSheet.create({
   },
   signInText: {
     fontSize: 16,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: 'bold',
   },
   backButton: {

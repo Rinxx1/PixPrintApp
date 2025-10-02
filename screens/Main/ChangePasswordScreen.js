@@ -353,7 +353,7 @@ export default function ChangePasswordScreen({ navigation }) {
         >
           <View style={styles.iconContainer}>
             <LinearGradient
-              colors={['#FF8D76', '#FF6F61']}
+              colors={['#4A90E2', '#357ABD']}
               style={styles.iconGradient}
             >
               <Ionicons name="lock-closed" size={32} color="#FFFFFF" />
@@ -514,7 +514,7 @@ export default function ChangePasswordScreen({ navigation }) {
             disabled={loading}
           >
             <LinearGradient
-              colors={loading ? ['#CCCCCC', '#AAAAAA'] : ['#FF8D76', '#FF6F61']}
+              colors={loading ? ['#CCCCCC', '#AAAAAA'] : ['#4A90E2', '#357ABD']}
               style={styles.saveButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
     width: width * 0.5,
     height: width * 0.5,
     borderRadius: width * 0.25,
-    backgroundColor: 'rgba(255, 111, 97, 0.08)',
+    backgroundColor: 'rgba(74, 144, 226, 0.08)',
     top: -width * 0.1,
     right: -width * 0.2,
   },
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
     width: width * 0.3,
     height: width * 0.3,
     borderRadius: width * 0.15,
-    backgroundColor: 'rgba(255, 141, 118, 0.06)',
+    backgroundColor: 'rgba(53, 122, 189, 0.06)',
     bottom: width * 0.1,
     left: -width * 0.05,
   },
@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingTop: 104,
+    paddingTop: 15,
     paddingHorizontal: 24,
     paddingBottom: 40,
   },
@@ -723,7 +723,7 @@ const styles = StyleSheet.create({
   saveButton: {
     borderRadius: 14,
     overflow: 'hidden',
-    shadowColor: '#FF6F61',
+    shadowColor: '#4A90E2',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -752,7 +752,7 @@ const styles = StyleSheet.create({
   },
   forgotText: {
     fontSize: 14,
-    color: '#FF6F61',
+    color: '#4A90E2',
     fontWeight: '500',
   },
 });

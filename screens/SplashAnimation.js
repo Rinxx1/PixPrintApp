@@ -50,10 +50,10 @@ export default function SplashAnimation({ onDone }) {
       />
 
       <Animated.Text style={[styles.text, { opacity: textFadeAnim }]}>
-        PixPrint
+        SnaptureX
       </Animated.Text>
       <Animated.Text style={[styles.subtitle, { opacity: textFadeAnim }]}>
-       Capture. Print. Celebrate
+       Click. Print. Share
       </Animated.Text>
     </View>
   );

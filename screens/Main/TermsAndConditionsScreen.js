@@ -116,7 +116,7 @@ Continued use of PixPrint after changes constitutes acceptance of new terms. For
       {/* Animated Header */}
       <Animated.View style={[styles.headerContainer, { opacity: headerOpacity }]}>
         <LinearGradient
-          colors={['#FF8D76', '#FF6F61']}
+          colors={['#4A90E2', '#357ABD']}
           style={styles.headerGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -187,7 +187,7 @@ Continued use of PixPrint after changes constitutes acceptance of new terms. For
             colors={['#F8F9FA', '#FFFFFF']}
             style={styles.summaryGradient}
           >
-            <Ionicons name="bulb" size={24} color="#FF6F61" style={styles.summaryIcon} />
+            <Ionicons name="bulb" size={24} color="#4A90E2" style={styles.summaryIcon} />
             <Text style={styles.summaryTitle}>Quick Summary</Text>
             <Text style={styles.summaryText}>
               • Use PixPrint responsibly for personal and event photography{'\n'}
@@ -201,7 +201,7 @@ Continued use of PixPrint after changes constitutes acceptance of new terms. For
         {/* Contact Section */}
         <View style={styles.contactCard}>
           <View style={styles.contactHeader}>
-            <Ionicons name="mail" size={20} color="#FF6F61" />
+            <Ionicons name="mail" size={20} color="#4A90E2" />
             <Text style={styles.contactTitle}>Questions or Concerns?</Text>
           </View>
           <Text style={styles.contactText}>
@@ -229,13 +229,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
   },
   headerContainer: {
-    marginTop: 100,
+    marginTop: 15,
     marginHorizontal: 20,
     marginBottom: 20,
     borderRadius: 20,
     overflow: 'hidden',
     elevation: 8,
-    shadowColor: '#FF6F61',
+    shadowColor: '#4A90E2',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 12,
@@ -402,11 +402,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emailLink: {
-    color: '#FF6F61',
+    color: '#4A90E2',
     fontWeight: '500',
   },
   supportButton: {
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#4A90E2',
     borderRadius: 25,
     paddingVertical: 12,
     paddingHorizontal: 20,

@@ -323,7 +323,7 @@ export default function SignInScreen({ navigation }) {
                 disabled={isSubmitting}
               >
                 <LinearGradient
-                  colors={isSubmitting ? ['#FFB0A8', '#FFB0A8'] : ['#FF8D76', '#FF6F61']}
+                  colors={isSubmitting ? ['#48C6EF', '#0060DF'] : ['#48C6EF', '#0060DF']}
                   style={styles.buttonGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -354,8 +354,15 @@ export default function SignInScreen({ navigation }) {
                 onPress={() => navigation.navigate('ContinueAsGuest')}
                 disabled={isSubmitting}
               >
-                <Ionicons name="person-outline" size={20} color="#FF6F61" />
-                <Text style={styles.guestButtonText}>Continue as Guest</Text>
+                <LinearGradient
+                  colors={['#48C6EF', '#0060DF']}
+                  style={styles.guestButtonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  <Ionicons name="person-outline" size={20} color="#FFFFFF" />
+                  <Text style={styles.guestButtonText}>Continue as Guest</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -406,13 +413,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     height: '100%',
-  },
-  circle1: {
+  },  circle1: {
     position: 'absolute',
     width: width * 0.8,
     height: width * 0.8,
     borderRadius: width * 0.4,
-    backgroundColor: 'rgba(255, 111, 97, 0.08)',
+    backgroundColor: 'rgba(72, 198, 239, 0.08)',
     top: -width * 0.3,
     right: -width * 0.3,
   },
@@ -421,7 +427,7 @@ const styles = StyleSheet.create({
     width: width * 0.6,
     height: width * 0.6,
     borderRadius: width * 0.3,
-    backgroundColor: 'rgba(255, 141, 118, 0.06)',
+    backgroundColor: 'rgba(0, 96, 223, 0.06)',
     bottom: -width * 0.2,
     left: -width * 0.2,
   },
@@ -430,7 +436,7 @@ const styles = StyleSheet.create({
     width: width * 0.4,
     height: width * 0.4,
     borderRadius: width * 0.2,
-    backgroundColor: 'rgba(255, 111, 97, 0.05)',
+    backgroundColor: 'rgba(72, 198, 239, 0.05)',
     top: height * 0.6,
     right: -width * 0.1,
   },
@@ -444,19 +450,18 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(255, 111, 97, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#FF6F61',
+    marginBottom: 10,
+    shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 8,
   },
   logo: {
-    width: 50,
-    height: 50,
+    width: 80,
+    height: 80,
     resizeMode: 'contain',
   },
   welcomeTitle: {
@@ -520,16 +525,15 @@ const styles = StyleSheet.create({
   forgotPasswordContainer: {
     alignItems: 'flex-end',
     marginBottom: 24,
-  },
-  forgotPasswordText: {
+  },  forgotPasswordText: {
     fontSize: 14,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: '500',
   },
   signInButton: {
     borderRadius: 12,
     marginBottom: 24,
-    shadowColor: '#FF6F61',
+    shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -567,18 +571,23 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   guestButton: {
+    borderRadius: 12,
+    shadowColor: '#48C6EF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  guestButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 111, 97, 0.08)',
-    borderRadius: 12,
     paddingVertical: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 111, 97, 0.2)',
+    borderRadius: 12,
   },
   guestButtonText: {
     fontSize: 16,
-    color: '#FF6F61',
+    color: '#FFFFFF',
     fontWeight: '600',
     marginLeft: 8,
   },
@@ -599,7 +608,7 @@ const styles = StyleSheet.create({
   },
   signUpText: {
     fontSize: 16,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: 'bold',
   },
   backButton: {

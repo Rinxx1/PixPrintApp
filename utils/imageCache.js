@@ -6,7 +6,7 @@ class ImageCache {
     this.cache = new Map();
     this.cacheDir = `${FileSystem.cacheDirectory}pixprint_images/`;
     this.memoryCache = new Map(); // In-memory cache for faster access
-    this.maxMemoryCacheSize = 50; // Maximum number of images to keep in memory
+    this.maxMemoryCacheSize = Platform.OS === 'ios' ? 75 : 50; // More memory cache for iOS
     this.maxCacheAge = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
     
     this.ensureCacheDirectoryExists();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import HeaderBar from '../../components/HeaderBar';
 import { 
   View, 
@@ -22,32 +22,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAlert } from '../../context/AlertContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../../context/authContext';
+import ProgressiveImage from '../../components/ProgressiveImage';
+import imagePreloader from '../../utils/imagePreloader';
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.85;
-
-// Simple cached image component for better performance
-const CachedEventImage = ({ source, style, fallbackSource, ...props }) => {
-  const [error, setError] = useState(false);
-  const [loading, setLoading] = useState(true);
-  
-  const imageSource = error ? fallbackSource : source;
-  
-  return (
-    <Image
-      {...props}
-      source={imageSource}
-      style={style}
-      onLoad={() => setLoading(false)}
-      onError={() => {
-        console.log('Image load error, using fallback');
-        setError(true);
-        setLoading(false);
-      }}
-      onLoadEnd={() => setLoading(false)}
-    />
-  );
-};
 
 export default function DashboardScreen({ navigation, route }) {
   const [eventCode, setEventCode] = useState('');
@@ -59,22 +38,21 @@ export default function DashboardScreen({ navigation, route }) {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
   
-  // Add context for detecting new account creation
   const { wasAccountJustCreated, clearAccountCreatedFlag } = useContext(AuthContext);
-  
-  // Add flag to force refresh after conversion
   const [forceRefresh, setForceRefresh] = useState(false);
   
   const { showAlert, showError, showSuccess, showConfirm } = useAlert();
   
-  // Enhanced but minimal animation values for loading
+  // Track if images have been preloaded to avoid re-preloading
+  const preloadedImagesRef = useRef(new Set());
+  const hasPreloadedProfile = useRef(false);
+  
   const rotateAnim = useState(new Animated.Value(0))[0];
   const scaleAnim = useState(new Animated.Value(0.8))[0];
   const fadeInAnim = useState(new Animated.Value(0))[0];
   const dotsAnim = useState(new Animated.Value(0))[0];
   const scrollY = useState(new Animated.Value(0))[0];
 
-  // Animation values
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, 100],
     outputRange: [1, 0.9],
@@ -87,7 +65,6 @@ export default function DashboardScreen({ navigation, route }) {
     extrapolate: 'clamp',
   });
 
-  // Enhanced fetch user data
   const fetchUserData = async () => {
     try {
       const user = auth.currentUser;
@@ -96,8 +73,15 @@ export default function DashboardScreen({ navigation, route }) {
         const docSnap = await getDoc(userRef);
         if (docSnap.exists()) {
           const userData = docSnap.data();
+          const newProfileUrl = userData.user_profile_url || '';
+          
+          // Reset preload flag if profile URL changed
+          if (newProfileUrl !== userProfileUrl && newProfileUrl !== '') {
+            hasPreloadedProfile.current = false;
+          }
+          
           setUsername(userData.user_firstname || 'User');
-          setUserProfileUrl(userData.user_profile_url || '');
+          setUserProfileUrl(newProfileUrl);
           return userData;
         }
       }
@@ -107,7 +91,6 @@ export default function DashboardScreen({ navigation, route }) {
     return null;
   };
 
-  // Simplified helper function to get profile image source
   const getProfileImageSource = () => {
     if (userProfileUrl && userProfileUrl.trim() !== '') {
       return { uri: userProfileUrl };
@@ -115,23 +98,18 @@ export default function DashboardScreen({ navigation, route }) {
     return require('../../assets/avatar.png');
   };
 
-  // Simplified function to get event image source
   const getEventImageSource = (event) => {
-    // Check if event has an image with URI
     if (event.image && typeof event.image === 'object' && event.image.uri) {
       return { uri: event.image.uri };
     }
     
-    // Check if event.image is a direct URI string
     if (event.image && typeof event.image === 'string') {
       return { uri: event.image };
     }
     
-    // Use default fallback
     return require('../../assets/event-wedding.png');
   };
 
-  // Enhanced fetch function with better image handling
   const fetchCreatedEvents = async () => {
     try {
       const user = auth.currentUser;
@@ -146,7 +124,6 @@ export default function DashboardScreen({ navigation, route }) {
           const data = doc.data();
           const eventId = doc.id;
           
-          // Format start date
           let formattedStartDate = 'No date specified';
           let startDateObj = null;
           
@@ -157,8 +134,7 @@ export default function DashboardScreen({ navigation, route }) {
               day: 'numeric',
             });
           }
-          
-          // Format end date
+
           let formattedEndDate = '';
           let dateRangeText = '';
           
@@ -170,19 +146,13 @@ export default function DashboardScreen({ navigation, route }) {
               day: 'numeric',
             });
             
-            // Get year from start date
             const eventYear = startDateObj ? startDateObj.getFullYear() : new Date().getFullYear();
-            
-            // Create a formatted date range
             if (formattedStartDate === formattedEndDate) {
-              // Single day event
               dateRangeText = `${formattedStartDate}, ${eventYear}`;
             } else {
-              // Multi-day event
               dateRangeText = `${formattedStartDate} - ${formattedEndDate}, ${eventYear}`;
             }
           } else {
-            // Only start date available
             if (startDateObj) {
               dateRangeText = `${formattedStartDate}, ${startDateObj.getFullYear()}`;
             } else {
@@ -198,7 +168,6 @@ export default function DashboardScreen({ navigation, route }) {
             dateRange: dateRangeText,
             code: data.event_code,
             description: data.event_description || 'No description available',
-            // Simplified image handling
             image: data.event_photo_url && data.event_photo_url.trim() !== '' 
               ? { uri: data.event_photo_url } 
               : require('../../assets/event-wedding.png'),
@@ -214,13 +183,10 @@ export default function DashboardScreen({ navigation, route }) {
     }
   };
 
-  // Updated fetchJoinedEvents function with simplified image handling
   const fetchJoinedEvents = async (retryCount = 0) => {
     try {
       const user = auth.currentUser;
-      if (user) {
-        //console.log(`Fetching joined events for user: ${user.uid} (attempt ${retryCount + 1})`);
-        
+      if (user) {      
         const joinedRef = collection(db, 'joined_tbl');
         const q = query(
           joinedRef,
@@ -229,22 +195,16 @@ export default function DashboardScreen({ navigation, route }) {
         );
         
         const querySnapshot = await getDocs(q);
-        //console.log(`Found ${querySnapshot.size} joined events for user ${user.uid}`);
-
         const eventPromises = [];
         
         querySnapshot.forEach(joinedDoc => {
           const joinedData = joinedDoc.data();
           const eventId = joinedData.event_id;
-          
-          console.log(`Processing joined event: ${eventId}, converted: ${joinedData.converted_from_guest}`);
-          
+              
           const eventPromise = getDoc(doc(db, 'event_tbl', eventId))
             .then(eventDoc => {
               if (eventDoc.exists()) {
                 const eventData = eventDoc.data();
-                
-                // Format dates as before...
                 let formattedStartDate = 'No date specified';
                 let startDateObj = null;
                 
@@ -290,12 +250,10 @@ export default function DashboardScreen({ navigation, route }) {
                   dateRange: dateRangeText,
                   code: eventData.event_code,
                   description: eventData.event_description || 'No description available',
-                  // Simplified image handling
                   image: eventData.event_photo_url && eventData.event_photo_url.trim() !== '' 
                     ? { uri: eventData.event_photo_url } 
                     : require('../../assets/event-wedding.png'),
                   joinedId: joinedDoc.id,
-                  // Mark if this was converted from guest
                   wasGuest: joinedData.converted_from_guest || false,
                 };
               }
@@ -311,37 +269,26 @@ export default function DashboardScreen({ navigation, route }) {
         
         const eventResults = await Promise.all(eventPromises);
         const validEvents = eventResults.filter(event => event !== null);
-        
-        //console.log(`Successfully loaded ${validEvents.length} joined events`);
         return validEvents;
       }
       return [];
     } catch (error) {
       console.error("Error fetching joined events:", error);
-      
-      // Retry logic for recently converted users
       if (retryCount < 2 && (wasAccountJustCreated || forceRefresh)) {
-        console.log(`Retrying fetch joined events (attempt ${retryCount + 2})`);
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        await new Promise(resolve => setTimeout(resolve, 1000));
         return fetchJoinedEvents(retryCount + 1);
       }
       
       return [];
     }
   };
-
-  // Enhanced fetch function with better handling for converted users
   const fetchAllData = async (showLoadingState = false, isNewUser = false) => {
     if (showLoadingState) {
       setLoading(true);
     }
     
     try {
-      //console.log(`Fetching all data - isNewUser: ${isNewUser}, wasAccountJustCreated: ${wasAccountJustCreated}`);
-      
-      // For newly converted users, add a small delay to ensure Firebase sync
       if (isNewUser || wasAccountJustCreated || forceRefresh) {
-        console.log('Adding delay for newly converted user...');
         await new Promise(resolve => setTimeout(resolve, 1500));
       }
       
@@ -351,18 +298,45 @@ export default function DashboardScreen({ navigation, route }) {
         fetchJoinedEvents()
       ]);
       
-      // Ensure we have arrays even if functions return undefined
       const safeCreatedEvents = Array.isArray(newCreatedEvents) ? newCreatedEvents : [];
       const safeJoinedEvents = Array.isArray(newJoinedEvents) ? newJoinedEvents : [];
       
       setCreatedEvents(safeCreatedEvents);
       setJoinedEvents(safeJoinedEvents);
       
-      //console.log(`Data fetched - Created: ${safeCreatedEvents.length}, Joined: ${safeJoinedEvents.length}`);
+      // Preload profile image only once (when it changes or first load)
+      if (userData?.user_profile_url && !hasPreloadedProfile.current) {
+        imagePreloader.preloadImage(userData.user_profile_url, 'high');
+        hasPreloadedProfile.current = true;
+      }
       
-      // If this was a converted user and we got joined events, show success message
+      // Preload event images (only new ones not already preloaded)
+      const allEvents = [...safeCreatedEvents, ...safeJoinedEvents];
+      if (allEvents.length > 0) {
+        const eventImageUrls = allEvents
+          .map(event => {
+            if (event.image && typeof event.image === 'object' && event.image.uri) {
+              return event.image.uri;
+            }
+            if (event.image && typeof event.image === 'string') {
+              return event.image;
+            }
+            return null;
+          })
+          .filter(Boolean)
+          .slice(0, 6); // Preload first 6 event images
+        
+        // Only preload images we haven't preloaded before
+        const newImageUrls = eventImageUrls.filter(url => !preloadedImagesRef.current.has(url));
+        
+        if (newImageUrls.length > 0) {
+          imagePreloader.preloadBatch(newImageUrls, 'normal');
+          // Mark these images as preloaded
+          newImageUrls.forEach(url => preloadedImagesRef.current.add(url));
+        }
+      }
+      
       if ((wasAccountJustCreated || forceRefresh) && safeJoinedEvents.length > 0) {
-        console.log('Converted user events loaded successfully');
         setTimeout(() => {
           showSuccess(
             'Events Loaded Successfully! 🎉',
@@ -370,8 +344,7 @@ export default function DashboardScreen({ navigation, route }) {
           );
         }, 500);
       }
-      
-      // Clear flags after successful load
+
       if (wasAccountJustCreated) {
         clearAccountCreatedFlag();
       }
@@ -381,8 +354,7 @@ export default function DashboardScreen({ navigation, route }) {
       
     } catch (error) {
       console.error("Error in data fetching:", error);
-      
-      // Set empty arrays to prevent undefined errors
+
       setCreatedEvents([]);
       setJoinedEvents([]);
       
@@ -397,16 +369,9 @@ export default function DashboardScreen({ navigation, route }) {
       setRefreshing(false);
     }
   };
-
-  // Enhanced focus effect with better new user detection
   useFocusEffect(
     useCallback(() => {
-      console.log('Screen focused - checking for new user status');
-      
-      // Check if this is a newly converted user
       const isNewUser = wasAccountJustCreated || route?.params?.fromAccountCreation;
-      
-      // Force refresh if coming from account creation
       if (isNewUser) {
         setForceRefresh(true);
       }
@@ -415,18 +380,13 @@ export default function DashboardScreen({ navigation, route }) {
     }, [wasAccountJustCreated, route?.params?.fromAccountCreation])
   );
 
-  // Enhanced pull to refresh
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    console.log('Manual refresh triggered');
     fetchAllData(false, false);
   }, []);
 
-  // Initial data fetch
   useEffect(() => {
-    // Start minimal loading animations
     Animated.parallel([
-      // Gentle rotation
       Animated.loop(
         Animated.timing(rotateAnim, {
           toValue: 1,
@@ -434,7 +394,6 @@ export default function DashboardScreen({ navigation, route }) {
           useNativeDriver: true,
         })
       ),
-      // Gentle scale breathing
       Animated.loop(
         Animated.sequence([
           Animated.timing(scaleAnim, {
@@ -449,7 +408,6 @@ export default function DashboardScreen({ navigation, route }) {
           }),
         ])
       ),
-      // Simple dots animation
       Animated.loop(
         Animated.timing(dotsAnim, {
           toValue: 1,
@@ -457,7 +415,6 @@ export default function DashboardScreen({ navigation, route }) {
           useNativeDriver: true,
         })
       ),
-      // Fade in
       Animated.timing(fadeInAnim, {
         toValue: 1,
         duration: 600,
@@ -465,7 +422,6 @@ export default function DashboardScreen({ navigation, route }) {
       }),
     ]).start();
 
-    // Initial data fetch with new user detection
     const isNewUser = wasAccountJustCreated;
     fetchAllData(true, isNewUser);
   }, []);
@@ -500,8 +456,6 @@ export default function DashboardScreen({ navigation, route }) {
         }
       },
       () => {
-        // User cancelled logout
-        console.log('Logout cancelled');
       }
     );
   };
@@ -610,7 +564,6 @@ export default function DashboardScreen({ navigation, route }) {
         },
         () => {
           setLoading(false);
-          console.log('Join event cancelled');
         }
       );
       
@@ -758,13 +711,12 @@ export default function DashboardScreen({ navigation, route }) {
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: true }
         )}
-        scrollEventThrottle={16}
-        refreshControl={
+        scrollEventThrottle={16}        refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={['#FF6F61']}
-            tintColor="#FF6F61"
+            colors={['#48C6EF']}
+            tintColor="#48C6EF"
             title="Pull to refresh events..."
             titleColor="#666"
           />
@@ -781,7 +733,7 @@ export default function DashboardScreen({ navigation, route }) {
           ]}
         >
           <LinearGradient
-            colors={['#FF8D76', '#FF6F61']}
+            colors={['#48C6EF', '#0060DF']}
             style={styles.welcomeGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
@@ -793,11 +745,12 @@ export default function DashboardScreen({ navigation, route }) {
                 <Text style={styles.welcomeSubtext}>Ready to capture more memories?</Text>
               </View>
               <View style={styles.avatarContainer}>
-                <CachedEventImage
+                <ProgressiveImage
                   source={getProfileImageSource()}
+                  thumbnailSource={getProfileImageSource()}
                   style={styles.avatarLarge}
-                  fallbackSource={require('../../assets/avatar.png')}
                   resizeMode="cover"
+                  priority="high"
                 />
                 <View style={styles.statusDot}></View>
               </View>
@@ -812,7 +765,7 @@ export default function DashboardScreen({ navigation, route }) {
             onPress={() => navigation.navigate('NewEvent')}
           >
             <View style={styles.actionIconContainer}>
-              <Ionicons name="add-circle-outline" size={24} color="#FF6F61" />
+              <Ionicons name="add-circle-outline" size={24} color="#48C6EF" />
             </View>
             <Text style={styles.actionButtonText}>Create Event</Text>
           </TouchableOpacity>
@@ -822,14 +775,14 @@ export default function DashboardScreen({ navigation, route }) {
             onPress={() => navigation.navigate('Camera')}
           >
             <View style={styles.actionIconContainer}>
-              <Ionicons name="camera-outline" size={24} color="#FF6F61" />
+              <Ionicons name="camera-outline" size={24} color="#48C6EF" />
             </View>
             <Text style={styles.actionButtonText}>Take Photos</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
             <View style={styles.actionIconContainer}>
-              <Ionicons name="print-outline" size={24} color="#FF6F61" />
+              <Ionicons name="print-outline" size={24} color="#48C6EF" />
             </View>
             <Text style={styles.actionButtonText}>My Prints</Text>
           </TouchableOpacity>
@@ -934,7 +887,7 @@ export default function DashboardScreen({ navigation, route }) {
                 }
               </Text>
               {activeTab === 'created' && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.createEventButton}
                   onPress={() => navigation.navigate('NewEvent')}
                 >
@@ -951,14 +904,12 @@ export default function DashboardScreen({ navigation, route }) {
               >
                 {/* Fixed image background */}
                 <View style={styles.eventImageContainer}>
-                  <CachedEventImage
+                  <ProgressiveImage
                     source={getEventImageSource(event)}
+                    thumbnailSource={getEventImageSource(event)}
                     style={styles.eventImageBackground}
-                    fallbackSource={require('../../assets/event-wedding.png')}
                     resizeMode="cover"
-                    onLoadEnd={() => {
-                      console.log(`Event image loaded for: ${event.name}`);
-                    }}
+                    priority="normal"
                   />
                   
                   <LinearGradient
@@ -988,7 +939,7 @@ export default function DashboardScreen({ navigation, route }) {
                   {/* Updated event details section without attendees */}
                   <View style={styles.eventDetailsRow}>
                     <View style={styles.eventDetail}>
-                      <Ionicons name="calendar-outline" size={14} color="#FF6F61" />
+                      <Ionicons name="calendar-outline" size={14} color="#48C6EF" />
                       <Text style={styles.eventDetailText}>{event.dateRange}</Text>
                     </View>
                   </View>
@@ -1028,7 +979,6 @@ export default function DashboardScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  // Minimalist Loading Styles - Adjusted spacing
   loadingContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -1044,18 +994,17 @@ const styles = StyleSheet.create({
     marginBottom: 20, // Reduced from 32
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  logoGlow: {
+  },  logoGlow: {
     position: 'absolute',
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
   },
   loadingIcon: {
     width: 64,
     height: 64,
-    tintColor: '#FF6F61',
+    tintColor: '#48C6EF',
   },
   brandName: {
     fontSize: 28,
@@ -1078,12 +1027,11 @@ const styles = StyleSheet.create({
   dotsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  dot: {
+  },  dot: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
     marginHorizontal: 2,
   },
   progressContainer: {
@@ -1094,11 +1042,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'flex-start',
     justifyContent: 'center',
-  },
-  progressDot: {
+  },  progressDot: {
     width: 10,
     height: 2,
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
     borderRadius: 1,
   },
 
@@ -1113,14 +1060,13 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingTop: 30,
     paddingBottom: 40,
-  },
-  welcomeHeader: {
+  },  welcomeHeader: {
     marginHorizontal: 20,
     marginBottom: 24,
     borderRadius: 24,
     overflow: 'hidden',
     elevation: 5,
-    shadowColor: '#FF6F61',
+    shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -1191,12 +1137,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 2.65,
     elevation: 2,
-  },
-  actionIconContainer: {
+  },  actionIconContainer: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: 'rgba(255, 111, 97, 0.1)',
+    backgroundColor: 'rgba(72, 198, 239, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -1242,13 +1187,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#333',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  joinButton: {
-    backgroundColor: '#FF6F61',
+  },  joinButton: {
+    backgroundColor: '#48C6EF',
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 12,
-    shadowColor: '#FF6F61',
+    shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -1296,9 +1240,8 @@ const styles = StyleSheet.create({
   activeEventTabText: {
     color: '#333',
     fontWeight: '600',
-  },
-  badgeContainer: {
-    backgroundColor: '#FF6F61',
+  },  badgeContainer: {
+    backgroundColor: '#48C6EF',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -1432,16 +1375,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#888',
     marginRight: 4,
-  },
-  codeText: {
+  },  codeText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#FF6F61',
+    color: '#48C6EF',
   },
   viewButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -1502,58 +1444,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  // Add these styles to the StyleSheet
-  eventDateDetail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 20,
-  },
-  calendarIcon: {
-    marginRight: 6,
-    color: '#FF6F61',
-  },
-  dateContainer: {
-    flexDirection: 'column',
-  },
-  dateText: {
-    fontSize: 13,
-    color: '#666',
-  },
-  dateSubtext: {
-    fontSize: 11,
-    color: '#888',
-    marginTop: 2,
-  },
-  durationBadge: {
-    backgroundColor: 'rgba(255, 111, 97, 0.1)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginTop: 2,
-  },
-  durationText: {
-    fontSize: 10,
-    color: '#FF6F61',
-    fontWeight: '500',
-  },
-  // Floating Button
-  floatingButton: {
-    position: 'absolute',
-    bottom: 30,
-    right: 30,
-    backgroundColor: '#FF6F61',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#FF6F61',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  // Add these styles to the StyleSheet
   eventDateDetail: {
     flexDirection: 'row',
     alignItems: 'center',

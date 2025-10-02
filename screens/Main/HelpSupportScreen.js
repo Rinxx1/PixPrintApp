@@ -137,7 +137,7 @@ export default function HelpSupportScreen({ navigation }) {
       {/* Animated Header */}
       <Animated.View style={[styles.headerContainer, { opacity: headerOpacity }]}>
         <LinearGradient
-          colors={['#4CAF50', '#45a049']}
+          colors={['#4A90E2', '#357ABD']}
           style={styles.headerGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -163,7 +163,7 @@ export default function HelpSupportScreen({ navigation }) {
         {/* Quick Help */}
         <View style={styles.quickHelpCard}>
           <View style={styles.quickHelpHeader}>
-            <Ionicons name="flash" size={24} color="#FF6F61" />
+            <Ionicons name="flash" size={24} color="#4A90E2" />
             <Text style={styles.quickHelpTitle}>Quick Help</Text>
           </View>
           <Text style={styles.quickHelpText}>
@@ -191,7 +191,7 @@ export default function HelpSupportScreen({ navigation }) {
         {/* FAQ Section */}
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="help-circle-outline" size={24} color="#FF6F61" />
+            <Ionicons name="help-circle-outline" size={24} color="#4A90E2" />
             <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
           </View>
           
@@ -204,7 +204,7 @@ export default function HelpSupportScreen({ navigation }) {
               >
                 <View style={styles.faqHeaderLeft}>
                   <View style={styles.faqIconContainer}>
-                    <Ionicons name={faq.icon} size={18} color="#FF6F61" />
+                    <Ionicons name={faq.icon} size={18} color="#4A90E2" />
                   </View>
                   <Text style={styles.faqQuestion}>{faq.question}</Text>
                 </View>
@@ -228,7 +228,7 @@ export default function HelpSupportScreen({ navigation }) {
         {/* Contact Options */}
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="headset" size={24} color="#FF6F61" />
+            <Ionicons name="headset" size={24} color="#4A90E2" />
             <Text style={styles.sectionTitle}>Contact Our Team</Text>
           </View>
           <Text style={styles.sectionSubtitle}>
@@ -260,51 +260,7 @@ export default function HelpSupportScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Additional Resources */}
-        <View style={styles.resourcesCard}>
-          <LinearGradient
-            colors={['#F8F9FA', '#FFFFFF']}
-            style={styles.resourcesGradient}
-          >
-            <Ionicons name="library" size={24} color="#FF6F61" style={styles.resourcesIcon} />
-            <Text style={styles.resourcesTitle}>Additional Resources</Text>
-            
-            <View style={styles.resourcesList}>
-              <TouchableOpacity style={styles.resourceItem}>
-                <Ionicons name="document-text" size={18} color="#666666" />
-                <Text style={styles.resourceText}>User Guide & Tutorials</Text>
-                <Ionicons name="open" size={16} color="#CCCCCC" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.resourceItem}>
-                <Ionicons name="play-circle" size={18} color="#666666" />
-                <Text style={styles.resourceText}>Video Tutorials</Text>
-                <Ionicons name="open" size={16} color="#CCCCCC" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.resourceItem}>
-                <Ionicons name="chatbubbles" size={18} color="#666666" />
-                <Text style={styles.resourceText}>Community Forum</Text>
-                <Ionicons name="open" size={16} color="#CCCCCC" />
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
-        </View>
 
-        {/* Emergency Contact */}
-        <View style={styles.emergencyCard}>
-          <View style={styles.emergencyHeader}>
-            <Ionicons name="warning" size={20} color="#FF6B6B" />
-            <Text style={styles.emergencyTitle}>Emergency Support</Text>
-          </View>
-          <Text style={styles.emergencyText}>
-            For urgent technical issues or account security concerns, contact us immediately:
-          </Text>
-          <TouchableOpacity style={styles.emergencyButton} onPress={handleEmailPress}>
-            <Ionicons name="call" size={16} color="#FFFFFF" />
-            <Text style={styles.emergencyButtonText}>Emergency Hotline</Text>
-          </TouchableOpacity>
-        </View>
 
         {/* Bottom Spacing */}
         <View style={styles.bottomSpacing} />
@@ -319,13 +275,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
   },
   headerContainer: {
-    marginTop: 100,
+    marginTop: 15,
     marginHorizontal: 20,
     marginBottom: 20,
     borderRadius: 20,
     overflow: 'hidden',
     elevation: 8,
-    shadowColor: '#4CAF50',
+    shadowColor: '#4A90E2',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -394,7 +350,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#FF6F61',
+    color: '#4A90E2',
     marginBottom: 4,
   },
   statLabel: {
@@ -527,89 +483,7 @@ const styles = StyleSheet.create({
     color: '#666666',
     marginLeft: 4,
   },
-  resourcesCard: {
-    marginBottom: 20,
-    borderRadius: 16,
-    overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-  },
-  resourcesGradient: {
-    padding: 20,
-  },
-  resourcesIcon: {
-    alignSelf: 'center',
-    marginBottom: 12,
-  },
-  resourcesTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333333',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  resourcesList: {
-    
-  },
-  resourceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  resourceText: {
-    fontSize: 14,
-    color: '#666666',
-    flex: 1,
-    marginLeft: 12,
-  },
-  emergencyCard: {
-    backgroundColor: '#FFF5F5',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF6B6B',
-  },
-  emergencyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  emergencyTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FF6B6B',
-    marginLeft: 8,
-  },
-  emergencyText: {
-    fontSize: 14,
-    color: '#666666',
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  emergencyButton: {
-    backgroundColor: '#FF6B6B',
-    borderRadius: 25,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'flex-start',
-  },
-  emergencyButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
-  },
+
   bottomSpacing: {
     height: 20,
   },

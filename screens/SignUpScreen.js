@@ -473,7 +473,7 @@ export default function SignUpScreen({ route, navigation }) {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         <LinearGradient
-          colors={['#FFF9F8', '#FFFFFF', '#F8F9FA']}
+          colors={['#F8FCFF', '#FFFFFF', '#F8F9FA']}
           style={styles.container}
         >
           {/* Decorative Background Elements */}
@@ -592,7 +592,8 @@ export default function SignUpScreen({ route, navigation }) {
                     style={styles.input}
                     keyboardType="email-address"
                     autoCapitalize="none"
-                    editable={!isLoading}                    maxLength={100}
+                    editable={!isLoading}
+                    maxLength={100}
                   />
                 </View>
               </View>
@@ -660,7 +661,7 @@ export default function SignUpScreen({ route, navigation }) {
                 disabled={isLoading}
               >
                 <LinearGradient
-                  colors={isLoading ? ['#FFB0A8', '#FFB0A8'] : ['#FF8D76', '#FF6F61']}
+                  colors={isLoading ? ['#B3E5FC', '#B3E5FC'] : ['#5DD9F5', '#48C6EF']}
                   style={styles.buttonGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -715,13 +716,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     height: '100%',
-  },
-  circle1: {
+  },  circle1: {
     position: 'absolute',
     width: width * 0.8,
     height: width * 0.8,
     borderRadius: width * 0.4,
-    backgroundColor: 'rgba(255, 111, 97, 0.08)',
+    backgroundColor: 'rgba(72, 198, 239, 0.08)',
     top: -width * 0.3,
     right: -width * 0.3,
   },
@@ -730,7 +730,7 @@ const styles = StyleSheet.create({
     width: width * 0.6,
     height: width * 0.6,
     borderRadius: width * 0.3,
-    backgroundColor: 'rgba(255, 141, 118, 0.06)',
+    backgroundColor: 'rgba(93, 217, 245, 0.06)',
     bottom: -width * 0.2,
     left: -width * 0.2,
   },
@@ -739,7 +739,7 @@ const styles = StyleSheet.create({
     width: width * 0.4,
     height: width * 0.4,
     borderRadius: width * 0.2,
-    backgroundColor: 'rgba(255, 111, 97, 0.05)',
+    backgroundColor: 'rgba(72, 198, 239, 0.05)',
     top: height * 0.5,
     right: -width * 0.1,
   },
@@ -754,11 +754,11 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: 'rgba(255, 111, 97, 0.1)',
+    backgroundColor: 'rgba(72, 198, 239, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#FF6F61',
+    shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -835,7 +835,7 @@ const styles = StyleSheet.create({
   signUpButton: {
     borderRadius: 12,
     marginTop: 8,
-    shadowColor: '#FF6F61',
+    shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -874,7 +874,7 @@ const styles = StyleSheet.create({
   },
   signInText: {
     fontSize: 15,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: 'bold',
   },
   guestConversionBanner: {

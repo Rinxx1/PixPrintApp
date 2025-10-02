@@ -1,0 +1,37 @@
+// Firebase Storage Security Rules
+// Copy these rules to your Firebase Console > Storage > Rules
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Allow authenticated users to upload their profile pictures
+    match /user-profile-pictures/{userId}_{timestamp} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow authenticated users to upload event main pictures (only event creators)
+    match /event-main-picture/{filename} {
+      allow read: if true; // Anyone can view event cover images
+      allow write: if request.auth != null; // Only authenticated users can upload
+    }
+    
+    // Allow users to upload photos to event directories
+    match /event-photos/{eventId}/{filename} {
+      allow read: if true; // Anyone can view event photos
+      allow write: if request.auth != null || 
+                     (filename.matches('.*_guest_.*') && 
+                      resource == null); // Allow guest uploads for new files
+    }
+    
+    // Allow authenticated users to manage their personal photos
+    match /user-photos/{userId}/{filename} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Default: deny all other access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

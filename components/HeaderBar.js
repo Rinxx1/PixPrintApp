@@ -1,12 +1,17 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet, StatusBar, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth } from '../firebase';
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
 export default function HeaderBar({ navigation, showBack = false, showDashboard = false, guestUsername = null }) {
   const currentUser = auth.currentUser;
   const isGuest = !currentUser && guestUsername;
+  const insets = useSafeAreaInsets();
   
   // Only show dashboard button if user is authenticated (not guest) and showDashboard is true
   const shouldShowDashboard = showDashboard && currentUser && !isGuest;
@@ -24,21 +29,16 @@ export default function HeaderBar({ navigation, showBack = false, showDashboard 
   };
 
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { 
+      height: 72 + insets.top, // Increased from 56 to 72 for more height
+      paddingTop: insets.top + 8 
+    }]}>
       {showBack ? (
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backArrow}>←</Text>
-        </TouchableOpacity>
-      ) : shouldShowDashboard ? (
-        <TouchableOpacity onPress={handleDashboardPress} style={styles.dashboardButton}>
-          <LinearGradient
-            colors={['#FF8D76', '#FF6F61']}
-            style={styles.dashboardGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Ionicons name="home" size={16} color="#FFFFFF" />
-          </LinearGradient>
+        </TouchableOpacity>      ) : shouldShowDashboard ? (
+        <TouchableOpacity onPress={handleDashboardPress} style={styles.plainBackButton}>
+          <Ionicons name="arrow-back" size={24} color="#000000" />
         </TouchableOpacity>
       ) : (
         <View style={styles.leftSpacer} />
@@ -53,7 +53,7 @@ export default function HeaderBar({ navigation, showBack = false, showDashboard 
             style={styles.logo}
           />
         </View>
-        <Text style={styles.brand}>PixPrint</Text>
+        <Text style={styles.brand}>SnaptureX</Text>
       </View>
     </View>
   );
@@ -61,37 +61,25 @@ export default function HeaderBar({ navigation, showBack = false, showDashboard 
 
 const styles = StyleSheet.create({
   header: {
-    height: 110,
     backgroundColor: '#FAF8F5',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 38, // status bar space
+    paddingVertical: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 5,
-  },
-  backArrow: {
+  },  backArrow: {
     fontSize: 22,
     paddingHorizontal: 12,
     paddingVertical: 4,
     color: '#2D2A32',
   },
-  dashboardButton: {
-    borderRadius: 20,
-    shadowColor: '#FF6F61',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  dashboardGradient: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  plainBackButton: {
+    padding: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -109,7 +97,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 111, 97, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 4,
@@ -120,8 +107,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   logo: {
-    width: 24,
-    height: 24,
+    width: 44,
+    height: 44,
     resizeMode: 'contain',
   },
   brand: {

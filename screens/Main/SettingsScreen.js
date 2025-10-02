@@ -139,7 +139,7 @@ export default function SettingsScreen({ navigation }) {
     <TouchableOpacity style={styles.settingItem} onPress={onPress}>
       <View style={styles.settingLeft}>
         <View style={styles.iconContainer}>
-          <Ionicons name={icon} size={20} color="#FF6F61" />
+          <Ionicons name={icon} size={20} color="#48C6EF" />
         </View>
         <View style={styles.textContainer}>
           <Text style={styles.settingTitle}>{title}</Text>
@@ -182,7 +182,7 @@ export default function SettingsScreen({ navigation }) {
           ]}
         >
           <LinearGradient
-            colors={['#FF8D76', '#FF6F61']}
+            colors={['#48C6EF', '#0060DF']}
             style={styles.creditsCard}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -197,12 +197,11 @@ export default function SettingsScreen({ navigation }) {
                   <Text style={styles.creditsAmount}>{credits}</Text>
                 </View>
               </View>
-              
               <TouchableOpacity 
                 style={styles.addCreditsBtn} 
                 onPress={() => navigation.navigate('AddMoreCredits')}
               >
-                <Ionicons name="add-circle-outline" size={20} color="#FF6F61" />
+                <Ionicons name="add-circle-outline" size={20} color="#48C6EF" />
                 <Text style={styles.addCreditsText}>Add Credits</Text>
               </TouchableOpacity>
             </View>
@@ -257,7 +256,7 @@ export default function SettingsScreen({ navigation }) {
               <Switch 
                 value={darkMode} 
                 onValueChange={handleDarkModeToggle}
-                trackColor={{ false: '#E5E5E5', true: '#FF6F61' }}
+                trackColor={{ false: '#E5E5E5', true: '#48C6EF' }}
                 thumbColor={darkMode ? '#FFFFFF' : '#FFFFFF'}
               />
             )}
@@ -270,7 +269,7 @@ export default function SettingsScreen({ navigation }) {
               <Switch 
                 value={notifications} 
                 onValueChange={handleNotificationsToggle}
-                trackColor={{ false: '#E5E5E5', true: '#FF6F61' }}
+                trackColor={{ false: '#E5E5E5', true: '#48C6EF' }}
                 thumbColor={notifications ? '#FFFFFF' : '#FFFFFF'}
               />
             )}
@@ -327,7 +326,7 @@ export default function SettingsScreen({ navigation }) {
 
         {/* App Version */}
         <View style={styles.versionContainer}>
-          <Text style={styles.versionText}>PixPrint v1.0.0</Text>
+          <Text style={styles.versionText}>Snapture v1.0.0</Text>
         </View>
       </ScrollView>
     </View>
@@ -360,12 +359,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666666',
     lineHeight: 22,
-  },
-  creditsCard: {
+  },  creditsCard: {
     borderRadius: 20,
     marginBottom: 24,
     overflow: 'hidden',
-    shadowColor: '#FF6F61',
+    shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 16,
@@ -414,9 +412,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 25,
     alignSelf: 'flex-start',
-  },
-  addCreditsText: {
-    color: '#FF6F61',
+  },  addCreditsText: {
+    color: '#48C6EF',
     fontWeight: '600',
     marginLeft: 8,
     fontSize: 16,
@@ -454,12 +451,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-  },
-  iconContainer: {
+  },  iconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 111, 97, 0.1)',
+    backgroundColor: 'rgba(72, 198, 239, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -479,17 +475,16 @@ const styles = StyleSheet.create({
   },
   settingRight: {
     marginLeft: 12,
-  },
-  logoutButton: {
+  },  logoutButton: {
     flexDirection: 'row',
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-    shadowColor: '#FF6F61',
+    shadowColor: '#48C6EF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

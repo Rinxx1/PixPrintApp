@@ -496,7 +496,7 @@ export default function JoinEventSettings({ route, navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF6F61" />
+        <ActivityIndicator size="large" color="#4A90E2" />
         <Text style={styles.loadingText}>Loading event settings...</Text>
       </View>
     );
@@ -573,12 +573,10 @@ export default function JoinEventSettings({ route, navigation }) {
               { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
             ]}
           >
-            <View style={styles.settingHeader}>
-              <Ionicons name="person-add" size={22} color="#FF6F61" />
-              <Text style={styles.settingTitle}>Create Your Account</Text>
-            </View>
-            
-            <View style={styles.accountCreationSection}>
+          <View style={styles.settingHeader}>
+            <Ionicons name="person-add" size={22} color="#4A90E2" />
+            <Text style={styles.settingTitle}>Create Your Account</Text>
+          </View>            <View style={styles.accountCreationSection}>
               <View style={styles.guestInfoContainer}>
                 <Ionicons name="information-circle" size={32} color="#FF9800" />
                 <View style={styles.guestInfoText}>
@@ -613,7 +611,7 @@ export default function JoinEventSettings({ route, navigation }) {
                 onPress={handleCreateAccount}
               >
                 <LinearGradient
-                  colors={['#FF8D76', '#FF6F61']}
+                  colors={['#4A90E2', '#357ABD']}
                   style={styles.createAccountGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -639,7 +637,7 @@ export default function JoinEventSettings({ route, navigation }) {
             ]}
           >
             <View style={styles.settingHeader}>
-              <Ionicons name="camera" size={22} color="#FF6F61" />
+              <Ionicons name="camera" size={22} color="#4A90E2" />
               <View style={styles.titleContainer}>
                 <Text style={styles.settingTitle}>Photographer Management</Text>
                 {currentPhotographers.length > 0 && (
@@ -700,10 +698,17 @@ export default function JoinEventSettings({ route, navigation }) {
               style={styles.assignButton}
               onPress={() => setShowPhotographerModal(true)}
             >
-              <Ionicons name="person-add" size={20} color="#FF6F61" />
-              <Text style={styles.assignButtonText}>
-                {currentPhotographers.length > 0 ? 'Add More Photographers' : 'Assign Photographers'}
-              </Text>
+              <LinearGradient
+                colors={['#4A90E2', '#357ABD']}
+                style={styles.assignButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Ionicons name="person-add" size={20} color="#FFFFFF" />
+                <Text style={styles.assignButtonText}>
+                  {currentPhotographers.length > 0 ? 'Add More Photographers' : 'Assign Photographers'}
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
         )}
@@ -720,7 +725,7 @@ export default function JoinEventSettings({ route, navigation }) {
           ]}
         >
           <View style={styles.settingHeader}>
-            <Ionicons name="notifications" size={22} color="#FF6F61" />
+            <Ionicons name="notifications" size={22} color="#4A90E2" />
             <Text style={styles.settingTitle}>Notifications</Text>
           </View>
           
@@ -732,8 +737,8 @@ export default function JoinEventSettings({ route, navigation }) {
             <Switch
               value={notificationsEnabled}
               onValueChange={(value) => setNotificationsEnabled(value)}
-              trackColor={{ false: '#E5E5E5', true: 'rgba(255, 111, 97, 0.4)' }}
-              thumbColor={notificationsEnabled ? '#FF6F61' : '#F5F5F5'}
+              trackColor={{ false: '#E5E5E5', true: 'rgba(74, 144, 226, 0.4)' }}
+              thumbColor={notificationsEnabled ? '#4A90E2' : '#F5F5F5'}
             />
           </View>
         </Animated.View>
@@ -750,7 +755,7 @@ export default function JoinEventSettings({ route, navigation }) {
           ]}
         >
           <View style={styles.settingHeader}>
-            <Ionicons name="image" size={22} color="#FF6F61" />
+            <Ionicons name="image" size={22} color="#4A90E2" />
             <Text style={styles.settingTitle}>Media</Text>
           </View>
           
@@ -762,8 +767,8 @@ export default function JoinEventSettings({ route, navigation }) {
             <Switch
               value={autoDownloadEnabled}
               onValueChange={(value) => setAutoDownloadEnabled(value)}
-              trackColor={{ false: '#E5E5E5', true: 'rgba(255, 111, 97, 0.4)' }}
-              thumbColor={autoDownloadEnabled ? '#FF6F61' : '#F5F5F5'}
+              trackColor={{ false: '#E5E5E5', true: 'rgba(74, 144, 226, 0.4)' }}
+              thumbColor={autoDownloadEnabled ? '#4A90E2' : '#F5F5F5'}
             />
           </View>
           
@@ -775,8 +780,8 @@ export default function JoinEventSettings({ route, navigation }) {
             <Switch
               value={highQualityEnabled}
               onValueChange={(value) => setHighQualityEnabled(value)}
-              trackColor={{ false: '#E5E5E5', true: 'rgba(255, 111, 97, 0.4)' }}
-              thumbColor={highQualityEnabled ? '#FF6F61' : '#F5F5F5'}
+              trackColor={{ false: '#E5E5E5', true: 'rgba(74, 144, 226, 0.4)' }}
+              thumbColor={highQualityEnabled ? '#4A90E2' : '#F5F5F5'}
             />
           </View>
         </Animated.View>
@@ -793,7 +798,7 @@ export default function JoinEventSettings({ route, navigation }) {
           ]}
         >
           <View style={styles.settingHeader}>
-            <Ionicons name="flash" size={22} color="#FF6F61" />
+            <Ionicons name="flash" size={22} color="#4A90E2" />
             <Text style={styles.settingTitle}>Quick Actions</Text>
           </View>
           
@@ -849,7 +854,7 @@ export default function JoinEventSettings({ route, navigation }) {
           ]}
         >
           <View style={styles.settingHeader}>
-            <Ionicons name="options" size={22} color="#FF6F61" />
+            <Ionicons name="options" size={22} color="#4A90E2" />
             <Text style={styles.settingTitle}>Event Options</Text>
           </View>
           
@@ -924,7 +929,7 @@ const styles = StyleSheet.create({
     width: width * 0.5,
     height: width * 0.5,
     borderRadius: width * 0.25,
-    backgroundColor: 'rgba(255, 111, 97, 0.08)',
+    backgroundColor: 'rgba(74, 144, 226, 0.08)',
     top: -width * 0.2,
     right: -width * 0.2,
   },
@@ -933,7 +938,7 @@ const styles = StyleSheet.create({
     width: width * 0.4,
     height: width * 0.4,
     borderRadius: width * 0.2,
-    backgroundColor: 'rgba(255, 141, 118, 0.06)',
+    backgroundColor: 'rgba(53, 122, 189, 0.06)',
     bottom: width * 0.1,
     left: -width * 0.1,
   },
@@ -1131,19 +1136,26 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   assignButton: {
+    borderRadius: 12,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    shadowColor: '#4A90E2',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  assignButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF0EF',
-    borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 20,
-    marginHorizontal: 20,
-    marginBottom: 20,
+    borderRadius: 12,
   },
   assignButtonText: {
     fontSize: 16,
-    color: '#FF6F61',
+    color: '#FFFFFF',
     fontWeight: '600',
     marginLeft: 8,
   },
@@ -1326,7 +1338,7 @@ const styles = StyleSheet.create({
   createAccountButton: {
     borderRadius: 12,
     marginBottom: 16,
-    shadowColor: '#FF6F61',
+    shadowColor: '#4A90E2',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,

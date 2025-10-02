@@ -7,14 +7,14 @@ import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 // Your Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBC0Ld15pfJ457vfC24tKld__TAFUKjP2U",
-  authDomain: "pixprintapp.firebaseapp.com",
-  databaseURL: "https://pixprintapp.firebaseio.com",
-  projectId: "pixprintapp",
-  storageBucket: "pixprintapp.firebasestorage.app",
-  messagingSenderId: "315145642881",
-  appId: "1:315145642881:android:ad319802eeea13c24c7e80",
-  measurementId: "YOUR_MEASUREMENT_ID", // Ensure you replace this with the actual measurement ID if required
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.EXPO_PUBLIC_FIREBASE_DATABASE_URL,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase

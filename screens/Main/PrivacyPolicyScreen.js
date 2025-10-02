@@ -212,7 +212,7 @@ We'll never make changes that significantly reduce your privacy rights without y
       {/* Animated Header */}
       <Animated.View style={[styles.headerContainer, { opacity: headerOpacity }]}>
         <LinearGradient
-          colors={['#667eea', '#764ba2']}
+          colors={['#4A90E2', '#357ABD']}
           style={styles.headerGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -238,7 +238,7 @@ We'll never make changes that significantly reduce your privacy rights without y
         {/* Introduction */}
         <View style={styles.introCard}>
           <View style={styles.introHeader}>
-            <Ionicons name="information-circle" size={24} color="#FF6F61" />
+            <Ionicons name="information-circle" size={24} color="#4A90E2" />
             <Text style={styles.introTitle}>Our Commitment to You</Text>
           </View>
           <Text style={styles.introText}>
@@ -313,7 +313,7 @@ We'll never make changes that significantly reduce your privacy rights without y
         {/* Contact Section */}
         <View style={styles.contactCard}>
           <LinearGradient
-            colors={['#FF6F61', '#FF8D76']}
+            colors={['#4A90E2', '#357ABD']}
             style={styles.contactGradient}
           >
             <Ionicons name="mail" size={24} color="#FFFFFF" style={styles.contactIcon} />
@@ -350,7 +350,7 @@ We'll never make changes that significantly reduce your privacy rights without y
               { icon: 'settings', text: 'Control sharing preferences' }
             ].map((right, index) => (
               <View key={index} style={styles.rightItem}>
-                <Ionicons name={right.icon} size={16} color="#FF6F61" />
+                <Ionicons name={right.icon} size={16} color="#4A90E2" />
                 <Text style={styles.rightText}>{right.text}</Text>
               </View>
             ))}
@@ -370,13 +370,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
   },
   headerContainer: {
-    marginTop: 100,
+    marginTop: 15,
     marginHorizontal: 20,
     marginBottom: 20,
     borderRadius: 20,
     overflow: 'hidden',
     elevation: 8,
-    shadowColor: '#667eea',
+    shadowColor: '#4A90E2',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     elevation: 4,
-    shadowColor: '#FF6F61',
+    shadowColor: '#4A90E2',
     shadowOpacity: 0.2,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 12,
