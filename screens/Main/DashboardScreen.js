@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import HeaderBar from '../../components/HeaderBar';
 import { 
   View, 
@@ -22,7 +22,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAlert } from '../../context/AlertContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../../context/authContext';
-import CachedImage from '../../components/CachedImage';
+import ProgressiveImage from '../../components/ProgressiveImage';
+import imagePreloader from '../../utils/imagePreloader';
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.85;
@@ -41,6 +42,10 @@ export default function DashboardScreen({ navigation, route }) {
   const [forceRefresh, setForceRefresh] = useState(false);
   
   const { showAlert, showError, showSuccess, showConfirm } = useAlert();
+  
+  // Track if images have been preloaded to avoid re-preloading
+  const preloadedImagesRef = useRef(new Set());
+  const hasPreloadedProfile = useRef(false);
   
   const rotateAnim = useState(new Animated.Value(0))[0];
   const scaleAnim = useState(new Animated.Value(0.8))[0];
@@ -68,8 +73,15 @@ export default function DashboardScreen({ navigation, route }) {
         const docSnap = await getDoc(userRef);
         if (docSnap.exists()) {
           const userData = docSnap.data();
+          const newProfileUrl = userData.user_profile_url || '';
+          
+          // Reset preload flag if profile URL changed
+          if (newProfileUrl !== userProfileUrl && newProfileUrl !== '') {
+            hasPreloadedProfile.current = false;
+          }
+          
           setUsername(userData.user_firstname || 'User');
-          setUserProfileUrl(userData.user_profile_url || '');
+          setUserProfileUrl(newProfileUrl);
           return userData;
         }
       }
@@ -291,6 +303,39 @@ export default function DashboardScreen({ navigation, route }) {
       
       setCreatedEvents(safeCreatedEvents);
       setJoinedEvents(safeJoinedEvents);
+      
+      // Preload profile image only once (when it changes or first load)
+      if (userData?.user_profile_url && !hasPreloadedProfile.current) {
+        imagePreloader.preloadImage(userData.user_profile_url, 'high');
+        hasPreloadedProfile.current = true;
+      }
+      
+      // Preload event images (only new ones not already preloaded)
+      const allEvents = [...safeCreatedEvents, ...safeJoinedEvents];
+      if (allEvents.length > 0) {
+        const eventImageUrls = allEvents
+          .map(event => {
+            if (event.image && typeof event.image === 'object' && event.image.uri) {
+              return event.image.uri;
+            }
+            if (event.image && typeof event.image === 'string') {
+              return event.image;
+            }
+            return null;
+          })
+          .filter(Boolean)
+          .slice(0, 6); // Preload first 6 event images
+        
+        // Only preload images we haven't preloaded before
+        const newImageUrls = eventImageUrls.filter(url => !preloadedImagesRef.current.has(url));
+        
+        if (newImageUrls.length > 0) {
+          imagePreloader.preloadBatch(newImageUrls, 'normal');
+          // Mark these images as preloaded
+          newImageUrls.forEach(url => preloadedImagesRef.current.add(url));
+        }
+      }
+      
       if ((wasAccountJustCreated || forceRefresh) && safeJoinedEvents.length > 0) {
         setTimeout(() => {
           showSuccess(
@@ -700,11 +745,12 @@ export default function DashboardScreen({ navigation, route }) {
                 <Text style={styles.welcomeSubtext}>Ready to capture more memories?</Text>
               </View>
               <View style={styles.avatarContainer}>
-                <CachedImage
+                <ProgressiveImage
                   source={getProfileImageSource()}
+                  thumbnailSource={getProfileImageSource()}
                   style={styles.avatarLarge}
-                  fallbackSource={require('../../assets/avatar.png')}
                   resizeMode="cover"
+                  priority="high"
                 />
                 <View style={styles.statusDot}></View>
               </View>
@@ -858,14 +904,12 @@ export default function DashboardScreen({ navigation, route }) {
               >
                 {/* Fixed image background */}
                 <View style={styles.eventImageContainer}>
-                  <CachedImage
+                  <ProgressiveImage
                     source={getEventImageSource(event)}
+                    thumbnailSource={getEventImageSource(event)}
                     style={styles.eventImageBackground}
-                    fallbackSource={require('../../assets/event-wedding.png')}
                     resizeMode="cover"
-                    onLoadEnd={(event) => {
-                     
-                    }}
+                    priority="normal"
                   />
                   
                   <LinearGradient

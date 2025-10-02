@@ -521,7 +521,8 @@ export default function NewEventScreen({ navigation }) {
       
       // Create a placeholder file to establish the folder structure
       // Firebase Storage doesn't actually create folders, but we can create a path structure
-      const placeholderContent = new Blob(['This folder contains frames for event: ' + eventId], { type: 'text/plain' });
+      const placeholderText = `This folder contains frames for event: ${eventId}`;
+      const placeholderContent = new Blob([placeholderText], { type: 'text/plain' });
       
       // Create reference to the Frames/event_id/placeholder.txt path
       const framesRef = ref(storage, `Frames/${eventId}/placeholder.txt`);
@@ -748,26 +749,27 @@ export default function NewEventScreen({ navigation }) {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Event Start Date & Time</Text>
             <TouchableOpacity
-            onPress={showDatePicker} 
-            style={[
-              styles.inputContainer,
-              eventStartDate && styles.inputContainerFilled
-            ]}
-          >            <Ionicons 
-              name="calendar-outline" 
-              size={20} 
-              color={eventStartDate ? "#48C6EF" : "#AAAAAA"} 
-              style={styles.inputIcon} 
-            />            
-            <Text style={eventStartDate ? styles.dateText : styles.placeholderDateText}>
-              {eventStartDate ? formatDateTime(eventStartDate) : 'Select start date & time'}
-            </Text>
-            <Ionicons 
-              name="chevron-down" 
-              size={20} 
-              color={eventStartDate ? "#48C6EF" : "#AAAAAA"}
-            />
-          </TouchableOpacity>
+              onPress={showDatePicker} 
+              style={[
+                styles.inputContainer,
+                eventStartDate && styles.inputContainerFilled
+              ]}
+            >
+              <Ionicons 
+                name="calendar-outline" 
+                size={20} 
+                color={eventStartDate ? "#48C6EF" : "#AAAAAA"} 
+                style={styles.inputIcon} 
+              />
+              <Text style={eventStartDate ? styles.dateText : styles.placeholderDateText}>
+                {eventStartDate ? formatDateTime(eventStartDate) : 'Select start date & time'}
+              </Text>
+              <Ionicons 
+                name="chevron-down" 
+                size={20} 
+                color={eventStartDate ? "#48C6EF" : "#AAAAAA"}
+              />
+            </TouchableOpacity>
           </View>
 
           {eventStartDate && selectedPackage && (
@@ -813,7 +815,8 @@ export default function NewEventScreen({ navigation }) {
                 onPress={generateUniqueAccessCode} 
                 disabled={isGeneratingCode}
                 style={isGeneratingCode ? styles.disabledButton : styles.refreshButton}
-              >                {isGeneratingCode ? (
+              >
+                {isGeneratingCode ? (
                   <ActivityIndicator size="small" color="#AAAAAA" />
                 ) : (
                   <Ionicons name="refresh" size={20} color="#48C6EF" />
@@ -917,7 +920,8 @@ export default function NewEventScreen({ navigation }) {
             ]} 
             onPress={handleCreateEvent}
             disabled={!hasEnoughCredits || isLoading || isGeneratingCode || !selectedPackage}
-          >            <LinearGradient
+          >
+            <LinearGradient
               colors={(!hasEnoughCredits || isLoading || isGeneratingCode || !selectedPackage) ? ['#CCCCCC', '#AAAAAA'] : ['#5DD9F5', '#48C6EF']}
               style={styles.createButtonGradient}
               start={{ x: 0, y: 0 }}
@@ -943,7 +947,8 @@ export default function NewEventScreen({ navigation }) {
         onCancel={hideDatePicker}
         minimumDate={new Date()}
         date={eventStartDate || new Date()}
-        minuteInterval={60}        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+        minuteInterval={60}
+        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
         themeVariant="light"
         accentColor="#48C6EF"
         buttonTextColorIOS="#48C6EF"

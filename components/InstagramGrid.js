@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,54 +9,37 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { optimizeImageUrl } from '../utils/imageOptimization';
-import CachedImage from './CachedImage';
+import { LinearGradient } from 'expo-linear-gradient';
+import ProgressiveImage from './ProgressiveImage';
+import imagePreloader from '../utils/imagePreloader';
 
 const { width } = Dimensions.get('window');
 
-const OptimizedGridImage = ({ photo, style, onPress, onLongPress, selectionMode, isSelected, onToggleSelection }) => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const fadeAnim = useState(new Animated.Value(0))[0];
-  const shimmerAnim = useState(new Animated.Value(0))[0];
+// Instagram-style Grid Image with progressive loading
+const OptimizedGridImage = React.memo(({ photo, style, onPress, onLongPress, selectionMode, isSelected, onToggleSelection, index, allPhotos }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
-  // Start shimmer animation when component mounts
   useEffect(() => {
-    const shimmerLoop = () => {
-      Animated.sequence([
-        Animated.timing(shimmerAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: false,
-        }),
-        Animated.timing(shimmerAnim, {
-          toValue: 0,
-          duration: 1000,
-          useNativeDriver: false,
-        }),
-      ]).start(() => shimmerLoop());
-    };
-    
-    if (loading) {
-      shimmerLoop();
+    // Stagger animation for smooth appearance
+    const delay = index * 30; // 30ms delay between images
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 100,
+        friction: 10,
+        useNativeDriver: true,
+      }).start();
+    }, delay);
+
+    // Preload adjacent images
+    if (allPhotos && allPhotos.length > 0) {
+      imagePreloader.preloadAdjacentImages(allPhotos, index, 2);
     }
-    
-    return () => shimmerAnim.stopAnimation();
-  }, [loading]);
 
-  const handleLoadEnd = () => {
-    setLoading(false);
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handleError = () => {
-    setError(true);
-    setLoading(false);
-  };
+    return () => clearTimeout(timer);
+  }, [index]);
 
   const handlePress = () => {
     if (selectionMode) {
@@ -74,82 +57,100 @@ const OptimizedGridImage = ({ photo, style, onPress, onLongPress, selectionMode,
     }
   };
 
-  // Create shimmer effect
-  const shimmerTranslateX = shimmerAnim.interpolate({
+  const gridImageWidth = (width - 10) / 3;
+
+  // Generate thumbnail URL
+  const thumbnailUrl = photo.imageUrl ? 
+    `${photo.imageUrl.split('?')[0]}?alt=media&w=200` : 
+    photo.url ? `${photo.url.split('?')[0]}?alt=media&w=200` : null;
+
+  const imageUrl = photo.imageUrl || photo.url;
+
+  return (
+    <Animated.View style={[style, { transform: [{ scale: scaleAnim }] }, isSelected && styles.selectedPhotoContainer]}>
+      <TouchableOpacity 
+        style={[style, styles.gridImageContainer]} 
+        onPress={handlePress}
+        onLongPress={handleLongPress}
+        activeOpacity={0.9}
+      >
+        {isVisible ? (
+          <ProgressiveImage
+            source={{ uri: imageUrl }}
+            thumbnailSource={{ uri: thumbnailUrl }}
+            style={[style, styles.gridImage]}
+            resizeMode="cover"
+            priority="normal"
+          />
+        ) : (
+          <View style={[style, styles.gridImagePlaceholder]}>
+            <SkeletonLoader width={gridImageWidth} height={gridImageWidth} borderRadius={8} />
+          </View>
+        )}
+        
+        {/* Selection overlay */}
+        {selectionMode && (
+          <View style={styles.selectionOverlay}>
+            <View style={[styles.selectionCircle, isSelected && styles.selectedCircle]}>
+              {isSelected && (
+                <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+              )}
+            </View>
+          </View>
+        )}
+        
+        {/* Type badge */}
+        {!selectionMode && photo.type && (
+          <View style={[styles.typeBadge, { backgroundColor: photo.type === 'event' ? '#4CAF50' : '#2196F3' }]}>
+            <Ionicons 
+              name={photo.type === 'event' ? 'people-outline' : 'person-outline'} 
+              size={10} 
+              color="#FFFFFF" 
+            />
+          </View>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}, (prevProps, nextProps) => {
+  return prevProps.photo.id === nextProps.photo.id && 
+         prevProps.index === nextProps.index &&
+         prevProps.isSelected === nextProps.isSelected &&
+         prevProps.selectionMode === nextProps.selectionMode;
+});
+
+// Simple skeleton loader component using LinearGradient
+const SkeletonLoader = ({ width, height, borderRadius = 0, style }) => {
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 1,
+        duration: 1500,
+        useNativeDriver: true,
+      })
+    );
+    animation.start();
+    return () => animation.stop();
+  }, []);
+
+  const translateX = shimmerAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-style.width || 100, style.width || 100],
+    outputRange: [-width, width],
   });
 
   return (
-    <TouchableOpacity 
-      style={[style, isSelected && styles.selectedPhotoContainer]} 
-      onPress={handlePress}
-      onLongPress={handleLongPress}
-      activeOpacity={0.8}
-    >
-      {/* Enhanced skeleton loader with shimmer effect */}
-      {loading && (
-        <View style={[style, styles.imageSkeleton]}>
-          <Animated.View 
-            style={[
-              styles.shimmerOverlay,
-              {
-                transform: [{ translateX: shimmerTranslateX }],
-              }
-            ]} 
-          />
-          <View style={styles.skeletonContent}>
-            <View style={styles.skeletonIconContainer}>
-              <Ionicons name="image-outline" size={16} color="#E0E0E0" />
-            </View>
-          </View>
-        </View>
-      )}
-       
-      {/* Optimized thumbnail image */}
-      <Animated.View style={[style, { opacity: fadeAnim }]}>
-        <CachedImage
-          source={{ 
-            uri: error ? null : optimizeImageUrl(photo.imageUrl || photo.url, 'thumbnail')
-          }}
-          style={[style, styles.eventImage]}
-          onLoadEnd={handleLoadEnd}
-          onError={handleError}
-          resizeMode="cover"
-          fallbackSource={require('../assets/image.jpg')}
+    <View style={[{ width, height, backgroundColor: '#E8E8E8', borderRadius, overflow: 'hidden' }, style]}>
+      <Animated.View style={{ transform: [{ translateX }], width: '100%', height: '100%' }}>
+        <LinearGradient
+          colors={['#E8E8E8', '#F5F5F5', '#E8E8E8']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: '100%', height: '100%' }}
         />
       </Animated.View>
-      
-      {/* Selection overlay */}
-      {selectionMode && (
-        <View style={styles.selectionOverlay}>
-          <View style={[styles.selectionCircle, isSelected && styles.selectedCircle]}>
-            {isSelected && (
-              <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-            )}
-          </View>
-        </View>
-      )}
-      
-      {/* Type badge */}
-      {!selectionMode && photo.type && (
-        <View style={[styles.typeBadge, { backgroundColor: photo.type === 'event' ? '#4CAF50' : '#2196F3' }]}>
-          <Ionicons 
-            name={photo.type === 'event' ? 'people-outline' : 'person-outline'} 
-            size={10} 
-            color="#FFFFFF" 
-          />
-        </View>
-      )}
-      
-      {/* Error fallback */}
-      {error && (
-        <View style={[style, styles.imageError]}>
-          <Ionicons name="image-outline" size={16} color="#999" />
-          <Text style={styles.errorText}>Failed to load</Text>
-        </View>
-      )}
-    </TouchableOpacity>
+    </View>
   );
 };
 
@@ -164,6 +165,14 @@ export default function InstagramGrid({
   selectedPhotos = new Set(),
   onToggleSelection = () => {}
 }) {
+  // Preload first batch of images on mount
+  useEffect(() => {
+    if (photos && photos.length > 0) {
+      const urlsToPreload = photos.slice(0, 12).map(photo => photo.imageUrl || photo.url).filter(Boolean);
+      imagePreloader.preloadBatch(urlsToPreload, 'high');
+    }
+  }, [photos]);
+
   const renderPhoto = (photo, index) => {
     const row = Math.floor(index / 3);
     const col = index % 3;
@@ -178,6 +187,8 @@ export default function InstagramGrid({
       <OptimizedGridImage
         key={photo.id || index}
         photo={photo}
+        index={index}
+        allPhotos={photos}
         style={[
           styles.instaEqualImage,
           isLarge && styles.largeImage,
@@ -201,24 +212,20 @@ export default function InstagramGrid({
     const isFirstInRow = col === 0;
     const isLastInRow = col === 2;
     const isFirstRow = row === 0;
+    const gridImageWidth = (width - 10) / 3;
 
     return (
       <View
         key={`placeholder-${index}`}
         style={[
           styles.instaEqualImage,
-          styles.imageSkeleton,
+          styles.gridImagePlaceholder,
           isFirstInRow && styles.edgeLeft,
           isLastInRow && styles.edgeRight,
           isFirstRow && styles.edgeTop,
         ]}
       >
-        <View style={styles.shimmerOverlay} />
-        <View style={styles.skeletonContent}>
-          <View style={styles.skeletonIconContainer}>
-            <Ionicons name="image-outline" size={16} color="#CCCCCC" />
-          </View>
-        </View>
+        <SkeletonLoader width={gridImageWidth} height={gridImageWidth} borderRadius={8} />
       </View>
     );
   };
@@ -322,64 +329,25 @@ const styles = StyleSheet.create({
   largeImage: {
     height: (width / 3) * 1.2,
   },
-  eventImage: {
+  gridImageContainer: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#F0F0F0',
   },
-  
-  // Enhanced skeleton loader styles
-  imageSkeleton: {
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  shimmerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+  gridImage: {
     width: '100%',
     height: '100%',
   },
-  skeletonContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  skeletonIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E8E8E8',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imageError: {
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  errorText: {
-    fontSize: 10,
-    color: '#999',
-    marginTop: 4,
-    textAlign: 'center',
+  gridImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F0F0F0',
   },
   
   // Selection and overlay styles
   selectedPhotoContainer: {
-    borderWidth: 2,
-    borderColor: '#FF6F61',
+    borderWidth: 3,
+    borderColor: '#48C6EF',
   },
   selectionOverlay: {
     position: 'absolute',
@@ -398,8 +366,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   selectedCircle: {
-    backgroundColor: '#FF6F61',
-    borderColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
+    borderColor: '#48C6EF',
   },
   typeBadge: {
     position: 'absolute',

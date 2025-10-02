@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,83 +12,50 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { optimizeImageUrl } from '../utils/imageOptimization';
-import CachedImage from './CachedImage';
+import ProgressiveImage from './ProgressiveImage';
+import imagePreloader from '../utils/imagePreloader';
 const { width, height } = Dimensions.get('window');
 
-const HighQualityModalImage = ({ imageUrl, style }) => {
-  const [imageLoading, setImageLoading] = useState(true);
-  const [error, setError] = useState(false);
+// Instagram-style Modal Image with high-quality loading
+const HighQualityModalImage = React.memo(({ imageUrl, index, allPhotos }) => {
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
-  const fadeAnim = useState(new Animated.Value(0))[0];
-  const modalShimmerAnim = useState(new Animated.Value(0))[0];
-  const scaleAnim = useState(new Animated.Value(0.8))[0];
-  useEffect(() => {
-    setImageLoading(true);
-    setError(false);
-  }, [imageUrl]);
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
 
-  // Start modal shimmer animation when component mounts
   useEffect(() => {
-    if (imageLoading) {
-      const modalShimmerLoop = () => {
-        Animated.sequence([
-          Animated.timing(modalShimmerAnim, {
-            toValue: 1,
-            duration: 1200,
-            useNativeDriver: false,
-          }),
-          Animated.timing(modalShimmerAnim, {
-            toValue: 0,
-            duration: 1200,
-            useNativeDriver: false,
-          }),
-        ]).start(() => modalShimmerLoop());
-      };
-      
-      modalShimmerLoop();
+    // Preload adjacent images in modal
+    if (allPhotos && allPhotos.length > 0 && index !== undefined) {
+      imagePreloader.preloadAdjacentImages(allPhotos, index, 1);
     }
-    
-    return () => modalShimmerAnim.stopAnimation();
-  }, [imageLoading]);  const handleLoadEnd = (event) => {
-    setImageLoading(false);
-    
-    // Get image dimensions for responsive sizing
-    if (event.nativeEvent) {
-      const { width: imgWidth, height: imgHeight } = event.nativeEvent;
-      setImageDimensions({ width: imgWidth, height: imgHeight });
-    }
-    
-    // Animate image appearance with scale and fade
+
+    // Animate entrance
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
       Animated.spring(scaleAnim, {
         toValue: 1,
-        tension: 100,
-        friction: 8,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 200,
         useNativeDriver: true,
       })
     ]).start();
-  };
-  const handleError = (errorEvent) => {
-    setError(true);
-    setImageLoading(false);
+  }, [imageUrl]);
+
+  const handleLoad = (event) => {
+    if (event?.source) {
+      const { width: imgWidth, height: imgHeight } = event.source;
+      if (imgWidth && imgHeight) {
+        setImageDimensions({ width: imgWidth, height: imgHeight });
+      }
+    }
   };
 
-  // Create modal shimmer effect
-  const modalShimmerTranslateX = modalShimmerAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-300, 300],
-  });
-
-  // Calculate responsive image dimensions
   const getResponsiveImageStyle = () => {
     const maxWidth = width * 0.95;
-    const maxHeight = height * 0.7;
+    const maxHeight = height * 0.6;
     
     if (imageDimensions.width && imageDimensions.height) {
       const aspectRatio = imageDimensions.width / imageDimensions.height;
@@ -100,6 +67,7 @@ const HighQualityModalImage = ({ imageUrl, style }) => {
         return {
           width: calculatedWidth,
           height: Math.min(calculatedHeight, maxHeight),
+          borderRadius: 12,
         };
       } else {
         // Portrait image
@@ -108,63 +76,45 @@ const HighQualityModalImage = ({ imageUrl, style }) => {
         return {
           width: Math.min(calculatedWidth, maxWidth),
           height: calculatedHeight,
+          borderRadius: 12,
         };
       }
     }
     
-    // Fallback to responsive dimensions
     return {
       width: Math.min(maxWidth, width * 0.9),
       height: Math.min(maxHeight, height * 0.6),
+      borderRadius: 12,
     };
   };
 
+  const imageStyle = getResponsiveImageStyle();
+  const thumbnailUrl = imageUrl ? `${imageUrl.split('?')[0]}?alt=media&w=400` : null;
+
   return (
-    <Animated.View style={[getResponsiveImageStyle(), { transform: [{ scale: scaleAnim }] }]}>
-      {/* Enhanced modal skeleton loader with shimmer effect */}
-      {imageLoading && (
-        <View style={[getResponsiveImageStyle(), styles.modalImageSkeleton]}>
-          <Animated.View 
-            style={[
-              styles.modalShimmerOverlay,
-              {
-                transform: [{ translateX: modalShimmerTranslateX }],
-              }
-            ]} 
-          />
-          <View style={styles.modalSkeletonContent}>
-            <View style={styles.modalSkeletonIconContainer}>
-              <Ionicons name="image-outline" size={48} color="rgba(255, 255, 255, 0.5)" />
-            </View>
-            <Text style={styles.modalSkeletonText}>Loading...</Text>
-          </View>
-        </View>
-      )}
-        {/* High-quality image with responsive sizing */}
-      <Animated.View style={[getResponsiveImageStyle(), { opacity: fadeAnim }]}>
-        <CachedImage
-          source={{ 
-            uri: error ? null : (optimizeImageUrl(imageUrl, 'high') || imageUrl)
-          }}
-          style={getResponsiveImageStyle()}
-          onLoadEnd={handleLoadEnd}
-          onError={handleError}
-          resizeMode="contain"
-          fallbackSource={require('../assets/image.jpg')}
-        />
-      </Animated.View>
-      
-      {/* Error fallback for modal */}
-      {error && (
-        <View style={[getResponsiveImageStyle(), styles.modalImageError]}>
-          <Ionicons name="alert-circle-outline" size={48} color="#FFFFFF" />
-          <Text style={styles.modalErrorText}>Unable to load image</Text>
-          <Text style={styles.modalErrorSubtext}>Network error or file corrupted</Text>
-        </View>
-      )}
+    <Animated.View 
+      style={[
+        imageStyle, 
+        { 
+          transform: [{ scale: scaleAnim }],
+          opacity: opacityAnim,
+          overflow: 'hidden',
+        }
+      ]}
+    >
+      <ProgressiveImage
+        source={{ uri: imageUrl }}
+        thumbnailSource={{ uri: thumbnailUrl }}
+        style={[imageStyle, { borderRadius: 12 }]}
+        resizeMode="contain"
+        onLoadEnd={handleLoad}
+        priority="high"
+      />
     </Animated.View>
   );
-};
+}, (prevProps, nextProps) => {
+  return prevProps.imageUrl === nextProps.imageUrl;
+});
 
 export default function EnhancedPhotoModal({ 
   visible, 
@@ -179,7 +129,9 @@ export default function EnhancedPhotoModal({
   canDeletePhoto = () => true,
   showUserInfo = true,
   showControls = true,
-  deleting = false
+  deleting = false,
+  photoIndex = 0,
+  allPhotos = []
 }) {  // Get the image URL from either selectedImage prop or selectedPhoto
   const imageUrl = selectedImage || (selectedPhoto && selectedPhoto.imageUrl);
   
@@ -233,6 +185,8 @@ export default function EnhancedPhotoModal({
           <View style={styles.modalImageContainer}>
             <HighQualityModalImage
               imageUrl={imageUrl}
+              index={photoIndex}
+              allPhotos={allPhotos}
               style={styles.modalImage}
             />
           </View>

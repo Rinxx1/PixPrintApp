@@ -29,6 +29,7 @@ const screenHeight = Dimensions.get('window').height;
 export default function GalleryScreen({ navigation }) {
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const [activeFilter, setActiveFilter] = useState('All');
@@ -196,13 +197,14 @@ export default function GalleryScreen({ navigation }) {
     setRefreshing(true);
     await fetchAllPhotos();
     setRefreshing(false);
-  };  const openImageModal = (photo) => {
+  };  const openImageModal = (photo, index = 0) => {
     if (selectionMode) {
       togglePhotoSelection(photo.id);
       return;
     }
     setSelectedImage(photo.imageUrl);
     setSelectedPhoto(photo);
+    setSelectedPhotoIndex(index);
     setModalVisible(true);
   };
 
@@ -210,6 +212,7 @@ export default function GalleryScreen({ navigation }) {
     setModalVisible(false);
     setSelectedImage(null);
     setSelectedPhoto(null);
+    setSelectedPhotoIndex(0);
   };
 
   const getFilteredPhotos = () => {
@@ -624,6 +627,8 @@ export default function GalleryScreen({ navigation }) {
         visible={modalVisible}
         selectedPhoto={selectedPhoto}
         selectedImage={selectedImage}
+        photoIndex={selectedPhotoIndex}
+        allPhotos={filteredPhotos}
         refreshing={refreshing}
         deleting={deleting}
         onClose={closeModal}
