@@ -169,7 +169,7 @@ export default function InstagramGrid({
   useEffect(() => {
     if (photos && photos.length > 0) {
       const urlsToPreload = photos.slice(0, 12).map(photo => photo.imageUrl || photo.url).filter(Boolean);
-      imagePreloader.preloadBatch(urlsToPreload, 'high');
+      imagePreloader.preloadBatch(urlsToPreload, 'normal');
     }
   }, [photos]);
 

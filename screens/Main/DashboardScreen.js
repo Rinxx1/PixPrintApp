@@ -306,7 +306,7 @@ export default function DashboardScreen({ navigation, route }) {
       
       // Preload profile image only once (when it changes or first load)
       if (userData?.user_profile_url && !hasPreloadedProfile.current) {
-        imagePreloader.preloadImage(userData.user_profile_url, 'high');
+        imagePreloader.preloadImage(userData.user_profile_url, 'normal');
         hasPreloadedProfile.current = true;
       }
       
@@ -750,7 +750,7 @@ export default function DashboardScreen({ navigation, route }) {
                   thumbnailSource={getProfileImageSource()}
                   style={styles.avatarLarge}
                   resizeMode="cover"
-                  priority="high"
+                  priority="normal"
                 />
                 <View style={styles.statusDot}></View>
               </View>
@@ -963,14 +963,6 @@ export default function DashboardScreen({ navigation, route }) {
             ))
           )}
         </View>
-
-        {/* Floating Create Button (optional) */}
-        <TouchableOpacity 
-          style={styles.floatingButton}
-          onPress={() => navigation.navigate('NewEvent')}
-        >
-          <Ionicons name="add" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
 
         <View style={{ height: 40 }} />
       </Animated.ScrollView>
