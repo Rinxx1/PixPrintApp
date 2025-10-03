@@ -897,7 +897,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     if (displayedImages.length > 0) {
       // Preload first batch of images
       const urlsToPreload = displayedImages.slice(0, 12).map(img => img.imageUrl).filter(Boolean);
-      imagePreloader.preloadBatch(urlsToPreload, 'high');
+      imagePreloader.preloadBatch(urlsToPreload, 'normal');
     }
   }, [displayedImages]);
 

@@ -102,7 +102,7 @@ export default function ForgotPasswordScreen({ navigation }) {
       if (!emailExistsInUserTable) {
         showAlert({
           title: 'Account Not Found',
-          message: 'No PixPrint account found with this email address. Only registered users with complete profiles can reset their password.',
+          message: 'No SnaptureX account found with this email address. Only registered users with complete profiles can reset their password.',
           type: 'warning',
           buttons: [
             { text: 'Try Different Email', style: 'cancel' },
