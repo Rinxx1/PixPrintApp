@@ -21,7 +21,7 @@ import { db, auth, storage } from '../../firebase';
 import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { useAlert } from '../../context/AlertContext';
-import { optimizeImageUrl, ImagePresets } from '../../utils/imageOptimization';
+
 
 const screenWidth = Dimensions.get('window').width;
 const screenHeight = Dimensions.get('window').height;

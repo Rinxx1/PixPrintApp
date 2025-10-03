@@ -26,7 +26,6 @@ import { doc, getDoc, collection, query, where, getDocs, updateDoc, onSnapshot, 
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../../firebase';
 import { useAlert } from '../../context/AlertContext';
-import { optimizeImageUrl, ImagePresets } from '../../utils/imageOptimization';
 import { addToCartPrintQueue } from '../../utils/printService';
 
 const { width, height } = Dimensions.get('window');
