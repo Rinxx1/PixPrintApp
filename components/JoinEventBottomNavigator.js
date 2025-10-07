@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, TouchableOpacity, StyleSheet, Dimensions, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,15 +34,15 @@ export default function JoinEventBottomNavigator({ activeTab, onTabChange, event
   const screenWidth = Dimensions.get('window').width;
 
   return (
-    <View style={[styles.bottomNavContainer, { height: 70 + insets.bottom }]}>
+    <View style={[styles.bottomNavContainer, { height: 80 + insets.bottom }]}>
       {/* Curved Navigation Background */}
       <Svg
         width={screenWidth}
-        height={70 + insets.bottom}
+        height={80 + insets.bottom}
         style={styles.curvedBackground}
       >
         <Path
-          d={`M0,20 L${screenWidth * 0.35},20 Q${screenWidth * 0.4},20 ${screenWidth * 0.42},15 Q${screenWidth * 0.5},0 ${screenWidth * 0.58},15 Q${screenWidth * 0.6},20 ${screenWidth * 0.65},20 L${screenWidth},20 L${screenWidth},${70 + insets.bottom} L0,${70 + insets.bottom} Z`}
+          d={`M0,20 L${screenWidth * 0.35},20 Q${screenWidth * 0.4},20 ${screenWidth * 0.42},15 Q${screenWidth * 0.5},0 ${screenWidth * 0.58},15 Q${screenWidth * 0.6},20 ${screenWidth * 0.65},20 L${screenWidth},20 L${screenWidth},${80 + insets.bottom} L0,${80 + insets.bottom} Z`}
           fill="#FFFFFF"
           stroke="#E1E1E1"
           strokeWidth="0.5"
@@ -54,12 +54,18 @@ export default function JoinEventBottomNavigator({ activeTab, onTabChange, event
           style={styles.navTab} 
           onPress={() => handleTabChange('gallery')}
         >
-          <View style={styles.navIcon}>
+          <View style={styles.navIconContainer}>
             <Ionicons 
               name={activeTab === 'gallery' ? 'images' : 'images-outline'}
-              size={27} 
+              size={24} 
               color={activeTab === 'gallery' ? '#48C6EF' : '#8E8E93'} 
             />
+            <Text style={[
+              styles.navLabel,
+              activeTab === 'gallery' && styles.navLabelActive
+            ]}>
+              Gallery
+            </Text>
           </View>
         </TouchableOpacity>
 
@@ -87,12 +93,18 @@ export default function JoinEventBottomNavigator({ activeTab, onTabChange, event
           style={styles.navTab} 
           onPress={() => handleTabChange('settings')}
         >
-          <View style={styles.navIcon}>
+          <View style={styles.navIconContainer}>
             <Ionicons 
               name={activeTab === 'settings' ? 'settings' : 'settings-outline'}
-              size={27} 
+              size={24} 
               color={activeTab === 'settings' ? '#48C6EF' : '#8E8E93'} 
             />
+            <Text style={[
+              styles.navLabel,
+              activeTab === 'settings' && styles.navLabelActive
+            ]}>
+              Settings
+            </Text>
           </View>
         </TouchableOpacity>
       </View>
@@ -117,9 +129,9 @@ const styles = StyleSheet.create({
   bottomNav: {
     flexDirection: 'row',
     backgroundColor: 'transparent',
-    paddingTop: 25,
+    paddingTop: 5,
     paddingHorizontal: 0,
-    height: 70,
+    height: 80,
     justifyContent: 'space-around',
     alignItems: 'flex-end',
     overflow: 'visible',
@@ -134,6 +146,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 0,
     paddingBottom: 8,
+    minWidth: 70,
+  },
+  navIconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 1,
+  },
+  navLabel: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: '#8E8E93',
+    marginTop: 4,
+    letterSpacing: 0.1,
+  },
+  navLabelActive: {
+    fontWeight: '600',
+    color: '#48C6EF',
   },
   navIcon: {
     width: 44,

@@ -68,6 +68,11 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const IMAGES_PER_PAGE = 6;
   const { showAlert, showError, showSuccess, showConfirm } = useAlert();
   const unsubscribeCredits = useRef(null);
+  const unsubscribeEventPhotos = useRef(null);
+  const unsubscribeMyPhotos = useRef(null);
+  const unsubscribePhotographerPhotos = useRef(null);
+  const lastModalPhotoId = useRef(null);
+  const animatedImages = useRef(new Set()).current; // Track animated images to prevent re-animation
   
   const scrollY = useRef(new Animated.Value(0)).current;
   const imageOpacity = scrollY.interpolate({
@@ -361,8 +366,10 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const fetchEventPhotos = async () => {
     if (!eventId) return;
     
-    try {      setPhotosLoading(true);
+    try {
+      setPhotosLoading(true);
       
+      // First, get photographer IDs
       const joinedRef = collection(db, 'joined_tbl');
       const photographersQuery = query(
         joinedRef,
@@ -380,53 +387,69 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         }
       });
       
+      // Unsubscribe from previous listener if exists
+      if (unsubscribeEventPhotos.current) {
+        unsubscribeEventPhotos.current();
+      }
+      
+      // Set up real-time listener for event photos
       const photosRef = collection(db, 'photos_tbl');
       const q = query(
         photosRef,
         where('event_id', '==', eventId)
       );
       
-      const querySnapshot = await getDocs(q);
-      const photos = [];
-      
-      querySnapshot.forEach((doc) => {
-        const photoData = doc.data();
+      unsubscribeEventPhotos.current = onSnapshot(q, (querySnapshot) => {
+        const photos = [];
         
-        if (!photographerIds.includes(photoData.user_id)) {
-          photos.push({
-            id: doc.id,
-            imageUrl: photoData.photo_url,
-            username: photoData.username || 'Unknown User',
-            uploadedAt: photoData.uploaded_at,
-            filter: photoData.filter,
-            filterName: photoData.filter_name,
-            likes: photoData.likes || 0,
-            comments: photoData.comments || 0,
-            userId: photoData.user_id
-          });
+        querySnapshot.forEach((doc) => {
+          const photoData = doc.data();
+          
+          if (!photographerIds.includes(photoData.user_id)) {
+            photos.push({
+              id: doc.id,
+              imageUrl: photoData.photo_url,
+              username: photoData.username || 'Unknown User',
+              uploadedAt: photoData.uploaded_at,
+              filter: photoData.filter,
+              filterName: photoData.filter_name,
+              likes: photoData.likes || 0,
+              comments: photoData.comments || 0,
+              userId: photoData.user_id
+            });
+          }
+        });
+        
+        const sortedPhotos = photos.sort((a, b) => {
+          if (!a.uploadedAt && !b.uploadedAt) return 0;
+          if (!a.uploadedAt) return 1;
+          if (!b.uploadedAt) return -1;
+          
+          const dateA = a.uploadedAt.toDate ? a.uploadedAt.toDate() : new Date(a.uploadedAt);
+          const dateB = b.uploadedAt.toDate ? b.uploadedAt.toDate() : new Date(b.uploadedAt);
+          return dateB.getTime() - dateA.getTime();
+        });
+        
+        setEventPhotos(sortedPhotos);
+        
+        // Only initialize images if this category is currently selected
+        if (selectedCategory === 'person') {
+          initializeImages(sortedPhotos);
         }
+        
+        setPhotosLoading(false);
+      }, (error) => {
+        console.error('Error in event photos listener:', error);
+        setEventPhotos([]);
+        setPhotosLoading(false);
       });
       
-      const sortedPhotos = photos.sort((a, b) => {
-        if (!a.uploadedAt && !b.uploadedAt) return 0;
-        if (!a.uploadedAt) return 1;
-        if (!b.uploadedAt) return -1;
-        
-        const dateA = a.uploadedAt.toDate ? a.uploadedAt.toDate() : new Date(a.uploadedAt);
-        const dateB = b.uploadedAt.toDate ? b.uploadedAt.toDate() : new Date(b.uploadedAt);
-          return dateB.getTime() - dateA.getTime();
-      });      setEventPhotos(sortedPhotos);
-      
-      // Only initialize images if this category is currently selected
-      if (selectedCategory === 'person') {
-        initializeImages(sortedPhotos);
-      }
-      
     } catch (error) {
+      console.error('Error setting up event photos listener:', error);
       setEventPhotos([]);
-    } finally {
       setPhotosLoading(false);
-    }  };
+    }
+  };
 
   const fetchMyPhotos = async () => {
     if (!eventId) return;
@@ -436,7 +459,13 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     try {
       setPhotosLoading(true);
       
-      const photosRef = collection(db, 'photos_tbl');      let q;
+      // Unsubscribe from previous listener if exists
+      if (unsubscribeMyPhotos.current) {
+        unsubscribeMyPhotos.current();
+      }
+      
+      const photosRef = collection(db, 'photos_tbl');
+      let q;
       
       if (currentUser) {
         q = query(
@@ -453,55 +482,69 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         );
       } else {
         setMyPhotos([]);
+        setPhotosLoading(false);
         return;
       }
       
-      const querySnapshot = await getDocs(q);
-      const photos = [];
-      
-      querySnapshot.forEach((doc) => {
-        const photoData = doc.data();
-        photos.push({
-          id: doc.id,
-          imageUrl: photoData.photo_url,
-          username: photoData.username || 'Unknown User',
-          uploadedAt: photoData.uploaded_at,
-          filter: photoData.filter,
-          filterName: photoData.filter_name,
-          likes: photoData.likes || 0,
-          comments: photoData.comments || 0,
-          userId: photoData.user_id,
-          isGuest: photoData.is_guest || false,
-          guestUsername: photoData.guest_username
+      // Set up real-time listener for my photos
+      unsubscribeMyPhotos.current = onSnapshot(q, (querySnapshot) => {
+        const photos = [];
+        
+        querySnapshot.forEach((doc) => {
+          const photoData = doc.data();
+          photos.push({
+            id: doc.id,
+            imageUrl: photoData.photo_url,
+            username: photoData.username || 'Unknown User',
+            uploadedAt: photoData.uploaded_at,
+            filter: photoData.filter,
+            filterName: photoData.filter_name,
+            likes: photoData.likes || 0,
+            comments: photoData.comments || 0,
+            userId: photoData.user_id,
+            isGuest: photoData.is_guest || false,
+            guestUsername: photoData.guest_username
+          });
         });
+        
+        const sortedPhotos = photos.sort((a, b) => {
+          if (!a.uploadedAt && !b.uploadedAt) return 0;
+          if (!a.uploadedAt) return 1;
+          if (!b.uploadedAt) return -1;
+          
+          const dateA = a.uploadedAt.toDate ? a.uploadedAt.toDate() : new Date(a.uploadedAt);
+          const dateB = b.uploadedAt.toDate ? b.uploadedAt.toDate() : new Date(b.uploadedAt);
+          return dateB.getTime() - dateA.getTime();
+        });
+        
+        setMyPhotos(sortedPhotos);
+        
+        // Only initialize images if this category is currently selected
+        if (selectedCategory === 'group') {
+          initializeImages(sortedPhotos);
+        }
+        
+        setPhotosLoading(false);
+      }, (error) => {
+        console.error('Error in my photos listener:', error);
+        setMyPhotos([]);
+        setPhotosLoading(false);
       });
       
-      const sortedPhotos = photos.sort((a, b) => {
-        if (!a.uploadedAt && !b.uploadedAt) return 0;
-        if (!a.uploadedAt) return 1;
-        if (!b.uploadedAt) return -1;
-        
-        const dateA = a.uploadedAt.toDate ? a.uploadedAt.toDate() : new Date(a.uploadedAt);
-        const dateB = b.uploadedAt.toDate ? b.uploadedAt.toDate() : new Date(b.uploadedAt);
-          return dateB.getTime() - dateA.getTime();
-      });      setMyPhotos(sortedPhotos);
-      
-      // Only initialize images if this category is currently selected
-      if (selectedCategory === 'group') {
-        initializeImages(sortedPhotos);
-      }
-      
     } catch (error) {
+      console.error('Error setting up my photos listener:', error);
       setMyPhotos([]);
-    } finally {
       setPhotosLoading(false);
-    }  };
+    }
+  };
 
   const fetchPhotographerPhotos = async () => {
     if (!eventId) return;
     
-    try {      setPhotosLoading(true);
+    try {
+      setPhotosLoading(true);
       
+      // First, get photographer IDs
       const joinedRef = collection(db, 'joined_tbl');
       const photographersQuery = query(
         joinedRef,
@@ -521,9 +564,16 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       
       if (photographerIds.length === 0) {
         setPhotographerPhotos([]);
+        setPhotosLoading(false);
         return;
       }
       
+      // Unsubscribe from previous listener if exists
+      if (unsubscribePhotographerPhotos.current) {
+        unsubscribePhotographerPhotos.current();
+      }
+      
+      // Set up real-time listener for photographer photos
       const photosRef = collection(db, 'photos_tbl');
       const photosQuery = query(
         photosRef,
@@ -531,44 +581,54 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         where('user_id', 'in', photographerIds)
       );
       
-      const photosSnapshot = await getDocs(photosQuery);
-      const photos = [];
-      
-      photosSnapshot.forEach((doc) => {
-        const photoData = doc.data();
-        photos.push({
-          id: doc.id,
-          imageUrl: photoData.photo_url,
-          username: photoData.username || 'Unknown User',
-          uploadedAt: photoData.uploaded_at,
-          filter: photoData.filter,
-          filterName: photoData.filter_name,
-          likes: photoData.likes || 0,
-          comments: photoData.comments || 0,
-          userId: photoData.user_id        });
+      unsubscribePhotographerPhotos.current = onSnapshot(photosQuery, (photosSnapshot) => {
+        const photos = [];
+        
+        photosSnapshot.forEach((doc) => {
+          const photoData = doc.data();
+          photos.push({
+            id: doc.id,
+            imageUrl: photoData.photo_url,
+            username: photoData.username || 'Unknown User',
+            uploadedAt: photoData.uploaded_at,
+            filter: photoData.filter,
+            filterName: photoData.filter_name,
+            likes: photoData.likes || 0,
+            comments: photoData.comments || 0,
+            userId: photoData.user_id
+          });
+        });
+        
+        const sortedPhotos = photos.sort((a, b) => {
+          if (!a.uploadedAt && !b.uploadedAt) return 0;
+          if (!a.uploadedAt) return 1;
+          if (!b.uploadedAt) return -1;
+          
+          const dateA = a.uploadedAt.toDate ? a.uploadedAt.toDate() : new Date(a.uploadedAt);
+          const dateB = b.uploadedAt.toDate ? b.uploadedAt.toDate() : new Date(b.uploadedAt);
+          return dateB.getTime() - dateA.getTime();
+        });
+        
+        setPhotographerPhotos(sortedPhotos);
+        
+        // Only initialize images if this category is currently selected
+        if (selectedCategory === 'camera') {
+          initializeImages(sortedPhotos);
+        }
+        
+        setPhotosLoading(false);
+      }, (error) => {
+        console.error('Error in photographer photos listener:', error);
+        setPhotographerPhotos([]);
+        setPhotosLoading(false);
       });
       
-      const sortedPhotos = photos.sort((a, b) => {
-        if (!a.uploadedAt && !b.uploadedAt) return 0;
-        if (!a.uploadedAt) return 1;
-        if (!b.uploadedAt) return -1;
-        
-        const dateA = a.uploadedAt.toDate ? a.uploadedAt.toDate() : new Date(a.uploadedAt);
-        const dateB = b.uploadedAt.toDate ? b.uploadedAt.toDate() : new Date(b.uploadedAt);
-          return dateB.getTime() - dateA.getTime();
-      });      setPhotographerPhotos(sortedPhotos);
-      
-      // Only initialize images if this category is currently selected
-      if (selectedCategory === 'camera') {
-        initializeImages(sortedPhotos);
-      }
-      
     } catch (error) {
-      console.error('Error fetching photographer photos:', error);
+      console.error('Error setting up photographer photos listener:', error);
       setPhotographerPhotos([]);
-    } finally {
       setPhotosLoading(false);
-    }  };
+    }
+  };
 
   const fetchEventData = async () => {
     try {
@@ -735,8 +795,18 @@ export default function JoinEventScreenTwo({ route, navigation }) {
 
   useEffect(() => {
     return () => {
+      // Clean up all listeners when component unmounts
       if (unsubscribeCredits.current) {
         unsubscribeCredits.current();
+      }
+      if (unsubscribeEventPhotos.current) {
+        unsubscribeEventPhotos.current();
+      }
+      if (unsubscribeMyPhotos.current) {
+        unsubscribeMyPhotos.current();
+      }
+      if (unsubscribePhotographerPhotos.current) {
+        unsubscribePhotographerPhotos.current();
       }
     };
   }, []);  useFocusEffect(
@@ -764,7 +834,12 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   );
   useEffect(() => {
     // Only check if modal is visible and we have a selected photo
+    // Use ref to track the current modal photo to prevent unnecessary checks
     if (isModalVisible && selectedPhoto && selectedPhoto.id) {
+      if (lastModalPhotoId.current !== selectedPhoto.id) {
+        lastModalPhotoId.current = selectedPhoto.id;
+      }
+      
       const photoExists = isPhotoStillExists(selectedPhoto.id);
       if (!photoExists) {
         // Photo was deleted, close modal without triggering refreshes
@@ -772,9 +847,13 @@ export default function JoinEventScreenTwo({ route, navigation }) {
         setSelectedImage(null);
         setSelectedPhoto(null);
         setIsPrinting(false);
+        lastModalPhotoId.current = null;
       }
+    } else if (!isModalVisible) {
+      // Reset ref when modal closes
+      lastModalPhotoId.current = null;
     }
-  }, [eventPhotos, myPhotos, photographerPhotos, isModalVisible, selectedPhoto]);
+  }, [eventPhotos.length, myPhotos.length, photographerPhotos.length, isModalVisible]);
 
   const deletePhoto = async (photoId, imageUrl) => {
     try {
@@ -888,8 +967,10 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const handleCategoryChange = useCallback((category) => {
     if (selectedCategory !== category) {
       setSelectedCategory(category);
+      // Clear animated images when switching categories to allow fresh animations
+      animatedImages.clear();
     }
-  }, [selectedCategory]);
+  }, [selectedCategory, animatedImages]);
 
   // Preload images when they change
   useEffect(() => {
@@ -902,14 +983,23 @@ export default function JoinEventScreenTwo({ route, navigation }) {
 
   // Instagram-style Grid Image with progressive loading
   const InstagramGridImage = React.memo(({ photo, style, onPress, index }) => {
-    const [isVisible, setIsVisible] = useState(false);
-    const scaleAnim = useRef(new Animated.Value(0.95)).current;
+    const imageId = photo.id;
+    const hasAnimated = animatedImages.has(imageId);
+    const [isVisible, setIsVisible] = useState(hasAnimated);
+    const scaleAnim = useRef(new Animated.Value(hasAnimated ? 1 : 0.95)).current;
 
     useEffect(() => {
+      // Only animate if this image hasn't been animated before
+      if (animatedImages.has(imageId)) {
+        setIsVisible(true);
+        return;
+      }
+
       // Stagger animation for smooth appearance
       const delay = index * 30; // 30ms delay between images
       const timer = setTimeout(() => {
         setIsVisible(true);
+        animatedImages.add(imageId); // Mark as animated
         Animated.spring(scaleAnim, {
           toValue: 1,
           tension: 100,
@@ -925,7 +1015,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
       imagePreloader.preloadAdjacentImages(currentImages, index, 2);
 
       return () => clearTimeout(timer);
-    }, [index]);
+    }, [imageId, index]);
 
     const gridImageWidth = (width - 10) / 3;
 
@@ -2124,7 +2214,8 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     paddingHorizontal: 20,
     alignItems: 'center',
-  },  loadMoreButton: {
+  },  
+  loadMoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',

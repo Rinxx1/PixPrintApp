@@ -61,6 +61,7 @@ export const PreviewModal = ({
     // Refresh camera when returning from preview to prevent blank screen
     refreshCameraPreview(50);
   };
+
   const handleUpload = async () => {
     if (isGridMode && gridComplete) {
       // Create and upload collage
@@ -72,7 +73,9 @@ export const PreviewModal = ({
       // Upload single photo
       uploadPhoto(capturedPhoto);
     }
-  };  const handlePrint = async () => {
+  };
+
+  const handlePrint = async () => {
     if (!eventId || !capturedPhoto) {
       showError(
         'Print Error',
@@ -108,10 +111,10 @@ export const PreviewModal = ({
           });
           photoUri = filteredSnapshot;
         } catch (captureError) {
-          console.warn('Could not capture filtered preview, using original:', captureError);
+          // Could not capture filtered preview, using original
         }
-      }      // Upload the image first to get a Firebase URL
-      console.log('Uploading photo for printing:', photoUri);
+      }
+
       const firebaseImageUrl = await uploadPhotoToStorage(photoUri, eventId, guestUsername, selectedFilter);
       
       if (!firebaseImageUrl) {
@@ -133,12 +136,9 @@ export const PreviewModal = ({
       // Use the global print service
       const success = await addToCartPrintQueue(photo, eventId, showSuccess, showError);
       
-      if (success) {
-        console.log('Photo added to print queue from preview');
-      }
+      // Success handled by print service
 
     } catch (error) {
-      console.error('Error printing photo from preview:', error);
       showError(
         '🖨️ Print Queue Error',
         'Failed to add photo to print queue. Please check your connection and try again.',
@@ -227,7 +227,9 @@ export const PreviewModal = ({
             onPress={handleClose}
           >
             <Text style={previewStyles.previewButtonText}>Retake</Text>
-          </TouchableOpacity>          <TouchableOpacity
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[
               previewStyles.previewButton,
               isPrinting && previewStyles.printButtonDisabled

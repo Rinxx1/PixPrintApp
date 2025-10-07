@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, View, Text } from 'react-native';
 import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,27 +39,53 @@ function TabNavigator() {
         },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
-          if (route.name === 'Dashboard') iconName = focused ? 'home' : 'home-outline';
-          if (route.name === 'Gallery') iconName = focused ? 'images' : 'images-outline';
-          if (route.name === 'Settings') iconName = focused ? 'settings' : 'settings-outline';
+          let label;
+          
+          if (route.name === 'Dashboard') {
+            iconName = focused ? 'home' : 'home-outline';
+            label = 'Home';
+          }
+          if (route.name === 'Gallery') {
+            iconName = focused ? 'images' : 'images-outline';
+            label = 'Gallery';
+          }
+          if (route.name === 'Settings') {
+            iconName = focused ? 'settings' : 'settings-outline';
+            label = 'Settings';
+          }
           
           return (
             <View style={{
               alignItems: 'center',
               justifyContent: 'center',
-              width: 44,
-              height: 44,
+              paddingTop: 4,
+              minWidth: 70,
+              width: '100%',
             }}>
               <Ionicons
                 name={iconName}
-                size={27}
+                size={24}
                 color={focused ? '#48C6EF' : '#8E8E93'}
               />
+              <Text 
+                style={{
+                  fontSize: 11,
+                  fontWeight: focused ? '600' : '400',
+                  color: focused ? '#48C6EF' : '#8E8E93',
+                  marginTop: 4,
+                  letterSpacing: 0.1,
+                }}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {label}
+              </Text>
             </View>
           );
         },
         tabBarItemStyle: {
           paddingVertical: 0,
+          paddingHorizontal: 4,
         },
         tabBarIconStyle: {
           marginTop: 0,
