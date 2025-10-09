@@ -171,8 +171,12 @@ export default function DashboardScreen({ navigation, route }) {
             image: data.event_photo_url && data.event_photo_url.trim() !== '' 
               ? { uri: data.event_photo_url } 
               : require('../../assets/event-wedding.png'),
+            createdAt: data.created_at ? data.created_at.toDate() : new Date(),
           });
         });
+        
+        // Sort by creation date - newest first
+        events.sort((a, b) => b.createdAt - a.createdAt);
         
         return events;
       }
@@ -255,6 +259,7 @@ export default function DashboardScreen({ navigation, route }) {
                     : require('../../assets/event-wedding.png'),
                   joinedId: joinedDoc.id,
                   wasGuest: joinedData.converted_from_guest || false,
+                  joinedAt: joinedData.joined_at ? joinedData.joined_at.toDate() : new Date(),
                 };
               }
               return null;
@@ -269,6 +274,10 @@ export default function DashboardScreen({ navigation, route }) {
         
         const eventResults = await Promise.all(eventPromises);
         const validEvents = eventResults.filter(event => event !== null);
+        
+        // Sort by joined date - newest first
+        validEvents.sort((a, b) => b.joinedAt - a.joinedAt);
+        
         return validEvents;
       }
       return [];
@@ -542,13 +551,15 @@ export default function DashboardScreen({ navigation, route }) {
 
             await addDoc(joinedRef, newEntry);
             
+            // Fetch updated data first before navigating
+            await fetchAllData(false);
+            setEventCode('');
+            
             showSuccess(
               'Successfully Joined! 🎉',
               `Welcome to "${eventData.event_name}"! You can now view photos and share your own memories with other attendees.`,
               () => {
                 navigation.navigate('JoinEventTwo', { eventId, eventCode: eventCode.toUpperCase() });
-                setEventCode('');
-                fetchAllData(false);
               }
             );
             

@@ -57,7 +57,7 @@ export default function AddMoreCreditsScreen({ navigation }) {
       icon: 'diamond-outline', 
       mostPopular: false,
       originalPrice: '₱400',
-      color: '#4CAF50'
+      color: '#48C6EF'
     },
     { 
       credits: 80, 
@@ -69,7 +69,7 @@ export default function AddMoreCreditsScreen({ navigation }) {
       icon: 'star-outline', 
       mostPopular: false,
       originalPrice: '₱400',
-      color: '#FF9800'
+      color: '#48C6EF'
     },
     { 
       credits: 120, 
@@ -81,7 +81,7 @@ export default function AddMoreCreditsScreen({ navigation }) {
       icon: 'trophy-outline', 
       mostPopular: true,
       originalPrice: '₱686',
-      color: '#FF6F61'
+      color: '#48C6EF'
     },
   ];
 
@@ -263,23 +263,23 @@ export default function AddMoreCreditsScreen({ navigation }) {
           ]}
         >
           <View style={styles.benefitItem}>
-            <Ionicons name="print-outline" size={20} color="#FF6F61" />
+            <Ionicons name="print-outline" size={20} color="#48C6EF" />
             <Text style={styles.benefitText}>Print high-quality photos</Text>
           </View>
           <View style={styles.benefitItem}>
-            <Ionicons name="flash-outline" size={20} color="#FF6F61" />
+            <Ionicons name="flash-outline" size={20} color="#48C6EF" />
             <Text style={styles.benefitText}>Instant photo delivery</Text>
           </View>
           <View style={styles.benefitItem}>
-            <Ionicons name="shield-checkmark-outline" size={20} color="#FF6F61" />
+            <Ionicons name="shield-checkmark-outline" size={20} color="#48C6EF" />
             <Text style={styles.benefitText}>Secure transactions</Text>
           </View>
           <View style={styles.benefitItem}>
-            <Ionicons name="people-outline" size={20} color="#FF6F61" />
+            <Ionicons name="people-outline" size={20} color="#48C6EF" />
             <Text style={styles.benefitText}>Share with friends</Text>
           </View>
           <View style={styles.benefitItem}>
-            <Ionicons name="star-outline" size={20} color="#FF6F61" />
+            <Ionicons name="star-outline" size={20} color="#48C6EF" />
             <Text style={styles.benefitText}>Access premium features</Text>
           </View>
         </Animated.View>
@@ -332,7 +332,7 @@ export default function AddMoreCreditsScreen({ navigation }) {
                       ₱{(option.price / option.credits).toFixed(1)} per credit
                     </Text>
                     {selectedCredits && selectedCredits.credits === option.credits && (
-                      <Ionicons name="checkmark-circle" size={20} color="#FF6F61" />
+                      <Ionicons name="checkmark-circle" size={20} color="#48C6EF" />
                     )}
                   </View>
                 </View>
@@ -352,7 +352,7 @@ export default function AddMoreCreditsScreen({ navigation }) {
           ]}
         >
           <TouchableOpacity style={styles.whyCreditsButton} onPress={showWhyCreditsInfo}>
-            <Ionicons name="help-circle-outline" size={18} color="#FF6F61" />
+            <Ionicons name="help-circle-outline" size={18} color="#48C6EF" />
             <Text style={styles.whyCreditsText}>Why do I need credits?</Text>
           </TouchableOpacity>
         </Animated.View>
@@ -382,7 +382,7 @@ export default function AddMoreCreditsScreen({ navigation }) {
           disabled={!selectedCredits || isLoading}
         >
           <LinearGradient
-            colors={(!selectedCredits || isLoading) ? ['#CCCCCC', '#AAAAAA'] : ['#FF8D76', '#FF6F61']}
+            colors={(!selectedCredits || isLoading) ? ['#CCCCCC', '#AAAAAA'] : ['#48C6EF', '#0060DF']}
             style={styles.buyButtonGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
     width: width * 0.6,
     height: width * 0.6,
     borderRadius: width * 0.3,
-    backgroundColor: 'rgba(255, 111, 97, 0.08)',
+    backgroundColor: 'rgba(72, 198, 239, 0.08)',
     top: -width * 0.2,
     right: -width * 0.2,
   },
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     width: width * 0.4,
     height: width * 0.4,
     borderRadius: width * 0.2,
-    backgroundColor: 'rgba(255, 141, 118, 0.06)',
+    backgroundColor: 'rgba(0, 96, 223, 0.06)',
     bottom: -width * 0.1,
     left: -width * 0.1,
   },
@@ -495,18 +495,18 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   selectedCard: {
-    borderColor: '#FF6F61',
-    shadowColor: '#FF6F61',
+    borderColor: '#48C6EF',
+    shadowColor: '#48C6EF',
     shadowOpacity: 0.2,
   },
   popularCard: {
-    borderColor: '#FF6F61',
+    borderColor: '#48C6EF',
   },
   popularBadge: {
     position: 'absolute',
     top: 0,
     right: 0,
-    backgroundColor: '#FF6F61',
+    backgroundColor: '#48C6EF',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderBottomLeftRadius: 8,
@@ -556,17 +556,17 @@ const styles = StyleSheet.create({
   currentPrice: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#FF6F61',
+    color: '#48C6EF',
   },
   discountBadge: {
-    backgroundColor: '#FFE5E2',
+    backgroundColor: '#E3F5FF',
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 12,
   },
   discountText: {
     fontSize: 12,
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontWeight: 'bold',
   },
   cardFooter: {
@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   whyCreditsText: {
-    color: '#FF6F61',
+    color: '#48C6EF',
     fontSize: 14,
     fontWeight: '500',
     marginLeft: 6,
