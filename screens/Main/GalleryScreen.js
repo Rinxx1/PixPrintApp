@@ -21,6 +21,7 @@ import { db, auth, storage } from '../../firebase';
 import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import { useAlert } from '../../context/AlertContext';
+import { downloadPhotoToGallery } from '../../utils/downloadService';
 
 
 const screenWidth = Dimensions.get('window').width;
@@ -308,6 +309,16 @@ export default function GalleryScreen({ navigation }) {
         }
       }
     );
+  };
+
+  // Handle photo download
+  const handleDownloadPhoto = async (photo) => {
+    if (!photo) return;
+    
+    // Get event name if it's an event photo, otherwise use a generic name
+    const eventName = photo.eventName || photo.type === 'event' ? 'Gallery_Photo' : 'My_Photo';
+    
+    await downloadPhotoToGallery(photo, eventName, showAlert, showSuccess, showError);
   };
 
   // Handle multiple photos deletion
@@ -639,9 +650,7 @@ export default function GalleryScreen({ navigation }) {
         onShare={() => {
           // TODO: Implement share functionality
         }}
-        onDownload={() => {
-          // TODO: Implement download functionality
-        }}
+        onDownload={() => selectedPhoto && handleDownloadPhoto(selectedPhoto)}
         onToggleLike={() => {
           // TODO: Implement like functionality
         }}

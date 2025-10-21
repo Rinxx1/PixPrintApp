@@ -27,6 +27,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { storage } from '../../firebase';
 import { useAlert } from '../../context/AlertContext';
 import { addToCartPrintQueue } from '../../utils/printService';
+import { downloadPhotoToGallery } from '../../utils/downloadService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -1280,6 +1281,11 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     }
   };
 
+  // Download handler function using global download service
+  const handleDownloadPhoto = async (photo) => {
+    await downloadPhotoToGallery(photo, eventName, showAlert, showSuccess, showError);
+  };
+
   const eventStatus = getEventStatus();
 
   if (loading) {
@@ -1674,7 +1680,10 @@ export default function JoinEventScreenTwo({ route, navigation }) {
               </View>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.modalControlButton}>
+            <TouchableOpacity 
+              style={styles.modalControlButton}
+              onPress={() => selectedPhoto && handleDownloadPhoto(selectedPhoto)}
+            >
               <View style={styles.controlButtonBackground}>
                 <Ionicons name="download-outline" size={20} color="#fff" />
               </View>

@@ -10,15 +10,18 @@ import {
   ImageBackground,
   Animated
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth } from '../firebase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import OnboardingModal from '../components/OnboardingModal';
 
 const { width, height } = Dimensions.get('window');
 
 export default function MainScreen({ navigation }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   
   // Enhanced animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -29,6 +32,20 @@ export default function MainScreen({ navigation }) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    // Check if user has seen onboarding
+    const checkOnboardingStatus = async () => {
+      try {
+        const hasSeenOnboarding = await AsyncStorage.getItem('hasSeenOnboarding');
+        if (!hasSeenOnboarding) {
+          setShowOnboarding(true);
+        }
+      } catch (error) {
+        console.log('Error checking onboarding status:', error);
+      }
+    };
+
+    checkOnboardingStatus();
+
     const unsubscribe = auth.onAuthStateChanged(user => {
       if (user) {
         setIsLoggedIn(true);
@@ -106,6 +123,16 @@ export default function MainScreen({ navigation }) {
 
   if (isLoading || isLoggedIn) return null;
 
+  const handleOnboardingComplete = async () => {
+    try {
+      await AsyncStorage.setItem('hasSeenOnboarding', 'true');
+      setShowOnboarding(false);
+    } catch (error) {
+      console.log('Error saving onboarding status:', error);
+      setShowOnboarding(false);
+    }
+  };
+
   const handleSignUpNavigation = () => {
     console.log('Navigating to SignUp...');
     navigation.navigate('SignUp');
@@ -117,6 +144,12 @@ export default function MainScreen({ navigation }) {
         barStyle="light-content"
         backgroundColor="transparent"
         translucent={true}
+      />
+
+      {/* Onboarding Modal */}
+      <OnboardingModal
+        visible={showOnboarding}
+        onComplete={handleOnboardingComplete}
       />
 
       {/* Enhanced Background */}
@@ -296,6 +329,16 @@ export default function MainScreen({ navigation }) {
               <Ionicons name="chevron-forward" size={14} color="#48C6EF" />
             </TouchableOpacity>
           </View>
+
+          {/* View Tutorial Button */}
+          <TouchableOpacity
+            style={styles.tutorialButton}
+            onPress={() => setShowOnboarding(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="help-circle-outline" size={16} color="#48C6EF" />
+            <Text style={styles.tutorialButtonText}>View Tutorial</Text>
+          </TouchableOpacity>
         </Animated.View>
       </View>
 
@@ -530,6 +573,7 @@ const styles = StyleSheet.create({
   // statDivider: { ... } - REMOVED
   
   signupPrompt: {
+    marginTop: 10,
     alignItems: 'center',
   },
   signupText: {
@@ -548,6 +592,24 @@ const styles = StyleSheet.create({
     color: '#48C6EF',
     fontWeight: '600',
     marginRight: 3,
+  },
+  tutorialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(72, 198, 239, 0.05)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(72, 198, 239, 0.2)',
+  },
+  tutorialButtonText: {
+    fontSize: 13,
+    color: '#48C6EF',
+    fontWeight: '600',
+    marginLeft: 6,
   },
   decorativeElements: {
     position: 'absolute',
