@@ -5,29 +5,29 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
-export default function JoinEventBottomNavigator({ activeTab, onTabChange, eventId, navigation, guestUsername }) {
+export default function JoinEventBottomNavigator({ state, descriptors, navigation, eventId, guestUsername }) {
   const insets = useSafeAreaInsets();
   
-  const handleTabChange = (tab) => {
-    onTabChange && onTabChange(tab);
+  // Get active tab from navigation state
+  const activeRoute = state?.routes[state.index];
+  const activeTab = activeRoute?.name;
+  
+  // Hide navigator on Camera screen
+  if (activeTab === 'Camera') {
+    return null;
+  }
+  
+  const handleTabPress = (routeName) => {
+    const route = state.routes.find(r => r.name === routeName);
     
-    if (!eventId) {
-      console.warn('No eventId available for navigation');
-      return;
-    }
+    if (!route) return;
     
-    // Include guest username in navigation params
-    const navParams = { 
-      eventId,
-      ...(guestUsername && { username: guestUsername })
-    };
+    // Check if tab is already focused
+    const isFocused = state.index === state.routes.indexOf(route);
     
-    if (tab === 'camera') {
-      navigation.navigate('Camera', navParams);
-    } else if (tab === 'gallery') {
-      navigation.navigate('JoinEventTwo', navParams);
-    } else if (tab === 'settings') {
-      navigation.navigate('JoinEventSettings', navParams);
+    if (!isFocused) {
+      // Navigate to the route
+      navigation.navigate(route.name, route.params);
     }
   };
 
@@ -52,17 +52,17 @@ export default function JoinEventBottomNavigator({ activeTab, onTabChange, event
         {/* Gallery Tab */}
         <TouchableOpacity 
           style={styles.navTab} 
-          onPress={() => handleTabChange('gallery')}
+          onPress={() => handleTabPress('Gallery')}
         >
           <View style={styles.navIconContainer}>
             <Ionicons 
-              name={activeTab === 'gallery' ? 'images' : 'images-outline'}
+              name={activeTab === 'Gallery' ? 'images' : 'images-outline'}
               size={24} 
-              color={activeTab === 'gallery' ? '#48C6EF' : '#8E8E93'} 
+              color={activeTab === 'Gallery' ? '#48C6EF' : '#8E8E93'} 
             />
             <Text style={[
               styles.navLabel,
-              activeTab === 'gallery' && styles.navLabelActive
+              activeTab === 'Gallery' && styles.navLabelActive
             ]}>
               Gallery
             </Text>
@@ -72,7 +72,7 @@ export default function JoinEventBottomNavigator({ activeTab, onTabChange, event
         {/* Camera Tab */}
         <TouchableOpacity 
           style={styles.cameraTab} 
-          onPress={() => handleTabChange('camera')}
+          onPress={() => handleTabPress('Camera')}
         >
           <View style={styles.cameraButtonContainer}>
             <LinearGradient
@@ -91,17 +91,17 @@ export default function JoinEventBottomNavigator({ activeTab, onTabChange, event
         {/* Settings Tab */}
         <TouchableOpacity 
           style={styles.navTab} 
-          onPress={() => handleTabChange('settings')}
+          onPress={() => handleTabPress('EventSettings')}
         >
           <View style={styles.navIconContainer}>
             <Ionicons 
-              name={activeTab === 'settings' ? 'settings' : 'settings-outline'}
+              name={activeTab === 'EventSettings' ? 'settings' : 'settings-outline'}
               size={24} 
-              color={activeTab === 'settings' ? '#48C6EF' : '#8E8E93'} 
+              color={activeTab === 'EventSettings' ? '#48C6EF' : '#8E8E93'} 
             />
             <Text style={[
               styles.navLabel,
-              activeTab === 'settings' && styles.navLabelActive
+              activeTab === 'EventSettings' && styles.navLabelActive
             ]}>
               Settings
             </Text>

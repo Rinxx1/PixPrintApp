@@ -20,7 +20,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import HeaderBar from '../../components/HeaderBar';
-import JoinEventBottomNavigator from '../../components/JoinEventBottomNavigator';
 import { db, auth } from '../../firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -47,7 +46,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('person');
-  const [activeTab, setActiveTab] = useState('gallery');
   const [eventCode, setEventCode] = useState('');
   const [eventTime, setEventTime] = useState('All Day');
   const [eventCreatorId, setEventCreatorId] = useState(null);
@@ -1235,8 +1233,7 @@ export default function JoinEventScreenTwo({ route, navigation }) {
     return false;
   };
 
-  const handleTabChange = (tab) => {    setActiveTab(tab);
-  };  // Add print handler function using global print service
+  // Add print handler function using global print service
   const handlePrintPhoto = async (photo) => {
     if (!photo || !photo.imageUrl || !eventId) {
       showError(
@@ -1703,15 +1700,6 @@ export default function JoinEventScreenTwo({ route, navigation }) {
           </View>
         </View>
       </Modal>
-
-      {/* Enhanced Floating Bottom Navigator */}
-      <JoinEventBottomNavigator 
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        eventId={eventId}
-        navigation={navigation}
-        guestUsername={guestUsername} // Pass guest info
-      />
     </View>
   );
 }

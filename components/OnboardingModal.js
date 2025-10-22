@@ -26,15 +26,15 @@ const onboardingData = [
   {
     id: 1,
     title: 'Capture Every Moment',
-    description: 'Create events and capture special moments with friends and family in real-time',
+    description: 'Capture stunning, high-resolution photos at events using advanced camera controls. Perfect for parties, weddings, and special occasions.',
     image: images.capture, // Download: "Mobile photography" or "Taking photos" from undraw.co
     icon: 'camera',
     color: '#48C6EF',
   },
   {
     id: 2,
-    title: 'Share Instantly',
-    description: 'Share photos instantly with all event participants. Everyone stays connected',
+    title: 'Instant Photo Sharing',
+    description: 'Effortlessly share captured moments with guests in real-time. Keep everyone connected and engaged throughout the event.',
     image: images.share, // Download: "Photo sharing" or "Share" from undraw.co
     icon: 'share-social',
     color: '#0060DF',
@@ -42,7 +42,7 @@ const onboardingData = [
   {
     id: 3,
     title: 'Print Your Memories',
-    description: 'Order premium quality prints delivered to your doorstep. Keep memories alive',
+    description: 'Print high-quality photos instantly using wireless technology. Give guests tangible memories they can take home right away.',
     image: images.print, // Download: "Printing" or "Photo album" from undraw.co
     icon: 'print',
     color: '#48C6EF',

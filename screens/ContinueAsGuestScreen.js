@@ -208,7 +208,7 @@ export default function ContinueAsGuestScreen({ navigation }) {
           
           if (isAlreadyJoined) {
             // If already joined, navigate to the event screen directly
-            navigation.navigate('JoinEventTwo', { eventId, eventCode, username });
+            navigation.navigate('JoinEvent', { eventId, eventCode, username });
           }
         }
       } catch (error) {
@@ -248,7 +248,7 @@ export default function ContinueAsGuestScreen({ navigation }) {
           // Only auto-navigate if it's a returning guest (exists but no user_id)
           if (usernameCheck.exists && !usernameCheck.hasUserId) {
             // This is a returning guest - safe to auto-navigate
-            navigation.navigate('JoinEventTwo', { 
+            navigation.navigate('JoinEvent', { 
               eventId, 
               eventCode: eventCode.trim().toUpperCase(), 
               username: username.trim() 
@@ -432,7 +432,7 @@ export default function ContinueAsGuestScreen({ navigation }) {
           '🎉 Welcome Back!',
           `Great! You're rejoining "${eventData.event_name}" as ${username.trim()}.\n\n📸 Your previous photos and activity will still be available\n🚀 Ready to capture more memories?`,
           () => {
-            navigation.navigate('JoinEventTwo', { 
+            navigation.navigate('JoinEvent', { 
               eventId, 
               eventCode: eventCode.trim().toUpperCase(), 
               username: username.trim() 
@@ -466,7 +466,7 @@ export default function ContinueAsGuestScreen({ navigation }) {
               '🎉 Successfully Joined!',
               `Welcome to "${eventData.event_name}", ${username.trim()}!\n\n🎊 You're now part of this amazing event\n📱 Start capturing and sharing memories right away!`,
               () => {
-                navigation.navigate('JoinEventTwo', { 
+                navigation.navigate('JoinEvent', { 
                   eventId, 
                   eventCode: eventCode.trim().toUpperCase(), 
                   username: username.trim() 

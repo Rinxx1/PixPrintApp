@@ -19,8 +19,7 @@ import TermsAndConditionsScreen from './screens/Main/TermsAndConditionsScreen';
 import PrivacyPolicyScreen from './screens/Main/PrivacyPolicyScreen';
 import HelpSupportScreen from './screens/Main/HelpSupportScreen';
 import AddMoreCreditsScreen from './screens/Main/AddMoreCreditsScreen';
-import JoinEventScreenTwo from './screens/Main/JoinEventScreenTwo';
-import JoinEventSettings from './screens/Main/JoinEventSettings';
+import JoinEventTabNavigator from './components/JoinEventTabNavigator';
 import { AlertProvider } from './context/AlertContext';
 
 const Stack = createNativeStackNavigator();
@@ -60,8 +59,7 @@ function AppNavigator() {
       <Stack.Screen name='PrivacyPolicy' component={PrivacyPolicyScreen} />
       <Stack.Screen name='HelpSupport' component={HelpSupportScreen} />
       <Stack.Screen name='AddMoreCredits' component={AddMoreCreditsScreen} />
-      <Stack.Screen name='JoinEventTwo' component={JoinEventScreenTwo} />
-      <Stack.Screen name='JoinEventSettings' component={JoinEventSettings} />
+      <Stack.Screen name='JoinEvent' component={JoinEventTabNavigator} />
     </Stack.Navigator>
   );
 }

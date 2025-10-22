@@ -525,7 +525,7 @@ export default function DashboardScreen({ navigation, route }) {
               text: 'View Event', 
               style: 'primary', 
               onPress: () => {
-                navigation.navigate('JoinEventTwo', { eventId, eventCode: eventCode.toUpperCase() });
+                navigation.navigate('JoinEvent', { eventId, eventCode: eventCode.toUpperCase() });
                 setEventCode('');
               }
             }
@@ -559,7 +559,7 @@ export default function DashboardScreen({ navigation, route }) {
               'Successfully Joined! 🎉',
               `Welcome to "${eventData.event_name}"! You can now view photos and share your own memories with other attendees.`,
               () => {
-                navigation.navigate('JoinEventTwo', { eventId, eventCode: eventCode.toUpperCase() });
+                navigation.navigate('JoinEvent', { eventId, eventCode: eventCode.toUpperCase() });
               }
             );
             
@@ -911,7 +911,7 @@ export default function DashboardScreen({ navigation, route }) {
               <TouchableOpacity 
                 key={`${event.id}-${event.joinedId || 'created'}`}
                 style={styles.eventCard}
-                onPress={() => navigation.navigate('JoinEventTwo', { eventId: event.id })}
+                onPress={() => navigation.navigate('JoinEvent', { eventId: event.id })}
               >
                 {/* Fixed image background */}
                 <View style={styles.eventImageContainer}>
@@ -963,7 +963,7 @@ export default function DashboardScreen({ navigation, route }) {
                     
                     <TouchableOpacity 
                       style={styles.viewButton}
-                      onPress={() => navigation.navigate('JoinEventTwo', { eventId: event.id })}
+                      onPress={() => navigation.navigate('JoinEvent', { eventId: event.id })}
                     >
                       <Text style={styles.viewButtonText}>View</Text>
                       <Ionicons name="chevron-forward" size={16} color="#FFF" />

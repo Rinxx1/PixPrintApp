@@ -17,7 +17,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import HeaderBar from '../../components/HeaderBar';
-import JoinEventBottomNavigator from '../../components/JoinEventBottomNavigator';
 import { db, auth } from '../../firebase';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { useAlert } from '../../context/AlertContext';
@@ -29,7 +28,6 @@ export default function JoinEventSettings({ route, navigation }) {
   const { eventId, username: guestUsername } = route.params || {};
   
   // State variables
-  const [activeTab, setActiveTab] = useState('settings');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoDownloadEnabled, setAutoDownloadEnabled] = useState(false);
   const [highQualityEnabled, setHighQualityEnabled] = useState(true);
@@ -363,10 +361,6 @@ export default function JoinEventSettings({ route, navigation }) {
   };
 
   // Handle tab change
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-  };
-
   // Render photographer selection modal - Updated for better sizing
   const renderPhotographerModal = () => (
     <Modal
@@ -887,15 +881,6 @@ export default function JoinEventSettings({ route, navigation }) {
         {/* Bottom padding for scroll view */}
         <View style={{ height: 100 }} />
       </ScrollView>
-      
-      {/* Bottom Navigation */}
-      <JoinEventBottomNavigator 
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        eventId={eventId}
-        navigation={navigation}
-        guestUsername={guestUsername} // Pass guest info
-      />
 
       {/* Photographer Selection Modal */}
       {renderPhotographerModal()}
