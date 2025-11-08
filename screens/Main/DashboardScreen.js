@@ -23,10 +23,12 @@ import { useAlert } from '../../context/AlertContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../../context/authContext';
 import ProgressiveImage from '../../components/ProgressiveImage';
+import EventQrModal from '../../components/EventQrModal';
 import imagePreloader from '../../utils/imagePreloader';
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.85;
+const EVENT_WEBSITE_BASE = 'https://pixprintapp.web.app/';
 
 export default function DashboardScreen({ navigation, route }) {
   const [eventCode, setEventCode] = useState('');
@@ -37,6 +39,8 @@ export default function DashboardScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  const [isQrVisible, setIsQrVisible] = useState(false);
+  const [selectedEventForQr, setSelectedEventForQr] = useState(null);
   
   const { wasAccountJustCreated, clearAccountCreatedFlag } = useContext(AuthContext);
   const [forceRefresh, setForceRefresh] = useState(false);
@@ -160,6 +164,8 @@ export default function DashboardScreen({ navigation, route }) {
             }
           }
           
+          const eventWebsite = data.event_website || (data.event_code ? `${EVENT_WEBSITE_BASE}${data.event_code}` : '');
+
           events.push({
             id: eventId,
             name: data.event_name,
@@ -172,6 +178,7 @@ export default function DashboardScreen({ navigation, route }) {
               ? { uri: data.event_photo_url } 
               : require('../../assets/event-wedding.png'),
             createdAt: data.created_at ? data.created_at.toDate() : new Date(),
+            eventWebsite,
           });
         });
         
@@ -246,6 +253,8 @@ export default function DashboardScreen({ navigation, route }) {
                   }
                 }
                 
+                const eventWebsite = eventData.event_website || (eventData.event_code ? `${EVENT_WEBSITE_BASE}${eventData.event_code}` : '');
+
                 return {
                   id: eventDoc.id,
                   name: eventData.event_name,
@@ -260,6 +269,7 @@ export default function DashboardScreen({ navigation, route }) {
                   joinedId: joinedDoc.id,
                   wasGuest: joinedData.converted_from_guest || false,
                   joinedAt: joinedData.joined_at ? joinedData.joined_at.toDate() : new Date(),
+                  eventWebsite,
                 };
               }
               return null;
@@ -291,6 +301,24 @@ export default function DashboardScreen({ navigation, route }) {
       return [];
     }
   };
+  const openQrModal = (event) => {
+    if (!event?.eventWebsite) {
+      showError(
+        'QR Unavailable',
+        'This event does not have a shareable link yet.'
+      );
+      return;
+    }
+
+    setSelectedEventForQr(event);
+    setIsQrVisible(true);
+  };
+
+  const closeQrModal = () => {
+    setIsQrVisible(false);
+    setSelectedEventForQr(null);
+  };
+
   const fetchAllData = async (showLoadingState = false, isNewUser = false) => {
     if (showLoadingState) {
       setLoading(true);
@@ -938,8 +966,11 @@ export default function DashboardScreen({ navigation, route }) {
                 <View style={styles.eventContent}>
                   <View style={styles.eventHeader}>
                     <Text style={styles.eventName}>{event.name}</Text>
-                    <TouchableOpacity style={styles.moreButton}>
-                      <Ionicons name="ellipsis-horizontal" size={20} color="#888" />
+                    <TouchableOpacity
+                      style={styles.moreButton}
+                      onPress={() => openQrModal(event)}
+                    >
+                      <Ionicons name="qr-code-outline" size={20} color="#48C6EF" />
                     </TouchableOpacity>
                   </View>
                   
@@ -977,6 +1008,14 @@ export default function DashboardScreen({ navigation, route }) {
 
         <View style={{ height: 40 }} />
       </Animated.ScrollView>
+
+      <EventQrModal
+        visible={isQrVisible}
+        onClose={closeQrModal}
+        eventName={selectedEventForQr?.name || ''}
+        eventCode={selectedEventForQr?.code || ''}
+        eventWebsite={selectedEventForQr?.eventWebsite || ''}
+      />
     </View>
   );
 }

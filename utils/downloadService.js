@@ -2,6 +2,27 @@ import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import { Platform, Linking } from 'react-native';
 
+const PIXPRINT_ALBUM = 'PixPrint';
+
+/**
+ * Attempt to create or reuse the PixPrint album.
+ * If the platform blocks album changes (Android 10+ scoped storage), we fall back silently.
+ */
+const tryEnsurePixPrintAlbum = async (asset) => {
+  try {
+    const existing = await MediaLibrary.getAlbumAsync(PIXPRINT_ALBUM);
+    if (!existing) {
+      await MediaLibrary.createAlbumAsync(PIXPRINT_ALBUM, asset, false);
+    } else {
+      await MediaLibrary.addAssetsToAlbumAsync([asset], existing, false);
+    }
+    return true;
+  } catch (albumError) {
+    console.warn('PixPrint album unavailable, saving to default library instead:', albumError);
+    return false;
+  }
+};
+
 /**
  * Download Service - Handles photo downloads to device gallery
  * Saves photos to a dedicated "PixPrint" album
@@ -103,24 +124,14 @@ export const downloadPhotoToGallery = async (photo, eventName, showAlert, showSu
       throw new Error('Download failed');
     }
 
-    // Save to media library
+    // Save to media library and try to attach to PixPrint album when possible
     const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
-    
-    // Create or get the PixPrint album
-    // Note: On Android 10+ (API 29+), albums work differently but this handles it
-    let album = await MediaLibrary.getAlbumAsync('PixPrint');
-    if (!album) {
-      // Create album - on iOS and Android < 10, this works as expected
-      // On Android 10+, photos are saved to gallery and album is just a reference
-      await MediaLibrary.createAlbumAsync('PixPrint', asset, false);
-    } else {
-      await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
-    }
+    const albumLinked = await tryEnsurePixPrintAlbum(asset);
 
-    // Show platform-specific success message
-    const albumLocation = Platform.OS === 'ios' 
-      ? 'Photos > Albums > PixPrint'
-      : 'Gallery > Albums > PixPrint';
+    // Show platform-specific success message with fallback location
+    const albumLocation = Platform.OS === 'ios'
+      ? (albumLinked ? 'Photos > Albums > PixPrint' : 'Photos app (Recent)')
+      : (albumLinked ? 'Gallery > Albums > PixPrint' : 'Gallery (Recent)');
 
     // Show success message
     showSuccess(
@@ -221,8 +232,9 @@ export const downloadMultiplePhotos = async (
       return { success: 0, failed: 0 };
     }
 
-    let successCount = 0;
-    let failedCount = 0;
+  let successCount = 0;
+  let failedCount = 0;
+  let albumLinkedForAll = true;
 
     // Download photos one by one
     for (let i = 0; i < photos.length; i++) {
@@ -245,14 +257,11 @@ export const downloadMultiplePhotos = async (
 
         if (downloadResult.status === 200) {
           const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
-          
-          let album = await MediaLibrary.getAlbumAsync('PixPrint');
-          if (!album) {
-            await MediaLibrary.createAlbumAsync('PixPrint', asset, false);
-          } else {
-            await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+          const albumLinked = await tryEnsurePixPrintAlbum(asset);
+          if (!albumLinked) {
+            albumLinkedForAll = false;
           }
-          
+
           successCount++;
         } else {
           failedCount++;
@@ -268,9 +277,14 @@ export const downloadMultiplePhotos = async (
 
     // Show result message
     if (successCount > 0 && failedCount === 0) {
+      const locationHint = Platform.OS === 'ios'
+        ? (albumLinkedForAll ? 'Photos > Albums > PixPrint' : 'Photos app (Recent)')
+        : (albumLinkedForAll ? 'Gallery > Albums > PixPrint' : 'Gallery (Recent)');
+
       showSuccess(
         '✅ All Photos Downloaded!',
-        `Successfully downloaded ${successCount} photo${successCount > 1 ? 's' : ''} to your PixPrint album!`,
+        `Successfully downloaded ${successCount} photo${successCount > 1 ? 's' : ''} to your library.
+📁 Location: ${locationHint}`,
         () => {}
       );
     } else if (successCount > 0 && failedCount > 0) {

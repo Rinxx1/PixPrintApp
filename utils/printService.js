@@ -1,7 +1,7 @@
 // Print Service Utility
 // Global print functionality that can be used across different screens
 
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 /**
@@ -27,6 +27,34 @@ export const addToCartPrintQueue = async (photo, eventId, showSuccess, showError
   }
 
   try {
+    // Lookup event meta (printer and event codes)
+    let printerCode = null;
+    let eventCode = null;
+
+    try {
+      const eventRef = doc(db, 'event_tbl', eventId);
+      const eventSnap = await getDoc(eventRef);
+      if (eventSnap.exists()) {
+        const eventData = eventSnap.data();
+        printerCode = eventData.printer_code || null;
+        eventCode = eventData.event_code || null;
+      }
+    } catch (metaError) {
+      console.warn('Unable to fetch event metadata for print queue:', metaError);
+    }
+
+    if (!printerCode) {
+      if (showError) {
+        showError(
+          'Printer Not Configured',
+          'This event is not linked to a printer yet. Please contact the organizer to finish setup before printing.',
+          () => {},
+          () => {}
+        );
+      }
+      return false;
+    }
+
     // Create print queue entry
     const printQueue = {
       event_id: eventId,
@@ -40,7 +68,9 @@ export const addToCartPrintQueue = async (photo, eventId, showSuccess, showError
       uploaded_at: photo.uploadedAt || null,
       user_id: photo.userId || null,
       is_guest: photo.isGuest || false,
-      guest_username: photo.guestUsername || null
+      guest_username: photo.guestUsername || null,
+      printer_code: printerCode,
+      event_code: eventCode
     };
 
     // Add to Firestore collection

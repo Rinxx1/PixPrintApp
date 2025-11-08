@@ -92,6 +92,8 @@ const HOUR_PACKAGES = [
   { hours: 6, credits: 25, label: '6 Hours', popular: false },
 ];
 
+const EVENT_WEBSITE_BASE = 'https://pixprintapp.web.app/';
+
 export default function NewEventScreen({ navigation }) {
   const [eventName, setEventName] = useState('');
   const [eventStartDate, setEventStartDate] = useState(null);
@@ -313,12 +315,13 @@ export default function NewEventScreen({ navigation }) {
           eventDescription, 
           finalAccessCode,
           selectedPackage.hours,
-          user.uid
+          user.uid,
+          ''
         );
         await updateCredits(user.uid, userCredits - selectedPackage.credits);
         hybridSuccess(
           'Event Created Successfully',
-          `"${eventName}" is live! Share code: ${finalAccessCode}`,
+          `"${eventName}" is live!\nShare code: ${finalAccessCode}\n\nDownload and share the event using QR from your Dashboard anytime.`,
           () => {
             navigation.navigate('Tabs');
           }
@@ -465,12 +468,14 @@ export default function NewEventScreen({ navigation }) {
     eventDescription, 
     accessCode,
     duration,
-    userId
+    userId,
+    printerCode
   ) => {
     try {
       console.log("Creating event with access code:", accessCode);
       
       let eventPhotoUrl = '';
+      const eventWebsite = `${EVENT_WEBSITE_BASE}${accessCode}`;
       
       if (eventImageUri) {
         console.log("Uploading event image...");
@@ -489,6 +494,8 @@ export default function NewEventScreen({ navigation }) {
         event_photo_url: eventPhotoUrl,
         user_id: userId,
         event_code: accessCode,
+        printer_code: printerCode,
+        event_website: eventWebsite,
         created_at: new Date(),
         status: 'active'
       });
